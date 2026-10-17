@@ -190,7 +190,6 @@
     recording = on;
     const btn = $('#record');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    $('#hudRec').classList.toggle('on', on);
   }
 
   /* ==========================================================================
@@ -203,6 +202,8 @@
   let particles = [];
   const PARTICLE_CAP = 260;
 
+  const SPREAD = 2.6;     // particle speed multiplier: hits spread well past the finger
+  const FINGER = 0.045;  // particles start this far out (pad units), clear of the fingertip
   function spawnBurst(x, y, P, now) {
     const sig = voiceSignature(P);
     const n = Math.round(8 + sig.level * 26);
@@ -212,17 +213,18 @@
     for (let k = 0; k < nLiquid; k++) particles.push(makeLiquid(x, y, sig, now));
     for (let k = 0; k < nSmoke; k++) particles.push(makeSmoke(x, y, sig, now));
     for (let k = 0; k < nSpark; k++) particles.push(makeSpark(x, y, sig, now));
-    particles.push(makeImpact(x, y, sig, now), makeRing(x, y, sig, now));
+    particles.push(makeRing(x, y, sig, now));
     if (particles.length > PARTICLE_CAP) particles.splice(0, particles.length - PARTICLE_CAP);
     dirty = true;
   }
 
   function makeLiquid(x, y, sig, now) {
     const ang = Math.random() * Math.PI * 2;
-    const spd = (0.11 + sig.t * 0.16) * (0.55 + Math.random() * 0.8) * (0.55 + sig.level * 0.65);
+    const spd = SPREAD * (0.11 + sig.t * 0.16) * (0.55 + Math.random() * 0.8) * (0.55 + sig.level * 0.65);
+    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER * 0.5;
     return {
       kind: 'liquid', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd * 0.5,
-      r: (0.009 + 0.016 * sig.level) * (1.25 - sig.t * 0.7) * (0.7 + Math.random() * 0.6),
+      r: (0.011 + 0.018 * sig.level) * (1.25 - sig.t * 0.7) * (0.7 + Math.random() * 0.6),
       born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.1, 200, 950),
       rgb: sig.rgb, drive: sig.drive,
     };
@@ -248,7 +250,8 @@
 
   function makeSmoke(x, y, sig, now) {
     const ang = Math.random() * Math.PI * 2;
-    const spd = (0.045 + Math.random() * 0.1) * (0.6 + sig.level * 0.6);
+    const spd = SPREAD * (0.045 + Math.random() * 0.1) * (0.6 + sig.level * 0.6);
+    x += Math.cos(ang) * FINGER; y += Math.abs(Math.sin(ang)) * FINGER;
     return {
       kind: 'smoke', x, y, vx: Math.cos(ang) * spd, vy: Math.abs(Math.sin(ang)) * spd * 0.55 + 0.02,
       r: (0.006 + 0.01 * sig.level) * (1.2 - sig.t * 0.4) * (0.7 + Math.random() * 0.6),
@@ -272,7 +275,8 @@
 
   function makeSpark(x, y, sig, now) {
     const ang = Math.random() * Math.PI * 2;
-    const spd = (0.22 + sig.t * 0.34) * (0.6 + Math.random() * 0.8) * (0.55 + sig.level * 0.75);
+    const spd = SPREAD * 0.85 * (0.22 + sig.t * 0.34) * (0.6 + Math.random() * 0.8) * (0.55 + sig.level * 0.75);
+    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER;
     return {
       kind: 'spark', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
       r: (0.0024 + 0.0042 * sig.level) * (1.15 - sig.t * 0.35),
@@ -297,46 +301,21 @@
     pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
   }
 
-  /* impact: a comic-book starburst, ink-outlined, that pops and shrinks
-     in a few frames. Spikier and bigger for louder, brighter hits. */
-  function makeImpact(x, y, sig, now) {
-    const n = 9 + Math.round(sig.t * 7);
-    const jag = Array.from({ length: n * 2 }, (_, k) => (k % 2 ? 0.42 + Math.random() * 0.12 : 0.85 + Math.random() * 0.3));
-    return {
-      kind: 'impact', x, y, born: now, life: reduceMotion ? 90 : 190,
-      r: 0.028 + 0.05 * Math.min(1, sig.level), rot: Math.random() * Math.PI, jag, rgb: sig.rgb,
-    };
-  }
-  function drawImpact(pg, p, age, px, py, u) {
-    const scale = px(1) - px(0);
-    // grows fast for the first third, then shrinks away
-    const g = age < 0.3 ? 0.55 + age / 0.3 * 0.45 : 1 - (age - 0.3) / 0.7 * 0.85;
-    const R = p.r * scale * g, cx = px(p.x), cy = py(p.y), n = p.jag.length;
-    pg.beginPath();
-    for (let k = 0; k < n; k++) {
-      const a = p.rot + k * Math.PI * 2 / n, rr = R * p.jag[k];
-      if (k) pg.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); else pg.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
-    }
-    pg.closePath();
-    const a = age < 0.6 ? 1 : 1 - (age - 0.6) / 0.4;
-    pg.fillStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.35), a * 0.95);
-    pg.strokeStyle = `rgba(5,4,12,${a})`; pg.lineWidth = 2.2 * u; pg.lineJoin = 'miter';
-    pg.fill(); pg.stroke();
-  }
-  /* ring: a thin sensor-pulse circle whose reach follows the decay */
+  /* ring: a thin pulse whose reach follows the decay, sized to clear a
+     fingertip (about a tenth of the pad) even for the shortest hits */
   function makeRing(x, y, sig, now) {
-    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 220, 1400), r: 0.05 + 0.12 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
+    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 320, 1400), r: 0.16 + 0.2 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
   }
   function drawRing(pg, p, age, px, py, u) {
     const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
     pg.strokeStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.5), (1 - age) * 0.7);
     pg.lineWidth = (2.5 - 1.5 * age) * u;
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.015 + p.r * e) * scale, 0, 6.283); pg.stroke();
+    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.03 + p.r * e) * scale, 0, 6.283); pg.stroke();
   }
   const noop = () => {};
 
-  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, impact: noop, ring: noop };
-  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, impact: drawImpact, ring: drawRing };
+  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, ring: noop };
+  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, ring: drawRing };
 
   function stepParticles(dt, now) {
     if (!particles.length) return;
@@ -347,9 +326,8 @@
     }
   }
 
-  /* ---------- abstract backdrop: dark field with a sound-coloured wash,
-     a Ben-Day halftone whose dots swell where the map is loud, and faint
-     scanlines. No labels, no icons, no named regions. */
+  /* ---------- abstract backdrop: a dark field with a soft sound-coloured
+     wash. No labels, no icons, no named regions, no grid. */
   let field = document.createElement('canvas');
   function buildField(W, H) {
     const FW = 96, FH = 96;
@@ -376,19 +354,6 @@
     const fg = f.getContext('2d');
     fg.imageSmoothingEnabled = true; fg.imageSmoothingQuality = 'high';
     fg.drawImage(off, 0, 0, W, H);
-    const spacing = 11 * dpr;
-    let row = 0;
-    for (let gy = spacing * 0.5; gy < H; gy += spacing, row++) {
-      // offset alternate rows, like a print screen
-      for (let gx = spacing * (row % 2 ? 0.5 : 0); gx < W; gx += spacing) {
-        const sig = voiceSignature(paramsAt(gx / W, 1 - gy / H));
-        const r = (0.5 + 1.5 * clamp(sig.level, 0, 1.2)) * dpr;
-        fg.fillStyle = rgbs(mixc(sig.rgb, [255, 255, 255], 0.35), 0.16);
-        fg.beginPath(); fg.arc(gx, gy, r, 0, 6.283); fg.fill();
-      }
-    }
-    fg.fillStyle = 'rgba(0,0,0,.16)';
-    for (let y = 0; y < H; y += 3 * dpr) fg.fillRect(0, y, W, Math.max(1, dpr * 0.8));
     return f;
   }
 
@@ -404,13 +369,14 @@
 
   function drawPad(now) {
     const W = pad.width, H = pad.height, u = dpr;
-    const font = cssVar('--font-display') || 'system-ui, sans-serif';
+    const font = cssVar('--font-ui') || 'system-ui, sans-serif';
     const px = (x) => x * W, py = (y) => (1 - y) * H;
     pg.clearRect(0, 0, W, H);
     pg.drawImage(field, 0, 0, W, H);
 
     for (const p of particles) {
-      const age = (now - p.born) / p.life;
+      // timer-spawned particles can be born a few ms after this frame's timestamp
+      const age = Math.max(0, (now - p.born) / p.life);
       if (age >= 1) continue;
       DRAW[p.kind](pg, p, age, px, py, u);
     }
@@ -458,47 +424,28 @@
           pg.strokeStyle = cssVar('--hold') || '#F0B400'; pg.lineWidth = 3 * u;
           pg.beginPath(); pg.arc(cx, cy, rad + 4 * u, 0, 6.283); pg.stroke();
         }
-        pg.fillStyle = 'rgba(43,232,255,.75)';
-        pg.beginPath(); pg.arc(cx - 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
-        pg.fillStyle = 'rgba(255,46,126,.75)';
-        pg.beginPath(); pg.arc(cx + 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
-        pg.fillStyle = '#05040C';
-        pg.beginPath(); pg.arc(cx, cy, rad + 2.2 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = 'rgba(5,7,12,.85)';
+        pg.beginPath(); pg.arc(cx, cy, rad + 1.8 * u, 0, 6.283); pg.fill();
         pg.fillStyle = `rgb(${sig.rgb[0] | 0},${sig.rgb[1] | 0},${sig.rgb[2] | 0})`;
         pg.beginPath(); pg.arc(cx, cy, rad, 0, 6.283); pg.fill();
         pg.fillStyle = lum(sig.rgb) > 0.52 ? '#11132a' : '#f4f3fb';
-        pg.font = `400 ${8.5 * u}px ${font}`;
+        pg.font = `700 ${9 * u}px ${font}`;
         pg.fillText(String(i + 1), cx, cy + 0.5 * u);
       });
     }
 
-    // cursor: a white dot inside a targeting reticle, deliberately unthemed
-    // so it always reads as "you". While touched, the reticle closes in,
-    // turns the "holding" yellow and slowly spins.
+    // cursor: a plain white dot, deliberately unthemed so it always reads
+    // as "you". Touching grows it and adds a thin ring.
     const c = seq.cursor, cx = px(c.x), cy = py(c.y);
     const held = seq.padHeld();
-    const R = (held ? 15 : 20) * u, arm = 7 * u;
-    const spin = held && !reduceMotion ? now / 900 : Math.PI / 4;
-    pg.lineCap = 'square';
-    for (const [col, w] of [['rgba(5,4,12,.9)', 5 * u], [held ? '#FFD60A' : '#F6F1E3', 2.4 * u]]) {
-      pg.strokeStyle = col; pg.lineWidth = w;
-      for (let k = 0; k < 4; k++) {
-        const a = spin + k * Math.PI / 2;
-        const ax = cx + Math.cos(a) * R, ay = cy + Math.sin(a) * R;
-        const t1 = a + Math.PI / 2, t2 = a - Math.PI / 2;
-        pg.beginPath();
-        pg.moveTo(ax + Math.cos(t1) * arm - Math.cos(a) * 0, ay + Math.sin(t1) * arm);
-        pg.lineTo(ax, ay);
-        pg.lineTo(ax + Math.cos(t2) * arm, ay + Math.sin(t2) * arm);
-        pg.stroke();
-      }
+    if (held) {
+      pg.strokeStyle = 'rgba(255,255,255,.55)'; pg.lineWidth = 1.5 * u;
+      pg.beginPath(); pg.arc(cx, cy, 15 * u, 0, 6.283); pg.stroke();
     }
-    pg.lineCap = 'butt';
-    pg.fillStyle = '#05040C';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 7.5 : 6) * u, 0, 6.283); pg.fill();
+    pg.fillStyle = 'rgba(5,7,12,.85)';
+    pg.beginPath(); pg.arc(cx, cy, (held ? 8.5 : 6.5) * u, 0, 6.283); pg.fill();
     pg.fillStyle = '#fff';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 5 : 4) * u, 0, 6.283); pg.fill();
-    if (held && !reduceMotion) dirty = true; // keep the reticle spinning
+    pg.beginPath(); pg.arc(cx, cy, (held ? 6 : 4.5) * u, 0, 6.283); pg.fill();
   }
 
   /* ---------- pad input ---------- */
@@ -968,13 +915,13 @@
      releasing fires onRoll(strength) once, then the die eases back to the
      left on its own. ---------- */
   function createDiceSlider(container, label, onRoll) {
-    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die">\u2685</div></div>';
+    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>';
     const el = container.querySelector('.dicetrack');
     el.setAttribute('aria-label', label);
     const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
     el.querySelector('.label').textContent = label;
-    const trackInset = 4, dieW = 34;
+    const trackInset = 5, dieW = 31;
     function place(strength) {
       const r = el.getBoundingClientRect();
       const travel = Math.max(0, r.width - dieW - trackInset * 2 - 4);
@@ -1178,18 +1125,6 @@
   });
   window.addEventListener('blur', () => { keyHeld.clear(); seq.releaseAll(); });
 
-  /* ---------- HUD over the pad: what you're on, how it's blended, where
-     the playhead is ---------- */
-  const hudName = $('#hudName'), hudMix = $('#hudMix'), hudMeta = $('#hudMeta'), hudXY = $('#hudXY');
-  function renderHud() {
-    const f = seq.focus();
-    const top = nearest(weightsAt(f.x, f.y), 2);
-    hudName.textContent = (f.kind === 'step' ? `#${f.index + 1} ` : '') + top[0].name;
-    hudMix.textContent = top.map((t) => `${Math.round(t.w * 100)}% ${t.name}`).join(' \u00b7 ');
-    hudMeta.innerHTML = `${tempo} BPM<br>${playing && cur >= 0 ? `<span class="now">STEP ${String(cur + 1).padStart(2, '0')}/16</span>` : 'STOPPED'}`;
-    hudXY.textContent = `X ${f.x.toFixed(2)}  Y ${f.y.toFixed(2)}`;
-  }
-
   /* ---------- frame loop ---------- */
   function frame(now) {
     const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
@@ -1207,9 +1142,9 @@
     stepParticles(dt, now);
     if (particles.length) dirty = true;
 
-    if (headDirty) { updateHead(); renderHud(); headDirty = false; }
+    if (headDirty) { updateHead(); headDirty = false; }
     if (stepsDirty) { renderSteps(); stepsDirty = false; }
-    if (readoutDirty || headDirty) { renderHud(); readoutDirty = false; }
+    readoutDirty = false; // nothing displays a voice readout anymore
     if (laneDirty) { drawLanes(); laneDirty = false; }
     if (dirty) { drawPad(now); dirty = false; }
     requestAnimationFrame(frame);
@@ -1218,15 +1153,42 @@
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
   const PAGE_ORDER = ['pad', 'lanes', 'kit', 'engine', 'info'];
   let currentPage = 'pad';
+  let slide = null; // the page transition in flight, if any
+  function settleSlide() {
+    if (!slide) return;
+    const { from, anims, timer } = slide;
+    slide = null;
+    clearTimeout(timer);
+    anims.forEach((an) => { try { an.cancel(); } catch (_) {} });
+    from.classList.remove('active', 'leaving');
+  }
   function setPage(page) {
-    if (!PAGE_ORDER.includes(page)) return;
+    if (!PAGE_ORDER.includes(page) || page === currentPage) return;
+    settleSlide();
+    const from = document.querySelector(`.page[data-page="${currentPage}"]`);
+    const to = document.querySelector(`.page[data-page="${page}"]`);
+    const dir = PAGE_ORDER.indexOf(page) > PAGE_ORDER.indexOf(currentPage) ? 1 : -1;
     currentPage = page;
-    document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.dataset.page === page));
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
+    to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
     // force a resize+redraw now that the page is actually visible.
     if (page === 'pad') { resizePad(); dirty = true; }
     if (page === 'lanes') { resizeLaneCanvas(); laneDirty = true; }
+    if (reduceMotion || !to.animate) { from.classList.remove('active'); return; }
+    // the old page leaves as the new one arrives, side by side like a strip;
+    // no fill mode, so once the animations end (or are cancelled) both pages
+    // are back to an untransformed resting state whatever happened
+    from.classList.add('leaving');
+    const opts = { duration: 380, easing: 'cubic-bezier(.65, 0, .35, 1)' };
+    const off = (sign) => `translateX(calc(${sign} * (100% + 24px)))`;
+    const anims = [
+      from.animate([{ transform: 'translateX(0)' }, { transform: off(-dir) }], opts),
+      to.animate([{ transform: off(dir) }, { transform: 'translateX(0)' }], opts),
+    ];
+    const timer = setTimeout(settleSlide, opts.duration + 200); // in case finish never fires
+    slide = { from, anims, timer };
+    anims[1].onfinish = () => { if (slide && slide.anims === anims) settleSlide(); };
   }
   function initPages() {
     document.querySelectorAll('.navbtn').forEach((btn) => {

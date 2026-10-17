@@ -150,7 +150,8 @@ function nearest(w, n) {
 /* voiceSignature: maps a voice's own parameters to a visual identity, so a
    point's look always follows its sound rather than a label.
    t      0 (low/tonal) .. 1 (high/noisy) on a log-frequency scale
-   hue    340 (warm, low) .. 190 (cool, high)
+   hue    30 (orange, low) .. 335 (pink) .. 280 (violet, high); kept clear of
+          the UI's indicator yellow and playhead cyan
    tW/nW/mW  body / noise / metal share of the sound (sums to 1), used to mix
              liquid / smoke / spark behaviour
    level  rough loudness, drives particle count and size
@@ -168,7 +169,7 @@ function voiceSignature(P) {
   const noiseF = Math.sqrt(Math.max(P.hp, 20) * Math.min(Math.max(P.lp, P.hp * 1.2), 18000));
   const freq = clamp((tone * toneF + (noise + metal) * noiseF) / norm, 25, 18000);
   const t = clamp((Math.log(freq) - Math.log(28)) / (Math.log(15000) - Math.log(28)), 0, 1);
-  const hue = 340 - 150 * t;
+  const hue = (30 - 110 * t + 360) % 360;
   const level = clamp(total * 0.65 + P.drive * 0.35, 0.08, 1.4);
   const sat = clamp(0.55 + nW * 0.15 + tW * 0.12, 0, 0.92);
   const light = clamp(0.4 + mW * 0.22 + level * 0.08, 0, 0.8);

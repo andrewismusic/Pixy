@@ -21,6 +21,8 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 
 ## Design rules (template.html)
 
-- Yellow (`--hold`) = touching/holding, cyan (`--now`) = playing now, magenta (`--rec`) = recording. Don't use them for anything else.
-- Raised controls use `.cap`; knob arcs take their colour from the module accent (`--m-*`).
+- Look: sci-fi instrument panel, not cartoon. No halftone, chromatic aberration or comic effects; the pad has no readouts or overlays.
+- Yellow (`--hold`) = on / selected / highlighted (toggles, active page and tab, playing, touched knob, held step). Cyan (`--now`) = the playhead. Red (`--rec`) = recording.
+- Sound colours (`voiceSignature` hue, orange -> pink -> violet) stay clear of yellow and cyan.
+- Raised controls use `.cap` and sink when pressed or on; knob arcs take their colour from the module accent (`--m-*`).
 - Check both light and dark themes, at phone width (430px).

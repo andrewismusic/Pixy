@@ -15,3 +15,11 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 - Mono/choke silences other voices at the new voice's start time `t`, not `ctx.currentTime`.
 - Recording clamps `safeNow = max(now, anchorTime)` before quantizing ratchets.
 - Toggling a step off resets it fully via `freshStep()`.
+- Resonator exciter sources must outlive the ring: Chromium stops processing a biquad ~0.28 s after its input source ends.
+- New synth params default in `BASE` so the original 14 anchors render byte-identically; check with an offline render before/after.
+
+## Design rules (template.html)
+
+- Yellow (`--hold`) = touching/holding, cyan (`--now`) = playing now, magenta (`--rec`) = recording. Don't use them for anything else.
+- Raised controls use `.cap`; knob arcs take their colour from the module accent (`--m-*`).
+- Check both light and dark themes, at phone width (430px).

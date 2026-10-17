@@ -11,12 +11,21 @@
   const mixc = (a, b, t) => [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t];
   const rgbs = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+  /* knob geometry (see createKnob) */
+  const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
+  function arcPath(a0, a1) {
+    // angles in degrees, 0 = 12 o'clock, clockwise
+    const pt = (a) => [KNOB_C + KNOB_R * Math.sin(a * Math.PI / 180), KNOB_C - KNOB_R * Math.cos(a * Math.PI / 180)];
+    if (Math.abs(a1 - a0) < 0.5) a1 = a0 + 0.5;
+    const [x0, y0] = pt(Math.min(a0, a1)), [x1, y1] = pt(Math.max(a0, a1));
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${KNOB_R} ${KNOB_R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  }
   /* ---------- state ---------- */
   let actx = null, engine = null;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
   let tempo = 118, swing = 0;
-  const trims = { tune: 0, decay: 1, drive: 0, toneMix: 1, noiseMix: 1, metalMix: 1, punch: 1 };
+  const trims = { tune: 0, decay: 1, drive: 0, fold: 0, toneMix: 1, noiseMix: 1, metalMix: 1, resMix: 1, punch: 1 };
   let cur = -1;
   let lastAud = { t: 0, x: 0, y: 0 };
   let lastT = 0;
@@ -181,6 +190,7 @@
     recording = on;
     const btn = $('#record');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('#hudRec').classList.toggle('on', on);
   }
 
   /* ==========================================================================
@@ -202,6 +212,7 @@
     for (let k = 0; k < nLiquid; k++) particles.push(makeLiquid(x, y, sig, now));
     for (let k = 0; k < nSmoke; k++) particles.push(makeSmoke(x, y, sig, now));
     for (let k = 0; k < nSpark; k++) particles.push(makeSpark(x, y, sig, now));
+    particles.push(makeImpact(x, y, sig, now), makeRing(x, y, sig, now));
     if (particles.length > PARTICLE_CAP) particles.splice(0, particles.length - PARTICLE_CAP);
     dirty = true;
   }
@@ -286,8 +297,46 @@
     pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
   }
 
-  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark };
-  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark };
+  /* impact: a comic-book starburst, ink-outlined, that pops and shrinks
+     in a few frames. Spikier and bigger for louder, brighter hits. */
+  function makeImpact(x, y, sig, now) {
+    const n = 9 + Math.round(sig.t * 7);
+    const jag = Array.from({ length: n * 2 }, (_, k) => (k % 2 ? 0.42 + Math.random() * 0.12 : 0.85 + Math.random() * 0.3));
+    return {
+      kind: 'impact', x, y, born: now, life: reduceMotion ? 90 : 190,
+      r: 0.028 + 0.05 * Math.min(1, sig.level), rot: Math.random() * Math.PI, jag, rgb: sig.rgb,
+    };
+  }
+  function drawImpact(pg, p, age, px, py, u) {
+    const scale = px(1) - px(0);
+    // grows fast for the first third, then shrinks away
+    const g = age < 0.3 ? 0.55 + age / 0.3 * 0.45 : 1 - (age - 0.3) / 0.7 * 0.85;
+    const R = p.r * scale * g, cx = px(p.x), cy = py(p.y), n = p.jag.length;
+    pg.beginPath();
+    for (let k = 0; k < n; k++) {
+      const a = p.rot + k * Math.PI * 2 / n, rr = R * p.jag[k];
+      if (k) pg.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); else pg.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    pg.closePath();
+    const a = age < 0.6 ? 1 : 1 - (age - 0.6) / 0.4;
+    pg.fillStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.35), a * 0.95);
+    pg.strokeStyle = `rgba(5,4,12,${a})`; pg.lineWidth = 2.2 * u; pg.lineJoin = 'miter';
+    pg.fill(); pg.stroke();
+  }
+  /* ring: a thin sensor-pulse circle whose reach follows the decay */
+  function makeRing(x, y, sig, now) {
+    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 220, 1400), r: 0.05 + 0.12 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
+  }
+  function drawRing(pg, p, age, px, py, u) {
+    const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
+    pg.strokeStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.5), (1 - age) * 0.7);
+    pg.lineWidth = (2.5 - 1.5 * age) * u;
+    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.015 + p.r * e) * scale, 0, 6.283); pg.stroke();
+  }
+  const noop = () => {};
+
+  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, impact: noop, ring: noop };
+  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, impact: drawImpact, ring: drawRing };
 
   function stepParticles(dt, now) {
     if (!particles.length) return;
@@ -298,8 +347,9 @@
     }
   }
 
-  /* ---------- abstract backdrop: dark field with a faint sound-coloured
-     wash plus a dotted memory grid. No labels, no icons, no named regions. */
+  /* ---------- abstract backdrop: dark field with a sound-coloured wash,
+     a Ben-Day halftone whose dots swell where the map is loud, and faint
+     scanlines. No labels, no icons, no named regions. */
   let field = document.createElement('canvas');
   function buildField(W, H) {
     const FW = 96, FH = 96;
@@ -312,7 +362,7 @@
       for (let i = 0; i < FW; i++) {
         const x = (i + 0.5) / FW;
         const sig = voiceSignature(paramsAt(x, y));
-        const t = 0.07 + 0.04 * sig.level;
+        const t = 0.1 + 0.07 * sig.level;
         const p = (j * FW + i) * 4;
         img.data[p] = base[0] * (1 - t) + sig.rgb[0] * t;
         img.data[p + 1] = base[1] * (1 - t) + sig.rgb[1] * t;
@@ -326,13 +376,19 @@
     const fg = f.getContext('2d');
     fg.imageSmoothingEnabled = true; fg.imageSmoothingQuality = 'high';
     fg.drawImage(off, 0, 0, W, H);
-    const spacing = 25 * dpr;
-    fg.fillStyle = 'rgba(255,255,255,.2)';
-    for (let gy = spacing * 0.6; gy < H; gy += spacing) {
-      for (let gx = spacing * 0.6; gx < W; gx += spacing) {
-        fg.beginPath(); fg.arc(gx, gy, 1.1 * dpr, 0, 6.283); fg.fill();
+    const spacing = 11 * dpr;
+    let row = 0;
+    for (let gy = spacing * 0.5; gy < H; gy += spacing, row++) {
+      // offset alternate rows, like a print screen
+      for (let gx = spacing * (row % 2 ? 0.5 : 0); gx < W; gx += spacing) {
+        const sig = voiceSignature(paramsAt(gx / W, 1 - gy / H));
+        const r = (0.5 + 1.5 * clamp(sig.level, 0, 1.2)) * dpr;
+        fg.fillStyle = rgbs(mixc(sig.rgb, [255, 255, 255], 0.35), 0.16);
+        fg.beginPath(); fg.arc(gx, gy, r, 0, 6.283); fg.fill();
       }
     }
+    fg.fillStyle = 'rgba(0,0,0,.16)';
+    for (let y = 0; y < H; y += 3 * dpr) fg.fillRect(0, y, W, Math.max(1, dpr * 0.8));
     return f;
   }
 
@@ -348,7 +404,7 @@
 
   function drawPad(now) {
     const W = pad.width, H = pad.height, u = dpr;
-    const font = cssVar('--font-body') || 'system-ui, sans-serif';
+    const font = cssVar('--font-display') || 'system-ui, sans-serif';
     const px = (x) => x * W, py = (y) => (1 - y) * H;
     pg.clearRect(0, 0, W, H);
     pg.drawImage(field, 0, 0, W, H);
@@ -402,24 +458,47 @@
           pg.strokeStyle = cssVar('--hold') || '#F0B400'; pg.lineWidth = 3 * u;
           pg.beginPath(); pg.arc(cx, cy, rad + 4 * u, 0, 6.283); pg.stroke();
         }
-        pg.fillStyle = 'rgba(10,11,24,.9)';
-        pg.beginPath(); pg.arc(cx, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = 'rgba(43,232,255,.75)';
+        pg.beginPath(); pg.arc(cx - 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = 'rgba(255,46,126,.75)';
+        pg.beginPath(); pg.arc(cx + 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = '#05040C';
+        pg.beginPath(); pg.arc(cx, cy, rad + 2.2 * u, 0, 6.283); pg.fill();
         pg.fillStyle = `rgb(${sig.rgb[0] | 0},${sig.rgb[1] | 0},${sig.rgb[2] | 0})`;
         pg.beginPath(); pg.arc(cx, cy, rad, 0, 6.283); pg.fill();
         pg.fillStyle = lum(sig.rgb) > 0.52 ? '#11132a' : '#f4f3fb';
-        pg.font = `700 ${9 * u}px ${font}`;
+        pg.font = `400 ${8.5 * u}px ${font}`;
         pg.fillText(String(i + 1), cx, cy + 0.5 * u);
       });
     }
 
-    // cursor: a plain white dot, deliberately unthemed so it always reads
-    // as "you", distinct from any sound's own colour
+    // cursor: a white dot inside a targeting reticle, deliberately unthemed
+    // so it always reads as "you". While touched, the reticle closes in,
+    // turns the "holding" yellow and slowly spins.
     const c = seq.cursor, cx = px(c.x), cy = py(c.y);
     const held = seq.padHeld();
-    pg.fillStyle = 'rgba(10,11,22,.85)';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 8.5 : 6.5) * u, 0, 6.283); pg.fill();
+    const R = (held ? 15 : 20) * u, arm = 7 * u;
+    const spin = held && !reduceMotion ? now / 900 : Math.PI / 4;
+    pg.lineCap = 'square';
+    for (const [col, w] of [['rgba(5,4,12,.9)', 5 * u], [held ? '#FFD60A' : '#F6F1E3', 2.4 * u]]) {
+      pg.strokeStyle = col; pg.lineWidth = w;
+      for (let k = 0; k < 4; k++) {
+        const a = spin + k * Math.PI / 2;
+        const ax = cx + Math.cos(a) * R, ay = cy + Math.sin(a) * R;
+        const t1 = a + Math.PI / 2, t2 = a - Math.PI / 2;
+        pg.beginPath();
+        pg.moveTo(ax + Math.cos(t1) * arm - Math.cos(a) * 0, ay + Math.sin(t1) * arm);
+        pg.lineTo(ax, ay);
+        pg.lineTo(ax + Math.cos(t2) * arm, ay + Math.sin(t2) * arm);
+        pg.stroke();
+      }
+    }
+    pg.lineCap = 'butt';
+    pg.fillStyle = '#05040C';
+    pg.beginPath(); pg.arc(cx, cy, (held ? 7.5 : 6) * u, 0, 6.283); pg.fill();
     pg.fillStyle = '#fff';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 6 : 4.5) * u, 0, 6.283); pg.fill();
+    pg.beginPath(); pg.arc(cx, cy, (held ? 5 : 4) * u, 0, 6.283); pg.fill();
+    if (held && !reduceMotion) dirty = true; // keep the reticle spinning
   }
 
   /* ---------- pad input ---------- */
@@ -507,7 +586,7 @@
       if (s.on) {
         const w = weightsAt(s.x, s.y);
         const sig = voiceSignature(paramsAt(s.x, s.y, w));
-        const c = mixc(sig.rgb, [20, 23, 46], 0.2);
+        const c = mixc(sig.rgb, [20, 23, 46], 0.08);
         el.style.setProperty('--c', `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
         el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
@@ -531,25 +610,39 @@
      of the map, not just a single fixed sound. Edits apply immediately and
      last for the session; Reset this drum restores its shipped tuning.
      ========================================================================== */
+  const MODULES = [
+    { id: 'body', label: 'Body', accent: '--m-body' },
+    { id: 'noise', label: 'Noise', accent: '--m-noise' },
+    { id: 'metal', label: 'Metal', accent: '--m-metal' },
+    { id: 'res', label: 'Resonator', accent: '--m-res' },
+    { id: 'filter', label: 'Filter', accent: '--m-filter' },
+    { id: 'out', label: 'Shape & out', accent: '--m-out' },
+  ];
   const PARAM_SPECS = [
-    { key: 'f', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz' },
-    { key: 'pEnv', label: 'Pitch sweep depth', min: 0, max: 5, step: 0.05, unit: 'oct' },
-    { key: 'pDec', label: 'Pitch sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's' },
-    { key: 'tone', label: 'Body level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'tDec', label: 'Body decay', min: 0.02, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'fm', label: 'Body FM crack', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'noise', label: 'Noise level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'nDec', label: 'Noise decay', min: 0.01, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'burst', label: 'Clap-style bursts', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'metal', label: 'Metal level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'mDec', label: 'Metal decay', min: 0.02, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'mPitch', label: 'Metal pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x' },
-    { key: 'hp', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz' },
-    { key: 'lp', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz' },
-    { key: 'q', label: 'Resonance', min: 0, max: 10, step: 0.1, unit: 'q' },
-    { key: 'drive', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'atk', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
-    { key: 'lvl', label: 'Output level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
+    { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
+    { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
+    { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
+    { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
+    { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
+    { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
+    { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
+    { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
+    { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
+    { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
+    { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
+    { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
+    { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
   ];
   function fmtParam(unit, v) {
     if (unit === 'hz') return fmtHz(v);
@@ -557,6 +650,7 @@
     if (unit === 'oct') return v.toFixed(2) + ' oct';
     if (unit === 'x') return '\u00d7' + v.toFixed(2);
     if (unit === 'q') return v.toFixed(1);
+    if (unit === 'shape') return v < 0.2 ? 'string' : v < 0.4 ? 'tube' : v < 0.6 ? 'skin' : v < 0.8 ? 'plate' : 'bar';
     return Math.round(v * 100) + '%';
   }
 
@@ -594,11 +688,21 @@
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
   }
+  const moduleGrids = {};
+  for (const m of MODULES) {
+    const el = document.createElement('div');
+    el.className = 'module'; el.style.setProperty('--accent', `var(${m.accent})`);
+    el.innerHTML = '<h3></h3><div class="knobgrid"></div>';
+    el.querySelector('h3').textContent = m.label;
+    engineParams.appendChild(el);
+    moduleGrids[m.id] = el.querySelector('.knobgrid');
+  }
   const paramRows = PARAM_SPECS.map((spec) => {
-    const container = document.createElement('div'); container.className = 'field';
-    engineParams.appendChild(container);
-    const slider = createHSlider(container, {
-      min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key],
+    const container = document.createElement('div');
+    moduleGrids[spec.mod].appendChild(container);
+    const slider = createKnob(container, {
+      min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key], log: spec.log,
+      def: () => ORIGINAL_PARAMS[+engineSelect.value][spec.key],
       label: spec.label, fmt: (v) => fmtParam(spec.unit, v),
       onInput: (v) => {
         const a = ANCHORS[+engineSelect.value];
@@ -669,18 +773,21 @@
       const sig = voiceSignature(paramsAt(s.x, s.y));
       const base = px2(i, colW);
       if (i === cur) {
-        lg.fillStyle = 'rgba(255,255,255,.06)';
+        lg.fillStyle = 'rgba(43,232,255,.14)';
         lg.fillRect(base, 0, colW, H);
       }
       rows.forEach((row, ri) => {
         const top = ri * rowH, h = rowH - gap;
         const v = clamp(s[row.key], 0, 1);
-        lg.fillStyle = on ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)';
+        lg.fillStyle = on ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)';
         lg.fillRect(base + gap / 2, top + gap / 2, colW - gap, h - gap / 2);
         const barH = Math.max(2 * u, v * (h - gap / 2));
         const rgb = on ? sig.rgb : [90, 92, 112];
-        lg.fillStyle = rgbs(rgb, on ? 0.92 : 0.5);
-        lg.fillRect(base + gap / 2, top + (h - gap / 2) - barH + gap / 2, colW - gap, barH);
+        const barTop = top + (h - gap / 2) - barH + gap / 2;
+        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.5);
+        lg.fillRect(base + gap / 2, barTop, colW - gap, barH);
+        lg.fillStyle = on ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.25)';
+        lg.fillRect(base + gap / 2, barTop, colW - gap, Math.min(barH, 3 * u));
         // a neutral mark at the middle of the decay row shows "no change"
         if (row.key === 'decay') {
           lg.fillStyle = 'rgba(255,255,255,.4)';
@@ -768,60 +875,88 @@
   });
   $('#laneHint').textContent = LANE_HINT.prob;
 
-  /* ---------- hslider: a rectangular, directly-draggable control. Click
-     anywhere on the track to jump there, drag to sweep, arrow keys to
-     nudge. The parameter name sits inside the bar on the left, the live
-     value on the right (see .hslider in template.html). ---------- */
-  function createHSlider(container, opts) {
-    container.innerHTML = '<div class="hslider" tabindex="0" role="slider"><div class="hslider-fill"></div><span class="hslider-label"></span><span class="hslider-value"></span></div>';
-    const el = container.querySelector('.hslider');
-    const fill = el.querySelector('.hslider-fill');
-    const labelEl = el.querySelector('.hslider-label');
-    const valueEl = el.querySelector('.hslider-value');
-    labelEl.textContent = opts.label;
-    el.setAttribute('aria-label', opts.label);
+  /* ---------- knob: drag up/right to turn up, down/left to turn down
+     (Shift for fine), double-tap to reset, arrow keys to nudge. A 270
+     degree arc shows the value; bipolar knobs fill from 12 o'clock. log
+     knobs move evenly in ratio (pitches, times), not in Hz or seconds.
+     Same API the old hslider had: { value, set(v) }. ---------- */
+  function createKnob(container, opts) {
+    container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
+      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
+      '<div class="knob-cap"></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
+    const el = container.querySelector('.knob');
+    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
+    el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
+    el.querySelector('.knob-label').textContent = opts.label;
+    el.setAttribute('aria-label', opts.ariaLabel || opts.label);
     el.setAttribute('aria-valuemin', opts.min);
     el.setAttribute('aria-valuemax', opts.max);
     const step = opts.step || 1;
+    const initial = opts.value;
     let value = opts.value;
-    const snap = (v) => Math.min(opts.max, Math.max(opts.min, Math.round((v - opts.min) / step) * step + opts.min));
+    const useLog = !!opts.log && opts.min > 0;
+    const toPos = (v) => useLog ? Math.log(v / opts.min) / Math.log(opts.max / opts.min) : (v - opts.min) / (opts.max - opts.min);
+    const fromPos = (p) => useLog ? opts.min * Math.pow(opts.max / opts.min, p) : opts.min + p * (opts.max - opts.min);
+    const snap = (v) => {
+      const q = Math.round((v - opts.min) / step) * step + opts.min;
+      return Math.min(opts.max, Math.max(opts.min, +q.toFixed(6)));
+    };
     function render() {
-      const frac = (value - opts.min) / (opts.max - opts.min);
-      fill.style.width = (frac * 100) + '%';
+      const pos = clamp(toPos(value), 0, 1);
+      const ang = -KNOB_SWEEP / 2 + pos * KNOB_SWEEP;
+      const from = opts.bipolar ? 0 : -KNOB_SWEEP / 2;
+      valPath.setAttribute('d', arcPath(from, ang));
+      valPath.style.opacity = !opts.bipolar && pos < 0.004 ? 0 : 1;
+      el.style.setProperty('--rot', ang + 'deg');
       valueEl.textContent = opts.fmt ? opts.fmt(value) : String(value);
       el.setAttribute('aria-valuenow', value);
+      el.setAttribute('aria-valuetext', valueEl.textContent);
     }
-    function fromClientX(clientX) {
-      const r = el.getBoundingClientRect();
-      const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-      value = snap(opts.min + frac * (opts.max - opts.min));
-      render();
-    }
-    let dragging = false;
+    const emit = () => { if (opts.onInput) opts.onInput(value); };
+    let drag = null, lastTap = 0;
     el.addEventListener('pointerdown', (e) => {
-      dragging = true;
+      e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
-      fromClientX(e.clientX);
-      if (opts.onInput) opts.onInput(value);
+      el.focus({ preventScroll: true });
+      const t = performance.now();
+      if (t - lastTap < 320) {
+        // double-tap: back to the default (for drums, their shipped tuning)
+        lastTap = 0;
+        value = snap(typeof opts.def === 'function' ? opts.def() : (opts.def != null ? opts.def : initial));
+        render(); emit();
+        if (opts.onChange) opts.onChange(value);
+        return;
+      }
+      lastTap = t;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, pos: clamp(toPos(value), 0, 1) };
+      el.classList.add('active');
       if (opts.onPointerDown) opts.onPointerDown(value);
     });
-    el.addEventListener('pointermove', (e) => { if (dragging) { fromClientX(e.clientX); if (opts.onInput) opts.onInput(value); } });
-    const end = () => {
-      if (!dragging) return;
-      dragging = false;
+    el.addEventListener('pointermove', (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const travel = e.shiftKey ? 800 : 200;
+      const p = clamp(drag.pos + ((e.clientX - drag.x) - (e.clientY - drag.y)) / travel, 0, 1);
+      const v = snap(fromPos(p));
+      if (v !== value) { value = v; render(); emit(); }
+    });
+    const end = (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      drag = null; el.classList.remove('active');
       if (opts.onPointerUp) opts.onPointerUp(value);
       if (opts.onChange) opts.onChange(value);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
     el.addEventListener('keydown', (e) => {
-      let d = 0;
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') d = -step;
-      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') d = step;
+      let dir = 0;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') dir = -1;
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') dir = 1;
       else return;
       e.preventDefault();
-      value = snap(value + d); render();
-      if (opts.onInput) opts.onInput(value);
+      const before = value;
+      value = snap(fromPos(clamp(toPos(value) + dir * (e.shiftKey ? 0.1 : 0.01), 0, 1)));
+      if (value === before) value = snap(value + dir * step); // coarse knobs: at least one step
+      render(); emit();
       if (opts.onChange) opts.onChange(value);
     });
     render();
@@ -833,25 +968,25 @@
      releasing fires onRoll(strength) once, then the die eases back to the
      left on its own. ---------- */
   function createDiceSlider(container, label, onRoll) {
-    container.innerHTML = '<div class="hslider dicetrack" tabindex="0" role="slider" aria-label="' +
-      label + '"><div class="hslider-fill"></div><span class="hslider-label"></span><div class="die">\u2685</div></div>';
+    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die">\u2685</div></div>';
     const el = container.querySelector('.dicetrack');
-    const fill = el.querySelector('.hslider-fill');
-    const labelEl = el.querySelector('.hslider-label');
+    el.setAttribute('aria-label', label);
+    const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
-    labelEl.textContent = label;
-    const trackInset = 3, dieW = 30;
+    el.querySelector('.label').textContent = label;
+    const trackInset = 4, dieW = 34;
     function place(strength) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(0, r.width - dieW - trackInset * 2);
+      const travel = Math.max(0, r.width - dieW - trackInset * 2 - 4);
       die.style.left = (trackInset + strength * travel) + 'px';
-      fill.style.width = (strength * 100) + '%';
+      die.style.transform = `rotate(${strength * 720}deg)`;
+      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW / 2 : 0) + 'px';
     }
     place(0);
     let dragging = false;
     function fromClientX(clientX) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(1, r.width - dieW - trackInset * 2);
+      const travel = Math.max(1, r.width - dieW - trackInset * 2 - 4);
       const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW / 2) / travel));
       place(strength);
       return strength;
@@ -871,6 +1006,11 @@
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+    // keyboard: Enter rolls at half strength, digits 1-9 roll at 10-90%
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoll(0.5); }
+      else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); onRoll(+e.key / 10); }
+    });
   }
 
   /* kit-wide Decay trim: deliberately a multiplier, not a plain percentage
@@ -891,21 +1031,25 @@
   }
 
   /* ---------- controls ---------- */
-  const tempoSlider = createHSlider($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: () => history.commit() });
-  const swingSlider = createHSlider($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const quantizeSlider = createHSlider($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: () => history.commit() });
-  const tuneSlider = createHSlider($('#tuneField'), { min: -12, max: 12, step: 1, value: 0, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; readoutDirty = true; }, onChange: () => history.commit() });
-  const decaySlider = createHSlider($('#decayField'), { min: -100, max: 100, step: 1, value: 0, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); readoutDirty = true; }, onChange: () => history.commit() });
-  const driveSlider = createHSlider($('#driveField'), { min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: (v) => v + '%', onInput: (v) => { trims.drive = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
+  const commit = () => history.commit();
+  const tempoSlider = createKnob($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: commit });
+  const swingSlider = createKnob($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: commit });
+  const quantizeSlider = createKnob($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: commit });
 
-  /* kit-wide macro mixes: shift the balance of every drum on the map at
-     once, independent of any single drum's own tuning. */
-  const macroEl = $('#macroParams');
-  const macroRow = (id) => { const d = document.createElement('div'); d.className = 'field'; d.id = id; macroEl.appendChild(d); return d; };
-  const macroPunchSlider = createHSlider(macroRow('macroPunch'), { min: 0, max: 300, step: 1, value: 100, label: 'Punch (attack)', fmt: (v) => v + '%', onInput: (v) => { trims.punch = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroToneSlider = createHSlider(macroRow('macroTone'), { min: 0, max: 200, step: 1, value: 100, label: 'Body mix', fmt: (v) => v + '%', onInput: (v) => { trims.toneMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroNoiseSlider = createHSlider(macroRow('macroNoise'), { min: 0, max: 200, step: 1, value: 100, label: 'Noise mix', fmt: (v) => v + '%', onInput: (v) => { trims.noiseMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroMetalSlider = createHSlider(macroRow('macroMetal'), { min: 0, max: 200, step: 1, value: 100, label: 'Metal mix', fmt: (v) => v + '%', onInput: (v) => { trims.metalMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
+  /* kit-wide trims and macro mixes: shift every drum on the map at once,
+     independent of any single drum's own tuning. */
+  const kitEl = $('#kitKnobs');
+  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit }, o)); };
+  const pct = (v) => v + '%';
+  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
+  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
+  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
+  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
+  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
+  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
+  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
+  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
+  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
   $('#play').addEventListener('click', () => setPlaying(!playing));
   $('#record').addEventListener('click', () => setRecording(!recording));
@@ -939,7 +1083,7 @@
     restore(s) {
       seq.steps = JSON.parse(JSON.stringify(s.steps));
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
-      Object.assign(trims, s.trims);
+      Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing; quantizeN = s.quantizeN;
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
@@ -950,6 +1094,8 @@
       tuneSlider.set(trims.tune);
       decaySlider.set(kitDecaySliderFromValue(trims.decay));
       driveSlider.set(Math.round(trims.drive * 100));
+      foldSlider.set(Math.round((trims.fold || 0) * 100));
+      macroResSlider.set(Math.round((trims.resMix == null ? 1 : trims.resMix) * 100));
       macroPunchSlider.set(Math.round(trims.punch * 100));
       macroToneSlider.set(Math.round(trims.toneMix * 100));
       macroNoiseSlider.set(Math.round(trims.noiseMix * 100));
@@ -1032,6 +1178,18 @@
   });
   window.addEventListener('blur', () => { keyHeld.clear(); seq.releaseAll(); });
 
+  /* ---------- HUD over the pad: what you're on, how it's blended, where
+     the playhead is ---------- */
+  const hudName = $('#hudName'), hudMix = $('#hudMix'), hudMeta = $('#hudMeta'), hudXY = $('#hudXY');
+  function renderHud() {
+    const f = seq.focus();
+    const top = nearest(weightsAt(f.x, f.y), 2);
+    hudName.textContent = (f.kind === 'step' ? `#${f.index + 1} ` : '') + top[0].name;
+    hudMix.textContent = top.map((t) => `${Math.round(t.w * 100)}% ${t.name}`).join(' \u00b7 ');
+    hudMeta.innerHTML = `${tempo} BPM<br>${playing && cur >= 0 ? `<span class="now">STEP ${String(cur + 1).padStart(2, '0')}/16</span>` : 'STOPPED'}`;
+    hudXY.textContent = `X ${f.x.toFixed(2)}  Y ${f.y.toFixed(2)}`;
+  }
+
   /* ---------- frame loop ---------- */
   function frame(now) {
     const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
@@ -1049,9 +1207,9 @@
     stepParticles(dt, now);
     if (particles.length) dirty = true;
 
-    if (headDirty) { updateHead(); headDirty = false; }
+    if (headDirty) { updateHead(); renderHud(); headDirty = false; }
     if (stepsDirty) { renderSteps(); stepsDirty = false; }
-    readoutDirty = false; // voice readout was removed; nothing consumes this flag anymore
+    if (readoutDirty || headDirty) { renderHud(); readoutDirty = false; }
     if (laneDirty) { drawLanes(); laneDirty = false; }
     if (dirty) { drawPad(now); dirty = false; }
     requestAnimationFrame(frame);
@@ -1075,7 +1233,7 @@
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .hslider, .dicetrack, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, #laneCanvas, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

@@ -77,3 +77,34 @@ test('trial never fires an off step and respects prob=0', () => {
   s.setLane(0, 'prob', 0);
   for (let i = 0; i < 50; i++) assert.equal(s.trial(0).fired, false);
 });
+
+test('foldCurve is the identity at 0 and folds at 1', () => {
+  const c0 = C.foldCurve(0), c1 = C.foldCurve(1), n = c0.length;
+  for (let i = 0; i < n; i += 97) near(c0[i], i / (n - 1) * 2 - 1, 1e-6);
+  let zc = 0;
+  for (let i = 1; i < n; i++) if ((c1[i] >= 0) !== (c1[i - 1] >= 0)) zc++;
+  assert.ok(zc >= 7, `only ${zc} zero crossings`);
+});
+
+test('modeRatios hits harmonic, membrane and bar sets at 0, 0.5, 1', () => {
+  assert.deepEqual(C.modeRatios(0).map((r) => +r.toFixed(3)), [1, 2, 3, 4, 5]);
+  near(C.modeRatios(0.5)[1], 1.594, 1e-9);
+  near(C.modeRatios(1)[4], 13.344, 1e-9);
+  for (const s of [0.1, 0.3, 0.7, 0.9]) {
+    const r = C.modeRatios(s);
+    for (let k = 1; k < r.length; k++) assert.ok(r[k] > r[k - 1]);
+  }
+});
+
+test('modeQ gives the requested -60 dB ring time', () => {
+  const Q = C.modeQ(440, 0.75);
+  near(Q * Math.log(1000) / (Math.PI * 440), 0.75, 1e-9);
+});
+
+test('new synthesis params blend and default from BASE', () => {
+  for (const k of ['fmRatio', 'fold', 'res', 'resF', 'resDec', 'resShape']) assert.ok(k in C.BASE, k);
+  const kick = C.ANCHORS.find((a) => a.name === 'kick');
+  near(C.paramsAt(kick.x, kick.y).fmRatio, 1.41, 1e-3);
+  const marimba = C.ANCHORS.find((a) => a.name === 'marimba');
+  assert.ok(C.paramsAt(marimba.x, marimba.y).res > 0.7);
+});

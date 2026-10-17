@@ -1,6 +1,8 @@
 # Pixy
 
-A single-voice XY-pad drum synthesizer with a 16-step sequencer. Moving a point around a square pad morphs between 14 synthesized drum "anchors" (kick, snare, hats, clap, cowbell, …); the sequencer records pad gestures, including sub-step ratchets and per-step probability/deviation/decay lanes.
+A single-voice XY-pad drum synthesizer with a 16-step sequencer. Moving a point around a square pad morphs between 18 synthesized drum "anchors" (kick, snare, hats, clap, tabla, marimba, bell, …); the sequencer records pad gestures, including sub-step ratchets and per-step probability/deviation/decay lanes.
+
+Each voice layers a pitched FM body, noise, 808-style metal and a modal resonator (a lightweight physical model), through a filter, wavefolder and drive.
 
 The current build is a web prototype: pure Web Audio + Canvas2D, no dependencies. The plan is a native iOS port; see [`docs/ios-port-handoff.md`](docs/ios-port-handoff.md).
 

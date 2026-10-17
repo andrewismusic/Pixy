@@ -29,12 +29,17 @@ function hsl2rgb(h, s, l) {
    fm      FM crack on the body (0-1)
    noise   noise level  nDec  noise decay (s)      burst  clap-style re-triggers (0-1)
    metal   six-square metal bank level  mDec decay (s)  mPitch  bank pitch multiplier
+   fmRatio FM modulator ratio to the body pitch (1.41 = the original crack; 3.5 = bell)
+   res     resonator level: a struck modal bank (lightweight physical model)
+   resF    resonator fundamental (Hz)   resDec  ring time (s, to -60 dB)
+   resShape  mode spacing: 0 string/tube (harmonic) .. 0.5 drum skin .. 1 bar/bell
    hp lp   high-pass / low-pass on noise+metal (Hz)  q  resonance on the low-pass (dB)
-   drive   saturation (0-1)   atk  attack (s)   lvl  output trim */
+   drive   saturation (0-1)   fold  wavefolder (0-1)   atk  attack (s)   lvl  output trim */
 const BASE = {
   f: 200, pEnv: 0, pDec: 0.03, tone: 0, tDec: 0.1, fm: 0,
   noise: 0, nDec: 0.1, burst: 0, metal: 0, mDec: 0.1, mPitch: 1,
   hp: 200, lp: 12000, q: 0, drive: 0, atk: 0.001, lvl: 1,
+  fmRatio: 1.41, fold: 0, res: 0, resF: 300, resDec: 0.4, resShape: 0.5,
 };
 
 const ANCHOR_DEFS = [
@@ -66,6 +71,15 @@ const ANCHOR_DEFS = [
     p: { f: 170, pEnv: 4.2, pDec: 0.16, tone: 1, tDec: 0.35, fm: 0.9, noise: 0.05, nDec: 0.05, hp: 2000, lp: 9000, drive: 0.2, atk: 0.003, lvl: 0.55 } },
   { name: 'rumble', x: 0.58, y: 0.08, hue: 262,
     p: { noise: 1, nDec: 0.55, hp: 35, lp: 380, q: 8, drive: 0.1, atk: 0.004, lvl: 1.3 } },
+  // resonator / FM / fold anchors: the expanded palette
+  { name: 'tabla', x: 0.30, y: 0.24, hue: 30,
+    p: { f: 150, pEnv: 0.7, pDec: 0.03, tone: 0.45, tDec: 0.1, res: 1, resF: 205, resDec: 0.6, resShape: 0.5, noise: 0.1, nDec: 0.012, hp: 900, lp: 7000, drive: 0.12, lvl: 1.05 } },
+  { name: 'marimba', x: 0.33, y: 0.63, hue: 48,
+    p: { res: 1, resF: 440, resDec: 0.75, resShape: 1, noise: 0.06, nDec: 0.006, hp: 1500, lp: 8000, atk: 0.0005, drive: 0.05, lvl: 1.1 } },
+  { name: 'bell', x: 0.84, y: 0.46, hue: 196,
+    p: { f: 620, tone: 0.8, tDec: 1.1, fm: 0.55, fmRatio: 3.5, res: 0.5, resF: 1240, resDec: 1.0, resShape: 1, atk: 0.0005, lvl: 0.6 } },
+  { name: 'fuzz', x: 0.46, y: 0.20, hue: 4,
+    p: { f: 68, pEnv: 1.6, pDec: 0.05, tone: 1, tDec: 0.3, fm: 0.1, noise: 0.12, nDec: 0.02, hp: 600, lp: 4000, drive: 0.45, fold: 0.6, lvl: 0.8 } },
 ];
 
 const ANCHORS = ANCHOR_DEFS.map((d) => ({
@@ -86,13 +100,14 @@ function weightsAt(x, y) {
   return w.map((v) => v / s);
 }
 
-const LOG_KEYS = new Set(['f', 'pDec', 'tDec', 'nDec', 'mDec', 'mPitch', 'hp', 'lp', 'atk']);
+const LOG_KEYS = new Set(['f', 'pDec', 'tDec', 'nDec', 'mDec', 'mPitch', 'hp', 'lp', 'atk', 'fmRatio', 'resF', 'resDec']);
 const GROUPS = [
-  [['f', 'pEnv', 'pDec', 'tDec', 'fm'], (p) => p.tone + 0.03],
+  [['f', 'pEnv', 'pDec', 'tDec', 'fm', 'fmRatio'], (p) => p.tone + 0.03],
+  [['resF', 'resDec', 'resShape'], (p) => p.res + 0.03],
   [['nDec', 'burst'], (p) => p.noise + 0.03],
   [['mDec', 'mPitch'], (p) => p.metal + 0.03],
   [['hp', 'lp', 'q'], (p) => p.noise + p.metal + 0.03],
-  [['tone', 'noise', 'metal', 'drive', 'atk', 'lvl'], () => 1],
+  [['tone', 'noise', 'metal', 'res', 'drive', 'fold', 'atk', 'lvl'], () => 1],
 ];
 
 function paramsAt(x, y, w) {
@@ -141,26 +156,31 @@ function nearest(w, n) {
    level  rough loudness, drives particle count and size
    dec    a single representative decay time (s), drives particle lifetime */
 function voiceSignature(P) {
-  const tone = clamp(P.tone, 0, 1), noise = clamp(P.noise, 0, 1), metal = clamp(P.metal, 0, 1);
+  const body = clamp(P.tone, 0, 1), res = clamp(P.res || 0, 0, 1);
+  const tone = clamp(body + res, 0, 1), noise = clamp(P.noise, 0, 1), metal = clamp(P.metal, 0, 1);
   const total = tone + noise + metal;
   const norm = total > 0.001 ? total : 1;
   const tW = tone / norm, nW = noise / norm, mW = metal / norm;
-  const dec = (tone * P.tDec + noise * P.nDec + metal * P.mDec) / norm;
+  const bodyN = body + res > 0.001 ? body + res : 1;
+  const toneF = (body * P.f + res * (P.resF || P.f)) / bodyN;
+  const toneDec = (body * P.tDec + res * (P.resDec || P.tDec)) / bodyN;
+  const dec = (tone * toneDec + noise * P.nDec + metal * P.mDec) / norm;
   const noiseF = Math.sqrt(Math.max(P.hp, 20) * Math.min(Math.max(P.lp, P.hp * 1.2), 18000));
-  const freq = clamp((tone * P.f + (noise + metal) * noiseF) / norm, 25, 18000);
+  const freq = clamp((tone * toneF + (noise + metal) * noiseF) / norm, 25, 18000);
   const t = clamp((Math.log(freq) - Math.log(28)) / (Math.log(15000) - Math.log(28)), 0, 1);
   const hue = 340 - 150 * t;
   const level = clamp(total * 0.65 + P.drive * 0.35, 0.08, 1.4);
   const sat = clamp(0.55 + nW * 0.15 + tW * 0.12, 0, 0.92);
   const light = clamp(0.4 + mW * 0.22 + level * 0.08, 0, 0.8);
-  return { t, hue, tW, nW, mW, freq, level, dec, drive: clamp(P.drive, 0, 1), rgb: hsl2rgb(hue, sat, light) };
+  return { t, hue, tW, nW, mW, freq, level, dec, drive: clamp(P.drive + (P.fold || 0), 0, 1), rgb: hsl2rgb(hue, sat, light) };
 }
 
 /* ==========================================================================
    Drum voice (Web Audio). One call = one hit.
-   body: sine + pitch envelope (+ FM crack)      noise: white noise, optional clap bursts
+   body: sine + pitch envelope (+ FM, any ratio)  noise: white noise, optional clap bursts
    metal: six detuned squares (808 hat ratios)   noise+metal -> high-pass -> low-pass
-   all layers -> drive (tanh) -> output. Short exponential amp envelopes.
+   resonator: a mallet click into five tuned band-passes (modal synthesis)
+   all layers -> wavefolder (sine) -> drive (tanh) -> output. Short exponential amp envelopes.
    ========================================================================== */
 
 const METAL_RATIOS = [205.3, 304.4, 369.6, 522.7, 540, 800];
@@ -170,6 +190,60 @@ const SHAPER_CURVE = (() => {
   for (let i = 0; i < n; i++) c[i] = Math.tanh((i / (n - 1) * 2 - 1) * k) / d;
   return c;
 })();
+
+/* wavefolder: a sine fold, crossfaded in from dry so small amounts are
+   gentle. Curves are cached per 1/50th of the fold amount. */
+const FOLD_CURVES = new Map();
+function foldCurve(amount) {
+  const key = Math.round(clamp(amount, 0, 1) * 50);
+  let c = FOLD_CURVES.get(key);
+  if (!c) {
+    const a = key / 50, n = 2048, k = 1 + 7 * a, m = Math.min(1, a * 4);
+    c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1) * 2 - 1;
+      c[i] = (1 - m) * x + m * Math.sin(x * k * Math.PI / 2);
+    }
+    FOLD_CURVES.set(key, c);
+  }
+  return c;
+}
+
+/* resonator mode ratios. resShape morphs (log domain) between three
+   idealized bodies: a string/tube (harmonic), a circular membrane, and a
+   free bar (marimba, bell-ish). */
+const MODE_SETS = [
+  [1, 2, 3, 4, 5],
+  [1, 1.594, 2.136, 2.296, 2.653],
+  [1, 2.756, 5.404, 8.933, 13.344],
+];
+const MODE_AMPS = [1, 0.62, 0.46, 0.36, 0.28];
+function modeRatios(shape) {
+  const s = clamp(shape, 0, 1) * 2;
+  const i = Math.min(1, Math.floor(s)), f = s - i;
+  return MODE_SETS[0].map((_, k) => Math.exp(Math.log(MODE_SETS[i][k]) * (1 - f) + Math.log(MODE_SETS[i + 1][k]) * f));
+}
+/* Q that makes a band-pass ring for `t60` seconds at `freq`: a two-pole
+   resonator's envelope falls as exp(-pi f t / Q), and -60 dB is ln(1000). */
+function modeQ(freq, t60) { return clamp(Math.PI * freq * t60 / Math.log(1000), 0.5, 4000); }
+
+/* a short half-sine "mallet" pulse; its area is what the resonator gain
+   compensation divides by. One buffer per context. The buffer runs on in
+   silence for 4 s: Chromium stops processing a biquad ~0.28 s after its
+   source ends (tail-time cap), so the source has to outlive the ring. */
+const CLICK_BUFS = new WeakMap();
+const CLICK_LEN = 12;
+const CLICK_AREA = (() => { let s = 0; for (let i = 0; i < CLICK_LEN; i++) s += Math.sin(Math.PI * (i + 0.5) / CLICK_LEN); return s; })();
+function clickBuf(ctx) {
+  let b = CLICK_BUFS.get(ctx);
+  if (!b) {
+    b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 4.05), ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < CLICK_LEN; i++) d[i] = Math.sin(Math.PI * (i + 0.5) / CLICK_LEN);
+    CLICK_BUFS.set(ctx, b);
+  }
+  return b;
+}
 
 function ampEnv(param, t, atk, level, dec) {
   param.setValueAtTime(0, t);
@@ -205,16 +279,19 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
   const tune = Math.pow(2, trims.tune / 12);
   const dm = trims.decay * (extraDecay == null ? 1 : extraDecay);
   const drive = clamp(P.drive + trims.drive, 0, 1);
+  const fold = clamp((P.fold || 0) + (trims.fold || 0), 0, 1);
   // kit-wide macro mixes: blend the whole kit's character without touching
   // any single drum's own tuning. 1 = unchanged.
   const toneMix = trims.toneMix == null ? 1 : trims.toneMix;
   const noiseMix = trims.noiseMix == null ? 1 : trims.noiseMix;
   const metalMix = trims.metalMix == null ? 1 : trims.metalMix;
   const punch = trims.punch == null ? 1 : trims.punch;
-  P = Object.assign({}, P, {
+  const resMix = trims.resMix == null ? 1 : trims.resMix;
+  P = Object.assign({}, BASE, P, {
     tone: clamp(P.tone * toneMix, 0, 2),
     noise: clamp(P.noise * noiseMix, 0, 2),
     metal: clamp(P.metal * metalMix, 0, 2),
+    res: clamp((P.res || 0) * resMix, 0, 2),
     atk: Math.max(0.0002, P.atk * punch),
   });
 
@@ -222,6 +299,15 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
   const shp = ctx.createWaveShaper(); shp.curve = SHAPER_CURVE;
   const post = ctx.createGain(); post.gain.value = P.lvl * 0.9 / (1 + drive * 0.8);
   pre.connect(shp); shp.connect(post); post.connect(out);
+  // every layer feeds `bus`: straight into the drive stage, or through the
+  // wavefolder first when there's any fold
+  let bus = pre;
+  if (fold > 0.01) {
+    // more fold also drives the folder harder, so it keeps biting into the tail
+    bus = ctx.createGain(); bus.gain.value = 0.8 + fold * 2.4;
+    const fs = ctx.createWaveShaper(); fs.curve = foldCurve(fold); fs.oversample = '2x';
+    bus.connect(fs); fs.connect(pre);
+  }
 
   let end = t;
   const stopAt = (node, time) => { node.stop(time); if (time > end) end = time; };
@@ -236,15 +322,15 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
     ampEnv(g.gain, t, P.atk, P.tone, dur);
     if (P.fm > 0.02) {
       const mod = ctx.createOscillator(); mod.type = 'sine';
-      mod.frequency.setValueAtTime(fs * 1.41, t);
-      mod.frequency.setTargetAtTime(f * 1.41, t, tau);
+      mod.frequency.setValueAtTime(fs * P.fmRatio, t);
+      mod.frequency.setTargetAtTime(f * P.fmRatio, t, tau);
       const mg = ctx.createGain();
       mg.gain.setValueAtTime(P.fm * f * 4, t);
       mg.gain.setTargetAtTime(0, t, Math.max(0.008, dur * 0.25));
       mod.connect(mg); mg.connect(osc.frequency);
       mod.start(t); stopAt(mod, t + P.atk + dur + 0.05);
     }
-    osc.connect(g); g.connect(pre);
+    osc.connect(g); g.connect(bus);
     osc.start(t); stopAt(osc, t + P.atk + dur + 0.05);
   }
 
@@ -255,7 +341,7 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
     lp.frequency.value = Math.min(Math.max(P.lp, P.hp * 1.2), ctx.sampleRate * 0.45);
     lp.Q.value = P.q;
-    hp.connect(lp); lp.connect(pre);
+    hp.connect(lp); lp.connect(bus);
 
     if (wantN) {
       const dur = P.nDec * dm;
@@ -278,6 +364,26 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
       }
       mg.connect(hp);
     }
+  }
+
+  if (P.res > 0.02) {
+    const sr = ctx.sampleRate, t60 = Math.min(4, P.resDec * dm);
+    const src = ctx.createBufferSource(); src.buffer = clickBuf(ctx);
+    const rg = ctx.createGain(); rg.gain.value = P.res * 0.45;
+    rg.connect(bus);
+    modeRatios(P.resShape).forEach((r, k) => {
+      const fr = P.resF * tune * r;
+      if (fr > sr * 0.45) return;
+      const Q = modeQ(fr, t60), w0 = 2 * Math.PI * fr / sr;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+      bp.frequency.value = fr; bp.Q.value = Q;
+      // a band-pass hit by a unit impulse rings at ~sin(w0)/Q; undo that
+      // so every mode starts at MODE_AMPS[k] whatever its pitch and ring
+      const g = ctx.createGain(); g.gain.value = MODE_AMPS[k] * Q / (Math.sin(w0) * CLICK_AREA);
+      src.connect(bp); bp.connect(g); g.connect(rg);
+    });
+    src.start(t + P.atk);
+    stopAt(src, t + P.atk + t60 + 0.02);
   }
   return end;
 }
@@ -561,5 +667,6 @@ const DEMO_BEAT = [
 if (typeof module !== "undefined") module.exports = {
   N_STEPS, SIGMA, clamp, BASE, ANCHOR_DEFS, ANCHORS, weightsAt, LOG_KEYS, GROUPS, paramsAt,
   colorAt, decayMultiplier, nearest, voiceSignature, METAL_RATIOS, BURST_GAP, SHAPER_CURVE,
+  foldCurve, modeRatios, modeQ, playVoice, Engine,
   LANE_DEFAULTS, freshStep, QUANT_VALUES, slotDuration, quantizedSlot, Sequence, DEMO_BEAT,
 };

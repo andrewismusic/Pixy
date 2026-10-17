@@ -6,216 +6,315 @@
 <title>Pixy: an XY drum synth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400..600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+/* ==========================================================================
+   Look: comic-print paper by day (halftone, ink outlines, misregistered
+   cyan/magenta), a HUD at night (indigo, scanlines, cyan readouts), and
+   chunky keycap hardware in both. Colour has jobs:
+     yellow   you are touching / holding this     (--hold)
+     cyan     this is playing now                  (--now)
+     magenta  recording                            (--rec)
+   Nothing else uses those three, so the eye always knows where to go.
+   Module accents (--m-*) colour knob arcs by synth layer.
+   ========================================================================== */
 :root {
-  --bg: #E8E6F0; --card: #F5F4FA; --ink: #191B31; --muted: #585B77; --line: #CBC8DB;
-  --tile: #DAD7E7; --focus: #4B3FE0;
-  --now: #0E9F8E; --hold: #F0B400; --cursor: #FF3D86;
-  --font-display: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #F2ECDD; --dots: rgba(18,16,30,.10); --panel: #FFFBF1; --well: #E9E1CD;
+  --ink: #12101E; --muted: #5E5871; --edge: #12101E; --shadow: #12101E;
+  --cap-hi: #FFFFFF; --cap-lo: #E2D9C3; --track: rgba(18,16,30,.14);
+  --now: #00A9CF; --hold: #FFC400; --rec: #E3135C; --cyan: #00B7DD; --magenta: #F0287A;
+  --m-body: #E3135C; --m-noise: #6E6A86; --m-metal: #0092B8; --m-res: #D98200;
+  --m-filter: #5B3DF5; --m-out: #E2531D; --m-kit: #12101E; --m-seq: #12101E;
+  --spill-a: rgba(240,40,122,.10); --spill-b: rgba(0,183,221,.12);
+  --font-display: 'Dela Gothic One', 'Arial Black', system-ui, sans-serif;
+  --font-body: 'Chakra Petch', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0D0F1F; --card: #171A2F; --ink: #E8E7F3; --muted: #A1A4C0; --line: #2F3350;
-    --tile: #23273F; --focus: #9A92FF; --now: #2FD9C4;
+    --bg: #15122B; --dots: rgba(160,200,255,.06); --panel: #211D3C; --well: #17142C;
+    --ink: #F6F1E3; --muted: #A9A4C8; --edge: #05040C; --shadow: #05040C;
+    --cap-hi: #3E3866; --cap-lo: #26214A; --track: rgba(255,255,255,.10);
+    --now: #2BE8FF; --hold: #FFD60A; --rec: #FF2E7E; --cyan: #2BE8FF; --magenta: #FF2E7E;
+    --m-body: #FF5D8F; --m-noise: #C4BFDD; --m-metal: #2BE8FF; --m-res: #FFB020;
+    --m-filter: #A08CFF; --m-out: #FF7A45; --m-kit: #F6F1E3; --m-seq: #F6F1E3;
+    --spill-a: rgba(255,46,126,.10); --spill-b: rgba(43,232,255,.08);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0D0F1F; --card: #171A2F; --ink: #E8E7F3; --muted: #A1A4C0; --line: #2F3350;
-  --tile: #23273F; --focus: #9A92FF; --now: #2FD9C4;
+  --bg: #15122B; --dots: rgba(160,200,255,.06); --panel: #211D3C; --well: #17142C;
+  --ink: #F6F1E3; --muted: #A9A4C8; --edge: #05040C; --shadow: #05040C;
+  --cap-hi: #3E3866; --cap-lo: #26214A; --track: rgba(255,255,255,.10);
+  --now: #2BE8FF; --hold: #FFD60A; --rec: #FF2E7E; --cyan: #2BE8FF; --magenta: #FF2E7E;
+  --m-body: #FF5D8F; --m-noise: #C4BFDD; --m-metal: #2BE8FF; --m-res: #FFB020;
+  --m-filter: #A08CFF; --m-out: #FF7A45; --m-kit: #F6F1E3; --m-seq: #F6F1E3;
+  --spill-a: rgba(255,46,126,.10); --spill-b: rgba(43,232,255,.08);
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 *, *::before, *::after { box-sizing: inherit; }
 body {
-  margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
-  font: 400 15px/1.5 var(--font-body);
+  margin: 0; min-height: 100%; color: var(--ink);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(var(--dots) 1.1px, transparent 1.5px),
+    radial-gradient(120% 60% at 0% 0%, var(--spill-a), transparent 60%),
+    radial-gradient(120% 60% at 100% 100%, var(--spill-b), transparent 60%);
+  background-size: 7px 7px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+  font: 500 15px/1.45 var(--font-body);
   -webkit-text-size-adjust: 100%;
 }
-.app { max-width: 1120px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
+.app { max-width: 760px; margin: 0 auto; padding: 14px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
 
-header.top {
-  margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; flex-wrap: wrap;
-}
-h1 { font: 700 clamp(28px, 4.6vw, 40px)/1.05 var(--font-display); letter-spacing: -0.02em; margin: 0; }
-h2 { font: 650 16px/1.2 var(--font-display); margin: 0; letter-spacing: -0.005em; }
-
-/* ---------- page nav: icon buttons beside the title that switch between
-   the pad, lanes, kit, drum-engine and info pages. Swiping left/right on
-   the page area does the same thing. ---------- */
-.pagenav { display: flex; gap: 6px; flex-wrap: wrap; }
-.navbtn {
-  display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px;
-  border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer;
-}
-.navbtn:hover { color: var(--ink); border-color: var(--muted); }
-.navbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: transparent; }
-.navbtn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-
-.pages { position: relative; overflow: hidden; touch-action: pan-y; }
-.page { display: none; }
-.page.active { display: block; animation: pageIn .18s ease both; }
-@keyframes pageIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .page.active { animation: none; } }
-
-#pad {
-  display: block; width: 100%; max-width: 720px; margin: 0 auto; aspect-ratio: 1 / 1; border-radius: 18px; background: #08091a;
-  touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none;
-  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 10px 30px -12px rgba(20,23,46,.55);
-}
-#pad:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; max-width: 640px; margin: 0 auto; }
-
-.field { margin-top: 10px; }
-.dicefield { margin-top: 14px; }
-.card .sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-
-/* ---------- hslider: a rectangular, directly-draggable control. The
-   fill grows from the left to the current value; the parameter name
-   sits inside the bar on the left, the live value on the right. */
-.hslider {
-  position: relative; height: 38px; border-radius: 9px; overflow: hidden;
-  background: var(--tile); border: 1px solid var(--line); cursor: pointer;
-  touch-action: none; user-select: none; -webkit-user-select: none;
+/* ---------- keycap: the shared 3D button body. Raised on a hard shadow,
+   pressing sinks it onto the shadow. ---------- */
+.cap {
+  position: relative; border: 2px solid var(--edge); border-radius: 12px;
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
+  color: var(--ink); cursor: pointer;
+  box-shadow: 0 4px 0 var(--shadow), inset 0 2px 0 rgba(255,255,255,.28);
+  transition: transform .06s, box-shadow .06s;
   -webkit-tap-highlight-color: transparent;
 }
-.hslider-fill {
-  position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--focus); opacity: .55;
-  transition: none;
-}
-.hslider-label, .hslider-value {
-  position: absolute; z-index: 1; font: 600 13px/1 var(--font-body); pointer-events: none; color: var(--ink);
-  top: 50%; transform: translateY(-50%);
-}
-.hslider-label { left: 11px; }
-.hslider-value { right: 11px; font-variant-numeric: tabular-nums; }
-.hslider:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.cap:active, .cap.pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), inset 0 2px 0 rgba(255,255,255,.28); }
+.cap:focus-visible { outline: 3px solid var(--hold); outline-offset: 3px; }
 
-/* dice slider: a die sits at the left of the track; drag it right (or tap
-   anywhere on the track) to set a randomization strength, then it animates
-   back to the left once released, having applied that amount once. */
-.dicetrack { cursor: pointer; }
-.dicetrack .hslider-label { left: 42px; }
+header.top { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.logo { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+h1 {
+  font: 400 clamp(30px, 6vw, 40px)/1 var(--font-display); letter-spacing: .02em; margin: 0;
+  text-shadow: -2.5px 0 var(--cyan), 2.5px 0 var(--magenta);
+}
+.tag { font: 500 10.5px/1.2 var(--font-mono); color: var(--muted); letter-spacing: .08em; white-space: nowrap; }
+.tag b { font-family: var(--font-display); font-weight: 400; color: var(--ink); letter-spacing: .1em; }
+h2 { font: 400 15px/1.2 var(--font-display); margin: 0; letter-spacing: .04em; text-transform: uppercase; }
+
+.pagenav { display: flex; gap: 7px; flex: none; }
+.navbtn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; }
+.navbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow); }
+
+.pages { position: relative; overflow: hidden; touch-action: pan-y; padding: 0 6px 8px; margin: 0 -6px; }
+.page { display: none; }
+/* page changes animate "on twos": four held frames, a nod to limited animation */
+.page.active { display: block; animation: pageIn .2s steps(4, jump-end) both; }
+@keyframes pageIn { from { opacity: 0; transform: translateX(16px) skewX(-6deg); } to { opacity: 1; transform: none; } }
+
+/* ---------- pad, with a HUD layered on top ---------- */
+.padwrap {
+  position: relative; max-width: 720px; margin: 0 auto; aspect-ratio: 1 / 1;
+  border: 3px solid var(--edge); border-radius: 20px; overflow: hidden; background: #08081A;
+  box-shadow: 0 7px 0 var(--shadow);
+}
+#pad {
+  display: block; width: 100%; height: 100%;
+  touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+#pad:focus-visible { outline: 3px solid var(--hold); outline-offset: -6px; }
+.hud { position: absolute; inset: 0; pointer-events: none; color: #F6F1E3; }
+.hud .br { position: absolute; width: 18px; height: 18px; border: 0 solid rgba(246,241,227,.75); }
+.hud .br.tl { top: 10px; left: 10px; border-top-width: 2px; border-left-width: 2px; }
+.hud .br.tr { top: 10px; right: 10px; border-top-width: 2px; border-right-width: 2px; }
+.hud .br.bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; }
+.hud .br.brr { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; }
+.hud-name {
+  position: absolute; top: 16px; left: 22px; right: 120px;
+  font: 400 clamp(17px, 4.4vw, 24px)/1 var(--font-display); letter-spacing: .03em; text-transform: uppercase;
+  text-shadow: -1.5px 0 rgba(43,232,255,.85), 1.5px 0 rgba(255,46,126,.85), 0 2px 0 #000;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hud-mix { position: absolute; top: 44px; left: 22px; font: 500 10.5px/1.3 var(--font-mono); color: rgba(246,241,227,.7); letter-spacing: .04em; text-shadow: 0 1px 0 #000; }
+.hud-meta { position: absolute; top: 18px; right: 22px; text-align: right; font: 700 11px/1.35 var(--font-mono); letter-spacing: .06em; text-shadow: 0 1px 0 #000; }
+.hud-meta .now { color: #2BE8FF; }
+.hud-xy { position: absolute; bottom: 18px; right: 22px; font: 500 10.5px/1 var(--font-mono); color: rgba(246,241,227,.6); letter-spacing: .06em; }
+.hud-rec { position: absolute; bottom: 16px; left: 22px; font: 700 11px/1 var(--font-mono); color: #fff; background: #FF2E7E; padding: 4px 7px; border-radius: 4px; letter-spacing: .1em; display: none; }
+.hud-rec.on { display: block; }
+
+/* ---------- panels ---------- */
+.panel {
+  background: var(--panel); border: 2px solid var(--edge); border-radius: 16px; padding: 14px 14px 16px;
+  box-shadow: 0 6px 0 var(--shadow);
+}
+.panel + .panel { margin-top: 18px; }
+.panel .sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.modhead { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.modhead h2::before {
+  content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px;
+  background: var(--accent, var(--ink)); border: 2px solid var(--edge); vertical-align: -1px;
+}
+
+/* ---------- knob ---------- */
+.knobgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px 4px; margin-top: 10px; }
+.knob {
+  --rot: 0deg; display: grid; justify-items: center; align-content: start; gap: 3px; min-width: 0;
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: ns-resize;
+  -webkit-tap-highlight-color: transparent; outline: none;
+}
+.knob-dial { position: relative; width: var(--kd, 52px); height: var(--kd, 52px); }
+.knob-dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.knob-dial .trk { fill: none; stroke: var(--track); stroke-width: 5; stroke-linecap: round; }
+.knob-dial .val { fill: none; stroke: var(--accent, var(--ink)); stroke-width: 5; stroke-linecap: round; }
+.knob-cap {
+  position: absolute; inset: 17%; border-radius: 50%; border: 2px solid var(--edge);
+  background: radial-gradient(circle at 34% 28%, var(--cap-hi), var(--cap-lo) 72%);
+  box-shadow: 0 3px 0 var(--shadow), inset 0 1.5px 0 rgba(255,255,255,.3);
+  transform: rotate(var(--rot));
+}
+.knob-cap::after {
+  content: ''; position: absolute; top: 9%; left: 50%; width: 3px; height: 32%;
+  background: var(--ink); border-radius: 2px; transform: translateX(-50%);
+}
+.knob-value { font: 700 11px/1.15 var(--font-mono); font-variant-numeric: tabular-nums; padding: 1px 4px; border-radius: 4px; white-space: nowrap; }
+.knob-label { font: 600 10.5px/1.15 var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; text-align: center; max-width: 100%; }
+.knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 3px var(--hold), 0 3px 0 var(--shadow); }
+.knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: #12101E; }
+
+/* ---------- dice slider: drag the die right for more randomness; it
+   tumbles home when released. ---------- */
+.dicefield { margin-top: 16px; }
+.dicetrack {
+  position: relative; height: 44px; border-radius: 12px; overflow: hidden; cursor: pointer;
+  background: var(--well); border: 2px solid var(--edge);
+  box-shadow: inset 0 3px 0 rgba(0,0,0,.18);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.dicetrack .fill {
+  position: absolute; inset: 0 auto 0 0; width: 0%;
+  background-color: var(--hold);
+  background-image: radial-gradient(rgba(18,16,30,.28) 1.2px, transparent 1.6px); background-size: 6px 6px;
+}
+.dicetrack .label { position: absolute; left: 50px; top: 50%; transform: translateY(-50%); font: 700 12.5px/1 var(--font-body); text-transform: uppercase; letter-spacing: .07em; pointer-events: none; }
 .dicetrack .die {
-  position: absolute; top: 3px; bottom: 3px; left: 3px; width: 30px; border-radius: 7px;
-  background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center;
-  font-size: 17px; z-index: 2; cursor: grab; transition: left .45s cubic-bezier(.2,.85,.25,1.15);
+  position: absolute; top: 4px; left: 4px; width: 34px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; z-index: 2;
+  background: linear-gradient(180deg, #FFFFFF, #E6DFCB); color: #12101E; border: 2px solid #12101E;
+  box-shadow: 0 2px 0 #12101E; cursor: grab;
+  transition: left .5s cubic-bezier(.2,.85,.25,1.15), transform .5s cubic-bezier(.2,.85,.25,1.15);
 }
 .dicetrack.dragging .die { transition: none; cursor: grabbing; }
-.dicetrack .hslider-fill { background: var(--hold); opacity: .35; }
-@media (prefers-reduced-motion: reduce) { .dicetrack .die { transition: none; } }
+.dicetrack:focus-visible { outline: 3px solid var(--hold); outline-offset: 3px; }
 
-.seq { margin-top: 26px; min-width: 0; max-width: 720px; margin-left: auto; margin-right: auto; }
-.seqhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin-bottom: 12px; }
-.seqhead .field { margin: 0; flex: 1 1 150px; max-width: 240px; }
-
-.btn {
-  font: 600 14px/1 var(--font-display); padding: 11px 15px; min-height: 42px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
-}
-.btn:hover { border-color: var(--muted); }
-.btn:focus-visible, .step:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.btn.primary { background: var(--ink); color: var(--bg); border-color: transparent; min-width: 84px; }
-.btn[aria-pressed="true"]:not(.primary):not(.rec) { background: var(--hold); color: #1c1600; border-color: transparent; }
-.btn.rec[aria-pressed="true"] { background: #D6294B; color: #fff; border-color: transparent; }
-.btn.rec[aria-pressed="true"] svg { animation: recBlink 1s step-start infinite; }
+/* ---------- transport row + steps ---------- */
+.seq { margin-top: 20px; }
+.transport { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.transport .knobslot { flex: 1 1 0; min-width: 0; }
+.transport .knob { --kd: 48px; }
+.btn { font: 700 13px/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em; padding: 0 14px; min-height: 42px; }
+.btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
+#play { width: 56px; height: 56px; border-radius: 16px; flex: none; }
+#record { width: 48px; height: 48px; border-radius: 14px; flex: none; color: var(--rec); }
+#play[aria-pressed="true"] { background: var(--now); color: #05040C; }
+#record[aria-pressed="true"] { background: var(--rec); color: #fff; }
+#record[aria-pressed="true"] svg { animation: recBlink 1s step-start infinite; }
 @keyframes recBlink { 50% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) { .btn.rec[aria-pressed="true"] svg { animation: none; } }
-.btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 11px; }
-.btn.small.icon { min-width: 36px; padding: 8px; }
 #play .ic-stop { display: none; }
 #play[aria-pressed="true"] .ic-play { display: none; }
 #play[aria-pressed="true"] .ic-stop { display: inline-block; }
+.btn[aria-pressed="true"]:not(#play):not(#record) { background: var(--hold); color: #12101E; }
 
 .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .grp { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.cell { display: grid; gap: 5px; }
-.led { display: block; height: 4px; border-radius: 2px; background: var(--line); }
-.cell.now .led { background: var(--now); box-shadow: 0 0 8px var(--now); }
+.cell { display: grid; gap: 6px; }
+.led { display: block; height: 5px; border-radius: 3px; background: var(--track); }
+.cell.now .led { background: var(--now); box-shadow: 0 0 10px var(--now); }
 .step {
-  position: relative; width: 100%; aspect-ratio: 5 / 6; padding: 0; border-radius: 10px; overflow: hidden;
-  border: 1px solid var(--line); background: var(--tile); color: var(--ink); cursor: pointer;
+  position: relative; width: 100%; aspect-ratio: 5 / 6; padding: 0; border-radius: 11px; overflow: hidden;
+  border: 2px solid var(--edge); background: var(--well); color: var(--ink); cursor: pointer;
+  box-shadow: 0 4px 0 var(--shadow), inset 0 2px 0 rgba(255,255,255,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent; transition: transform .08s;
+  -webkit-tap-highlight-color: transparent; transition: transform .06s, box-shadow .06s;
 }
-.step .n { position: absolute; top: 5px; left: 7px; font: 650 11px/1 var(--font-display); opacity: .7; }
+.step .n { position: absolute; top: 5px; left: 7px; font: 400 12px/1 var(--font-display); opacity: .55; }
 .step .dot {
-  display: none; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff;
-  box-shadow: 0 0 0 2px rgba(10,12,30,.45);
-  left: calc(10% + var(--dx, .5) * 80%); bottom: calc(10% + var(--dy, .5) * 80%); transform: translate(-50%, 50%);
+  display: none; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fff;
+  border: 2px solid #12101E;
+  left: calc(14% + var(--dx, .5) * 72%); bottom: calc(12% + var(--dy, .5) * 56%); transform: translate(-50%, 50%);
 }
-.step.on { background: var(--c, #555); border-color: transparent; color: var(--tc, #fff); }
-.step.on .n { opacity: .9; }
+.step.on {
+  background-color: var(--c, #555); color: var(--tc, #fff);
+  background-image: radial-gradient(rgba(0,0,0,.16) 1.1px, transparent 1.5px); background-size: 5px 5px;
+}
+.step.on .n { opacity: .95; }
 .step.on .dot { display: block; }
-.step.held { outline: 3px solid var(--hold); outline-offset: 2px; transform: translateY(-3px); }
+.cell.now .step { transform: translateY(-3px); box-shadow: 0 7px 0 var(--shadow), 0 0 0 3px var(--now); }
+.step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 4px var(--hold); }
+.step:focus-visible { outline: 3px solid var(--hold); outline-offset: 3px; }
 
-.tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
-.tools .gap { flex: 1 1 24px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
+.tools .gap { flex: 1 1 8px; }
 
-.lanes { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; max-width: 900px; margin: 0 auto; }
-.lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 4px; }
+/* ---------- lanes ---------- */
+.lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 4px; }
 .lanehead h2 { margin-right: auto; }
 .lanetabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.tab {
-  font: 600 13px/1 var(--font-display); padding: 8px 12px; min-height: 36px; border-radius: 999px;
-  border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer;
+.tab { font: 700 12px/1 var(--font-body); text-transform: uppercase; letter-spacing: .05em; padding: 0 12px; min-height: 36px; border-radius: 10px; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow); }
+.btn.small { min-height: 36px; font-size: 12px; border-radius: 10px; }
+#laneCanvas {
+  display: block; width: 100%; height: min(58vh, 460px); margin-top: 10px; border-radius: 12px;
+  touch-action: none; cursor: crosshair; background: #0D0B19; border: 2px solid var(--edge);
 }
-.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: transparent; }
-.btn.small { padding: 8px 12px; min-height: 36px; font-size: 13px; }
-.lanes .sub { margin: 6px 0 10px; }
-#laneCanvas { display: block; width: 100%; height: 108px; border-radius: 8px; touch-action: none; cursor: crosshair; background: var(--bg); }
-.lanes.big #laneCanvas { height: min(58vh, 460px); }
-.lanereadout { margin: 8px 0 0; min-height: 1.3em; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.enginepick { display: flex; gap: 8px; margin: 10px 0 4px; }
+/* ---------- engine ---------- */
+.enginepick { display: flex; gap: 8px; margin: 12px 0 2px; }
 .enginepick select {
-  flex: 1 1 auto; min-width: 0; font: 600 14px/1 var(--font-body); padding: 9px 10px; min-height: 40px;
-  border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  flex: 1 1 auto; min-width: 0; font: 400 16px/1 var(--font-display); text-transform: uppercase; letter-spacing: .04em;
+  padding: 0 12px; min-height: 44px; appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
 }
-.engineparams { max-height: 420px; overflow-y: auto; padding-right: 6px; margin-top: 6px; }
-.engineparams .field { margin-top: 12px; }
-.engineparams .field:first-child { margin-top: 10px; }
-.how { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; color: var(--muted); font-size: 13.5px; max-width: 78ch; }
-.how b { color: var(--ink); font-weight: 600; }
-kbd { font: 600 12px var(--font-display); padding: 1px 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); color: var(--ink); }
+.selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
+.selwrap select { width: 100%; }
+.selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
+.module { border: 2px solid var(--edge); border-radius: 14px; padding: 10px 10px 12px; background: var(--well); }
+.module h3 { margin: 0; font: 400 12px/1 var(--font-display); letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 7px; }
+.module h3::before { content: ''; width: 9px; height: 9px; border-radius: 3px; background: var(--accent); border: 2px solid var(--edge); }
+.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
 
-@media (max-width: 860px) {
-  .seq { margin-top: 16px; }
-}
+.how { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 78ch; }
+.how b { color: var(--ink); font-weight: 700; }
+kbd { font: 700 12px var(--font-mono); padding: 1px 5px; border: 2px solid var(--edge); border-radius: 5px; background: var(--panel); color: var(--ink); box-shadow: 0 2px 0 var(--shadow); }
+
 @media (max-width: 640px) {
   .app { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
-  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 10px; }
-  .seqhead { gap: 8px 14px; }
-  .seqhead h2 { flex: 1 1 auto; }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
   .navbtn { width: 38px; height: 38px; }
+  .pagenav { gap: 5px; }
+  .tag { display: none; }
+  .transport { gap: 6px; }
+  .transport .knob { --kd: 44px; }
 }
-@media (prefers-reduced-motion: reduce) { .step { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .page.active, .step, .cap, .dicetrack .die { animation: none; transition: none; }
+  #record[aria-pressed="true"] svg { animation: none; }
+}
 </style>
 </head>
 <body>
 <main class="app">
   <header class="top">
-    <h1>Pixy</h1>
+    <div class="logo">
+      <h1>PIXY</h1>
+      <span class="tag" aria-hidden="true"><b>ピクシー</b> // XY DRUM SYNTH</span>
+    </div>
     <nav class="pagenav" aria-label="Pages">
-      <button class="navbtn" type="button" data-page="pad" aria-pressed="true" aria-label="Pad &amp; sequencer" title="Pad &amp; sequencer">
+      <button class="navbtn cap" type="button" data-page="pad" aria-pressed="true" aria-label="Pad &amp; sequencer" title="Pad &amp; sequencer">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="6" cy="6" r="2.2" fill="currentColor"/><circle cx="12" cy="6" r="2.2" fill="currentColor"/><circle cx="18" cy="6" r="2.2" fill="currentColor"/><circle cx="6" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="18" cy="12" r="2.2" fill="currentColor"/><circle cx="6" cy="18" r="2.2" fill="currentColor"/><circle cx="12" cy="18" r="2.2" fill="currentColor"/><circle cx="18" cy="18" r="2.2" fill="currentColor"/></svg>
       </button>
-      <button class="navbtn" type="button" data-page="lanes" aria-pressed="false" aria-label="Automation lanes" title="Automation lanes">
+      <button class="navbtn cap" type="button" data-page="lanes" aria-pressed="false" aria-label="Automation lanes" title="Automation lanes">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>
       </button>
-      <button class="navbtn" type="button" data-page="kit" aria-pressed="false" aria-label="Kit editor" title="Kit editor">
+      <button class="navbtn cap" type="button" data-page="kit" aria-pressed="false" aria-label="Kit editor" title="Kit editor">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><ellipse cx="12" cy="7" rx="8" ry="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <button class="navbtn" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
+      <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12h4l2-7 4 14 3-10 2 5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="navbtn" type="button" data-page="info" aria-pressed="false" aria-label="Info" title="Info">
+      <button class="navbtn cap" type="button" data-page="info" aria-pressed="false" aria-label="Info" title="Info">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11" y="10.5" width="2" height="6.5" rx="1" fill="currentColor"/><circle cx="12" cy="7.2" r="1.4" fill="currentColor"/></svg>
       </button>
     </nav>
@@ -223,54 +322,61 @@ kbd { font: 600 12px var(--font-display); padding: 1px 5px; border: 1px solid va
 
   <div class="pages" id="pages">
     <section class="page active" data-page="pad">
-      <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+      <div class="padwrap">
+        <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+        <div class="hud" aria-hidden="true">
+          <i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+          <div class="hud-name" id="hudName"></div>
+          <div class="hud-mix" id="hudMix"></div>
+          <div class="hud-meta" id="hudMeta"></div>
+          <div class="hud-xy" id="hudXY"></div>
+          <div class="hud-rec" id="hudRec">REC</div>
+        </div>
+      </div>
 
-      <section class="seq" aria-labelledby="seqH">
-        <div class="seqhead">
-          <h2 id="seqH">Sequence</h2>
-          <button id="play" class="btn primary icon" type="button" aria-pressed="false" aria-label="Play" title="Play">
-            <svg class="ic-play" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
-            <svg class="ic-stop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
+      <section class="seq" aria-label="Sequencer">
+        <div class="transport">
+          <button id="play" class="cap icon" type="button" aria-pressed="false" aria-label="Play" title="Play">
+            <svg class="ic-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
+            <svg class="ic-stop" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
           </button>
-          <button id="record" class="btn rec icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes your live position into whichever step is passing">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
+          <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes your live position into whichever step is passing">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
-          <div class="field" id="tempoField"></div>
-          <div class="field" id="swingField"></div>
-          <div class="field" id="quantizeField" title="Governs live pad-drag retriggering and recording resolution. 1/16 for normal beats; a finer setting lets you overdub ratchets, and can be changed mid-recording."></div>
-          <button id="mono" class="btn" type="button" aria-pressed="false" title="Only one voice sounds at a time; a new hit cuts off whatever was still ringing">Choke</button>
-          <button id="undo" class="btn small icon" type="button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button id="redo" class="btn small icon" type="button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
+          <div class="knobslot" id="tempoField"></div>
+          <div class="knobslot" id="swingField"></div>
+          <div class="knobslot" id="quantizeField" title="Governs live pad-drag retriggering and recording resolution. 1/16 for normal beats; a finer setting lets you overdub ratchets, and can be changed mid-recording."></div>
         </div>
 
         <div id="steps" class="steps"></div>
 
         <div class="tools">
-          <button id="clear" class="btn" type="button">Clear</button>
+          <button id="undo" class="btn cap icon" type="button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="redo" class="btn cap icon" type="button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <span class="gap"></span>
-          <button id="select" class="btn" type="button" aria-pressed="false">Select</button>
+          <button id="mono" class="btn cap" type="button" aria-pressed="false" title="Only one voice sounds at a time; a new hit cuts off whatever was still ringing">Choke</button>
+          <button id="select" class="btn cap" type="button" aria-pressed="false">Select</button>
+          <button id="clear" class="btn cap" type="button">Clear</button>
         </div>
-        <div class="dicefield">
-          <div class="field" id="seqDiceField"></div>
-        </div>
+        <div class="dicefield" id="seqDiceField"></div>
       </section>
     </section>
 
     <section class="page" data-page="lanes">
-      <div class="lanes big" aria-labelledby="lanesH">
+      <div class="panel" aria-labelledby="lanesH">
         <div class="lanehead">
           <h2 id="lanesH">Step lanes</h2>
-          <div class="lanetabs" role="tablist" aria-label="Lane to edit">
-            <button class="tab" type="button" data-lane="prob" role="tab" aria-selected="true">Probability</button>
-            <button class="tab" type="button" data-lane="devx" role="tab" aria-selected="false">X deviation</button>
-            <button class="tab" type="button" data-lane="devy" role="tab" aria-selected="false">Y deviation</button>
-            <button class="tab" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
-          </div>
-          <button id="laneReset" class="btn small" type="button">Reset lane</button>
+          <button id="laneReset" class="btn cap small" type="button">Reset lane</button>
+        </div>
+        <div class="lanetabs" role="tablist" aria-label="Lane to edit">
+          <button class="tab cap" type="button" data-lane="prob" role="tab" aria-selected="true">Chance</button>
+          <button class="tab cap" type="button" data-lane="devx" role="tab" aria-selected="false">X drift</button>
+          <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
+          <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
         </div>
         <p class="sub" id="laneHint"></p>
         <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
@@ -279,36 +385,29 @@ kbd { font: 600 12px var(--font-display); padding: 1px 5px; border: 1px solid va
     </section>
 
     <section class="page" data-page="kit">
-      <section class="card" aria-labelledby="tweakH">
-        <h2 id="tweakH">Whole-kit tweaks</h2>
-        <p class="sub">These shift every sound on the map at once.</p>
-        <div class="field" id="tuneField"></div>
-        <div class="field" id="decayField"></div>
-        <div class="field" id="driveField"></div>
-        <div id="macroParams"></div>
-        <div class="dicefield">
-          <div class="field" id="kitDiceField"></div>
-        </div>
+      <section class="panel" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
+        <div class="modhead"><h2 id="tweakH">Whole kit</h2></div>
+        <p class="sub">These shift every sound on the map at once. Double-tap a knob to reset it.</p>
+        <div class="knobgrid" id="kitKnobs"></div>
+        <div class="dicefield" id="kitDiceField"></div>
       </section>
     </section>
 
     <section class="page" data-page="engine">
-      <section class="card" aria-labelledby="engineH">
-        <h2 id="engineH">Drum engine</h2>
-        <p class="sub">Pick a drum and shape it directly. It's a control point the whole map blends toward, so this reshapes nearby sounds too.</p>
+      <section class="panel" aria-labelledby="engineH">
+        <div class="modhead"><h2 id="engineH">Drum engine</h2></div>
+        <p class="sub">Each drum is a control point the whole map blends toward, so shaping it reshapes nearby sounds too.</p>
         <div class="enginepick">
-          <select id="engineSelect" aria-label="Drum to edit"></select>
-          <button id="engineReset" class="btn small" type="button">Reset this drum</button>
+          <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
+          <button id="engineReset" class="btn cap small" type="button">Reset</button>
         </div>
-        <div id="engineParams" class="engineparams"></div>
-        <div class="dicefield">
-          <div class="field" id="drumDiceField"></div>
-        </div>
+        <div id="engineParams" class="modules"></div>
+        <div class="dicefield" id="drumDiceField"></div>
       </section>
     </section>
 
     <section class="page" data-page="info">
-      <section class="card">
+      <section class="panel">
         <h2>How it works</h2>
         <ul class="how">
           <li><b>Tap a step</b> to switch it on or off. A new step takes the sound your cursor was last on; switching one off clears it completely, so tapping it back on starts fresh.</li>
@@ -316,10 +415,12 @@ kbd { font: 600 12px var(--font-display); padding: 1px 5px; border: 1px solid va
           <li><b>Hold one or more steps, then touch the pad</b> and those steps take the point you touched last.</li>
           <li>Only one pointer? <b>Select</b> latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
           <li><b>Hold a step, then tap another</b> to copy the first step's sound onto the second.</li>
+          <li><b>Knobs</b>: drag up or right to turn up, down or left to turn down. Hold <kbd>Shift</kbd> for fine moves, double-tap to reset.</li>
           <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
           <li><b>Quantize</b> sets how finely holding the pad retriggers (1/16 for a normal beat, finer for ratchets), live or while recording &mdash; and can be changed on the fly.</li>
           <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. A finer quantize setting overdubs ratchets into that step without changing its 16-step grid.</li>
           <li><b>Choke</b> makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
+          <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
           <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>
           <li>Each <b>die</b> randomizes by how far you drag it right (or tap a spot on its track) &mdash; for the sequence, the selected drum (on the drum-engine page), or the whole kit (on the kit page).</li>
           <li>Swipe left or right, or use the icons beside the title, to switch between the pad, lanes, kit, drum engine and this page.</li>
@@ -361,12 +462,17 @@ function hsl2rgb(h, s, l) {
    fm      FM crack on the body (0-1)
    noise   noise level  nDec  noise decay (s)      burst  clap-style re-triggers (0-1)
    metal   six-square metal bank level  mDec decay (s)  mPitch  bank pitch multiplier
+   fmRatio FM modulator ratio to the body pitch (1.41 = the original crack; 3.5 = bell)
+   res     resonator level: a struck modal bank (lightweight physical model)
+   resF    resonator fundamental (Hz)   resDec  ring time (s, to -60 dB)
+   resShape  mode spacing: 0 string/tube (harmonic) .. 0.5 drum skin .. 1 bar/bell
    hp lp   high-pass / low-pass on noise+metal (Hz)  q  resonance on the low-pass (dB)
-   drive   saturation (0-1)   atk  attack (s)   lvl  output trim */
+   drive   saturation (0-1)   fold  wavefolder (0-1)   atk  attack (s)   lvl  output trim */
 const BASE = {
   f: 200, pEnv: 0, pDec: 0.03, tone: 0, tDec: 0.1, fm: 0,
   noise: 0, nDec: 0.1, burst: 0, metal: 0, mDec: 0.1, mPitch: 1,
   hp: 200, lp: 12000, q: 0, drive: 0, atk: 0.001, lvl: 1,
+  fmRatio: 1.41, fold: 0, res: 0, resF: 300, resDec: 0.4, resShape: 0.5,
 };
 
 const ANCHOR_DEFS = [
@@ -398,6 +504,15 @@ const ANCHOR_DEFS = [
     p: { f: 170, pEnv: 4.2, pDec: 0.16, tone: 1, tDec: 0.35, fm: 0.9, noise: 0.05, nDec: 0.05, hp: 2000, lp: 9000, drive: 0.2, atk: 0.003, lvl: 0.55 } },
   { name: 'rumble', x: 0.58, y: 0.08, hue: 262,
     p: { noise: 1, nDec: 0.55, hp: 35, lp: 380, q: 8, drive: 0.1, atk: 0.004, lvl: 1.3 } },
+  // resonator / FM / fold anchors: the expanded palette
+  { name: 'tabla', x: 0.30, y: 0.24, hue: 30,
+    p: { f: 150, pEnv: 0.7, pDec: 0.03, tone: 0.45, tDec: 0.1, res: 1, resF: 205, resDec: 0.6, resShape: 0.5, noise: 0.1, nDec: 0.012, hp: 900, lp: 7000, drive: 0.12, lvl: 1.05 } },
+  { name: 'marimba', x: 0.33, y: 0.63, hue: 48,
+    p: { res: 1, resF: 440, resDec: 0.75, resShape: 1, noise: 0.06, nDec: 0.006, hp: 1500, lp: 8000, atk: 0.0005, drive: 0.05, lvl: 1.1 } },
+  { name: 'bell', x: 0.84, y: 0.46, hue: 196,
+    p: { f: 620, tone: 0.8, tDec: 1.1, fm: 0.55, fmRatio: 3.5, res: 0.5, resF: 1240, resDec: 1.0, resShape: 1, atk: 0.0005, lvl: 0.6 } },
+  { name: 'fuzz', x: 0.46, y: 0.20, hue: 4,
+    p: { f: 68, pEnv: 1.6, pDec: 0.05, tone: 1, tDec: 0.3, fm: 0.1, noise: 0.12, nDec: 0.02, hp: 600, lp: 4000, drive: 0.45, fold: 0.6, lvl: 0.8 } },
 ];
 
 const ANCHORS = ANCHOR_DEFS.map((d) => ({
@@ -418,13 +533,14 @@ function weightsAt(x, y) {
   return w.map((v) => v / s);
 }
 
-const LOG_KEYS = new Set(['f', 'pDec', 'tDec', 'nDec', 'mDec', 'mPitch', 'hp', 'lp', 'atk']);
+const LOG_KEYS = new Set(['f', 'pDec', 'tDec', 'nDec', 'mDec', 'mPitch', 'hp', 'lp', 'atk', 'fmRatio', 'resF', 'resDec']);
 const GROUPS = [
-  [['f', 'pEnv', 'pDec', 'tDec', 'fm'], (p) => p.tone + 0.03],
+  [['f', 'pEnv', 'pDec', 'tDec', 'fm', 'fmRatio'], (p) => p.tone + 0.03],
+  [['resF', 'resDec', 'resShape'], (p) => p.res + 0.03],
   [['nDec', 'burst'], (p) => p.noise + 0.03],
   [['mDec', 'mPitch'], (p) => p.metal + 0.03],
   [['hp', 'lp', 'q'], (p) => p.noise + p.metal + 0.03],
-  [['tone', 'noise', 'metal', 'drive', 'atk', 'lvl'], () => 1],
+  [['tone', 'noise', 'metal', 'res', 'drive', 'fold', 'atk', 'lvl'], () => 1],
 ];
 
 function paramsAt(x, y, w) {
@@ -473,26 +589,31 @@ function nearest(w, n) {
    level  rough loudness, drives particle count and size
    dec    a single representative decay time (s), drives particle lifetime */
 function voiceSignature(P) {
-  const tone = clamp(P.tone, 0, 1), noise = clamp(P.noise, 0, 1), metal = clamp(P.metal, 0, 1);
+  const body = clamp(P.tone, 0, 1), res = clamp(P.res || 0, 0, 1);
+  const tone = clamp(body + res, 0, 1), noise = clamp(P.noise, 0, 1), metal = clamp(P.metal, 0, 1);
   const total = tone + noise + metal;
   const norm = total > 0.001 ? total : 1;
   const tW = tone / norm, nW = noise / norm, mW = metal / norm;
-  const dec = (tone * P.tDec + noise * P.nDec + metal * P.mDec) / norm;
+  const bodyN = body + res > 0.001 ? body + res : 1;
+  const toneF = (body * P.f + res * (P.resF || P.f)) / bodyN;
+  const toneDec = (body * P.tDec + res * (P.resDec || P.tDec)) / bodyN;
+  const dec = (tone * toneDec + noise * P.nDec + metal * P.mDec) / norm;
   const noiseF = Math.sqrt(Math.max(P.hp, 20) * Math.min(Math.max(P.lp, P.hp * 1.2), 18000));
-  const freq = clamp((tone * P.f + (noise + metal) * noiseF) / norm, 25, 18000);
+  const freq = clamp((tone * toneF + (noise + metal) * noiseF) / norm, 25, 18000);
   const t = clamp((Math.log(freq) - Math.log(28)) / (Math.log(15000) - Math.log(28)), 0, 1);
   const hue = 340 - 150 * t;
   const level = clamp(total * 0.65 + P.drive * 0.35, 0.08, 1.4);
   const sat = clamp(0.55 + nW * 0.15 + tW * 0.12, 0, 0.92);
   const light = clamp(0.4 + mW * 0.22 + level * 0.08, 0, 0.8);
-  return { t, hue, tW, nW, mW, freq, level, dec, drive: clamp(P.drive, 0, 1), rgb: hsl2rgb(hue, sat, light) };
+  return { t, hue, tW, nW, mW, freq, level, dec, drive: clamp(P.drive + (P.fold || 0), 0, 1), rgb: hsl2rgb(hue, sat, light) };
 }
 
 /* ==========================================================================
    Drum voice (Web Audio). One call = one hit.
-   body: sine + pitch envelope (+ FM crack)      noise: white noise, optional clap bursts
+   body: sine + pitch envelope (+ FM, any ratio)  noise: white noise, optional clap bursts
    metal: six detuned squares (808 hat ratios)   noise+metal -> high-pass -> low-pass
-   all layers -> drive (tanh) -> output. Short exponential amp envelopes.
+   resonator: a mallet click into five tuned band-passes (modal synthesis)
+   all layers -> wavefolder (sine) -> drive (tanh) -> output. Short exponential amp envelopes.
    ========================================================================== */
 
 const METAL_RATIOS = [205.3, 304.4, 369.6, 522.7, 540, 800];
@@ -502,6 +623,60 @@ const SHAPER_CURVE = (() => {
   for (let i = 0; i < n; i++) c[i] = Math.tanh((i / (n - 1) * 2 - 1) * k) / d;
   return c;
 })();
+
+/* wavefolder: a sine fold, crossfaded in from dry so small amounts are
+   gentle. Curves are cached per 1/50th of the fold amount. */
+const FOLD_CURVES = new Map();
+function foldCurve(amount) {
+  const key = Math.round(clamp(amount, 0, 1) * 50);
+  let c = FOLD_CURVES.get(key);
+  if (!c) {
+    const a = key / 50, n = 2048, k = 1 + 7 * a, m = Math.min(1, a * 4);
+    c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1) * 2 - 1;
+      c[i] = (1 - m) * x + m * Math.sin(x * k * Math.PI / 2);
+    }
+    FOLD_CURVES.set(key, c);
+  }
+  return c;
+}
+
+/* resonator mode ratios. resShape morphs (log domain) between three
+   idealized bodies: a string/tube (harmonic), a circular membrane, and a
+   free bar (marimba, bell-ish). */
+const MODE_SETS = [
+  [1, 2, 3, 4, 5],
+  [1, 1.594, 2.136, 2.296, 2.653],
+  [1, 2.756, 5.404, 8.933, 13.344],
+];
+const MODE_AMPS = [1, 0.62, 0.46, 0.36, 0.28];
+function modeRatios(shape) {
+  const s = clamp(shape, 0, 1) * 2;
+  const i = Math.min(1, Math.floor(s)), f = s - i;
+  return MODE_SETS[0].map((_, k) => Math.exp(Math.log(MODE_SETS[i][k]) * (1 - f) + Math.log(MODE_SETS[i + 1][k]) * f));
+}
+/* Q that makes a band-pass ring for `t60` seconds at `freq`: a two-pole
+   resonator's envelope falls as exp(-pi f t / Q), and -60 dB is ln(1000). */
+function modeQ(freq, t60) { return clamp(Math.PI * freq * t60 / Math.log(1000), 0.5, 4000); }
+
+/* a short half-sine "mallet" pulse; its area is what the resonator gain
+   compensation divides by. One buffer per context. The buffer runs on in
+   silence for 4 s: Chromium stops processing a biquad ~0.28 s after its
+   source ends (tail-time cap), so the source has to outlive the ring. */
+const CLICK_BUFS = new WeakMap();
+const CLICK_LEN = 12;
+const CLICK_AREA = (() => { let s = 0; for (let i = 0; i < CLICK_LEN; i++) s += Math.sin(Math.PI * (i + 0.5) / CLICK_LEN); return s; })();
+function clickBuf(ctx) {
+  let b = CLICK_BUFS.get(ctx);
+  if (!b) {
+    b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 4.05), ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < CLICK_LEN; i++) d[i] = Math.sin(Math.PI * (i + 0.5) / CLICK_LEN);
+    CLICK_BUFS.set(ctx, b);
+  }
+  return b;
+}
 
 function ampEnv(param, t, atk, level, dec) {
   param.setValueAtTime(0, t);
@@ -537,16 +712,19 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
   const tune = Math.pow(2, trims.tune / 12);
   const dm = trims.decay * (extraDecay == null ? 1 : extraDecay);
   const drive = clamp(P.drive + trims.drive, 0, 1);
+  const fold = clamp((P.fold || 0) + (trims.fold || 0), 0, 1);
   // kit-wide macro mixes: blend the whole kit's character without touching
   // any single drum's own tuning. 1 = unchanged.
   const toneMix = trims.toneMix == null ? 1 : trims.toneMix;
   const noiseMix = trims.noiseMix == null ? 1 : trims.noiseMix;
   const metalMix = trims.metalMix == null ? 1 : trims.metalMix;
   const punch = trims.punch == null ? 1 : trims.punch;
-  P = Object.assign({}, P, {
+  const resMix = trims.resMix == null ? 1 : trims.resMix;
+  P = Object.assign({}, BASE, P, {
     tone: clamp(P.tone * toneMix, 0, 2),
     noise: clamp(P.noise * noiseMix, 0, 2),
     metal: clamp(P.metal * metalMix, 0, 2),
+    res: clamp((P.res || 0) * resMix, 0, 2),
     atk: Math.max(0.0002, P.atk * punch),
   });
 
@@ -554,6 +732,15 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
   const shp = ctx.createWaveShaper(); shp.curve = SHAPER_CURVE;
   const post = ctx.createGain(); post.gain.value = P.lvl * 0.9 / (1 + drive * 0.8);
   pre.connect(shp); shp.connect(post); post.connect(out);
+  // every layer feeds `bus`: straight into the drive stage, or through the
+  // wavefolder first when there's any fold
+  let bus = pre;
+  if (fold > 0.01) {
+    // more fold also drives the folder harder, so it keeps biting into the tail
+    bus = ctx.createGain(); bus.gain.value = 0.8 + fold * 2.4;
+    const fs = ctx.createWaveShaper(); fs.curve = foldCurve(fold); fs.oversample = '2x';
+    bus.connect(fs); fs.connect(pre);
+  }
 
   let end = t;
   const stopAt = (node, time) => { node.stop(time); if (time > end) end = time; };
@@ -568,15 +755,15 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
     ampEnv(g.gain, t, P.atk, P.tone, dur);
     if (P.fm > 0.02) {
       const mod = ctx.createOscillator(); mod.type = 'sine';
-      mod.frequency.setValueAtTime(fs * 1.41, t);
-      mod.frequency.setTargetAtTime(f * 1.41, t, tau);
+      mod.frequency.setValueAtTime(fs * P.fmRatio, t);
+      mod.frequency.setTargetAtTime(f * P.fmRatio, t, tau);
       const mg = ctx.createGain();
       mg.gain.setValueAtTime(P.fm * f * 4, t);
       mg.gain.setTargetAtTime(0, t, Math.max(0.008, dur * 0.25));
       mod.connect(mg); mg.connect(osc.frequency);
       mod.start(t); stopAt(mod, t + P.atk + dur + 0.05);
     }
-    osc.connect(g); g.connect(pre);
+    osc.connect(g); g.connect(bus);
     osc.start(t); stopAt(osc, t + P.atk + dur + 0.05);
   }
 
@@ -587,7 +774,7 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
     lp.frequency.value = Math.min(Math.max(P.lp, P.hp * 1.2), ctx.sampleRate * 0.45);
     lp.Q.value = P.q;
-    hp.connect(lp); lp.connect(pre);
+    hp.connect(lp); lp.connect(bus);
 
     if (wantN) {
       const dur = P.nDec * dm;
@@ -610,6 +797,26 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
       }
       mg.connect(hp);
     }
+  }
+
+  if (P.res > 0.02) {
+    const sr = ctx.sampleRate, t60 = Math.min(4, P.resDec * dm);
+    const src = ctx.createBufferSource(); src.buffer = clickBuf(ctx);
+    const rg = ctx.createGain(); rg.gain.value = P.res * 0.45;
+    rg.connect(bus);
+    modeRatios(P.resShape).forEach((r, k) => {
+      const fr = P.resF * tune * r;
+      if (fr > sr * 0.45) return;
+      const Q = modeQ(fr, t60), w0 = 2 * Math.PI * fr / sr;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+      bp.frequency.value = fr; bp.Q.value = Q;
+      // a band-pass hit by a unit impulse rings at ~sin(w0)/Q; undo that
+      // so every mode starts at MODE_AMPS[k] whatever its pitch and ring
+      const g = ctx.createGain(); g.gain.value = MODE_AMPS[k] * Q / (Math.sin(w0) * CLICK_AREA);
+      src.connect(bp); bp.connect(g); g.connect(rg);
+    });
+    src.start(t + P.atk);
+    stopAt(src, t + P.atk + t60 + 0.02);
   }
   return end;
 }
@@ -903,12 +1110,21 @@ const DEMO_BEAT = [
   const mixc = (a, b, t) => [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t];
   const rgbs = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+  /* knob geometry (see createKnob) */
+  const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
+  function arcPath(a0, a1) {
+    // angles in degrees, 0 = 12 o'clock, clockwise
+    const pt = (a) => [KNOB_C + KNOB_R * Math.sin(a * Math.PI / 180), KNOB_C - KNOB_R * Math.cos(a * Math.PI / 180)];
+    if (Math.abs(a1 - a0) < 0.5) a1 = a0 + 0.5;
+    const [x0, y0] = pt(Math.min(a0, a1)), [x1, y1] = pt(Math.max(a0, a1));
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${KNOB_R} ${KNOB_R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  }
   /* ---------- state ---------- */
   let actx = null, engine = null;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
   let tempo = 118, swing = 0;
-  const trims = { tune: 0, decay: 1, drive: 0, toneMix: 1, noiseMix: 1, metalMix: 1, punch: 1 };
+  const trims = { tune: 0, decay: 1, drive: 0, fold: 0, toneMix: 1, noiseMix: 1, metalMix: 1, resMix: 1, punch: 1 };
   let cur = -1;
   let lastAud = { t: 0, x: 0, y: 0 };
   let lastT = 0;
@@ -1073,6 +1289,7 @@ const DEMO_BEAT = [
     recording = on;
     const btn = $('#record');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('#hudRec').classList.toggle('on', on);
   }
 
   /* ==========================================================================
@@ -1094,6 +1311,7 @@ const DEMO_BEAT = [
     for (let k = 0; k < nLiquid; k++) particles.push(makeLiquid(x, y, sig, now));
     for (let k = 0; k < nSmoke; k++) particles.push(makeSmoke(x, y, sig, now));
     for (let k = 0; k < nSpark; k++) particles.push(makeSpark(x, y, sig, now));
+    particles.push(makeImpact(x, y, sig, now), makeRing(x, y, sig, now));
     if (particles.length > PARTICLE_CAP) particles.splice(0, particles.length - PARTICLE_CAP);
     dirty = true;
   }
@@ -1178,8 +1396,46 @@ const DEMO_BEAT = [
     pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
   }
 
-  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark };
-  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark };
+  /* impact: a comic-book starburst, ink-outlined, that pops and shrinks
+     in a few frames. Spikier and bigger for louder, brighter hits. */
+  function makeImpact(x, y, sig, now) {
+    const n = 9 + Math.round(sig.t * 7);
+    const jag = Array.from({ length: n * 2 }, (_, k) => (k % 2 ? 0.42 + Math.random() * 0.12 : 0.85 + Math.random() * 0.3));
+    return {
+      kind: 'impact', x, y, born: now, life: reduceMotion ? 90 : 190,
+      r: 0.028 + 0.05 * Math.min(1, sig.level), rot: Math.random() * Math.PI, jag, rgb: sig.rgb,
+    };
+  }
+  function drawImpact(pg, p, age, px, py, u) {
+    const scale = px(1) - px(0);
+    // grows fast for the first third, then shrinks away
+    const g = age < 0.3 ? 0.55 + age / 0.3 * 0.45 : 1 - (age - 0.3) / 0.7 * 0.85;
+    const R = p.r * scale * g, cx = px(p.x), cy = py(p.y), n = p.jag.length;
+    pg.beginPath();
+    for (let k = 0; k < n; k++) {
+      const a = p.rot + k * Math.PI * 2 / n, rr = R * p.jag[k];
+      if (k) pg.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); else pg.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+    pg.closePath();
+    const a = age < 0.6 ? 1 : 1 - (age - 0.6) / 0.4;
+    pg.fillStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.35), a * 0.95);
+    pg.strokeStyle = `rgba(5,4,12,${a})`; pg.lineWidth = 2.2 * u; pg.lineJoin = 'miter';
+    pg.fill(); pg.stroke();
+  }
+  /* ring: a thin sensor-pulse circle whose reach follows the decay */
+  function makeRing(x, y, sig, now) {
+    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 220, 1400), r: 0.05 + 0.12 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
+  }
+  function drawRing(pg, p, age, px, py, u) {
+    const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
+    pg.strokeStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.5), (1 - age) * 0.7);
+    pg.lineWidth = (2.5 - 1.5 * age) * u;
+    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.015 + p.r * e) * scale, 0, 6.283); pg.stroke();
+  }
+  const noop = () => {};
+
+  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, impact: noop, ring: noop };
+  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, impact: drawImpact, ring: drawRing };
 
   function stepParticles(dt, now) {
     if (!particles.length) return;
@@ -1190,8 +1446,9 @@ const DEMO_BEAT = [
     }
   }
 
-  /* ---------- abstract backdrop: dark field with a faint sound-coloured
-     wash plus a dotted memory grid. No labels, no icons, no named regions. */
+  /* ---------- abstract backdrop: dark field with a sound-coloured wash,
+     a Ben-Day halftone whose dots swell where the map is loud, and faint
+     scanlines. No labels, no icons, no named regions. */
   let field = document.createElement('canvas');
   function buildField(W, H) {
     const FW = 96, FH = 96;
@@ -1204,7 +1461,7 @@ const DEMO_BEAT = [
       for (let i = 0; i < FW; i++) {
         const x = (i + 0.5) / FW;
         const sig = voiceSignature(paramsAt(x, y));
-        const t = 0.07 + 0.04 * sig.level;
+        const t = 0.1 + 0.07 * sig.level;
         const p = (j * FW + i) * 4;
         img.data[p] = base[0] * (1 - t) + sig.rgb[0] * t;
         img.data[p + 1] = base[1] * (1 - t) + sig.rgb[1] * t;
@@ -1218,13 +1475,19 @@ const DEMO_BEAT = [
     const fg = f.getContext('2d');
     fg.imageSmoothingEnabled = true; fg.imageSmoothingQuality = 'high';
     fg.drawImage(off, 0, 0, W, H);
-    const spacing = 25 * dpr;
-    fg.fillStyle = 'rgba(255,255,255,.2)';
-    for (let gy = spacing * 0.6; gy < H; gy += spacing) {
-      for (let gx = spacing * 0.6; gx < W; gx += spacing) {
-        fg.beginPath(); fg.arc(gx, gy, 1.1 * dpr, 0, 6.283); fg.fill();
+    const spacing = 11 * dpr;
+    let row = 0;
+    for (let gy = spacing * 0.5; gy < H; gy += spacing, row++) {
+      // offset alternate rows, like a print screen
+      for (let gx = spacing * (row % 2 ? 0.5 : 0); gx < W; gx += spacing) {
+        const sig = voiceSignature(paramsAt(gx / W, 1 - gy / H));
+        const r = (0.5 + 1.5 * clamp(sig.level, 0, 1.2)) * dpr;
+        fg.fillStyle = rgbs(mixc(sig.rgb, [255, 255, 255], 0.35), 0.16);
+        fg.beginPath(); fg.arc(gx, gy, r, 0, 6.283); fg.fill();
       }
     }
+    fg.fillStyle = 'rgba(0,0,0,.16)';
+    for (let y = 0; y < H; y += 3 * dpr) fg.fillRect(0, y, W, Math.max(1, dpr * 0.8));
     return f;
   }
 
@@ -1240,7 +1503,7 @@ const DEMO_BEAT = [
 
   function drawPad(now) {
     const W = pad.width, H = pad.height, u = dpr;
-    const font = cssVar('--font-body') || 'system-ui, sans-serif';
+    const font = cssVar('--font-display') || 'system-ui, sans-serif';
     const px = (x) => x * W, py = (y) => (1 - y) * H;
     pg.clearRect(0, 0, W, H);
     pg.drawImage(field, 0, 0, W, H);
@@ -1294,24 +1557,47 @@ const DEMO_BEAT = [
           pg.strokeStyle = cssVar('--hold') || '#F0B400'; pg.lineWidth = 3 * u;
           pg.beginPath(); pg.arc(cx, cy, rad + 4 * u, 0, 6.283); pg.stroke();
         }
-        pg.fillStyle = 'rgba(10,11,24,.9)';
-        pg.beginPath(); pg.arc(cx, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = 'rgba(43,232,255,.75)';
+        pg.beginPath(); pg.arc(cx - 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = 'rgba(255,46,126,.75)';
+        pg.beginPath(); pg.arc(cx + 2 * u, cy, rad + 1.6 * u, 0, 6.283); pg.fill();
+        pg.fillStyle = '#05040C';
+        pg.beginPath(); pg.arc(cx, cy, rad + 2.2 * u, 0, 6.283); pg.fill();
         pg.fillStyle = `rgb(${sig.rgb[0] | 0},${sig.rgb[1] | 0},${sig.rgb[2] | 0})`;
         pg.beginPath(); pg.arc(cx, cy, rad, 0, 6.283); pg.fill();
         pg.fillStyle = lum(sig.rgb) > 0.52 ? '#11132a' : '#f4f3fb';
-        pg.font = `700 ${9 * u}px ${font}`;
+        pg.font = `400 ${8.5 * u}px ${font}`;
         pg.fillText(String(i + 1), cx, cy + 0.5 * u);
       });
     }
 
-    // cursor: a plain white dot, deliberately unthemed so it always reads
-    // as "you", distinct from any sound's own colour
+    // cursor: a white dot inside a targeting reticle, deliberately unthemed
+    // so it always reads as "you". While touched, the reticle closes in,
+    // turns the "holding" yellow and slowly spins.
     const c = seq.cursor, cx = px(c.x), cy = py(c.y);
     const held = seq.padHeld();
-    pg.fillStyle = 'rgba(10,11,22,.85)';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 8.5 : 6.5) * u, 0, 6.283); pg.fill();
+    const R = (held ? 15 : 20) * u, arm = 7 * u;
+    const spin = held && !reduceMotion ? now / 900 : Math.PI / 4;
+    pg.lineCap = 'square';
+    for (const [col, w] of [['rgba(5,4,12,.9)', 5 * u], [held ? '#FFD60A' : '#F6F1E3', 2.4 * u]]) {
+      pg.strokeStyle = col; pg.lineWidth = w;
+      for (let k = 0; k < 4; k++) {
+        const a = spin + k * Math.PI / 2;
+        const ax = cx + Math.cos(a) * R, ay = cy + Math.sin(a) * R;
+        const t1 = a + Math.PI / 2, t2 = a - Math.PI / 2;
+        pg.beginPath();
+        pg.moveTo(ax + Math.cos(t1) * arm - Math.cos(a) * 0, ay + Math.sin(t1) * arm);
+        pg.lineTo(ax, ay);
+        pg.lineTo(ax + Math.cos(t2) * arm, ay + Math.sin(t2) * arm);
+        pg.stroke();
+      }
+    }
+    pg.lineCap = 'butt';
+    pg.fillStyle = '#05040C';
+    pg.beginPath(); pg.arc(cx, cy, (held ? 7.5 : 6) * u, 0, 6.283); pg.fill();
     pg.fillStyle = '#fff';
-    pg.beginPath(); pg.arc(cx, cy, (held ? 6 : 4.5) * u, 0, 6.283); pg.fill();
+    pg.beginPath(); pg.arc(cx, cy, (held ? 5 : 4) * u, 0, 6.283); pg.fill();
+    if (held && !reduceMotion) dirty = true; // keep the reticle spinning
   }
 
   /* ---------- pad input ---------- */
@@ -1399,7 +1685,7 @@ const DEMO_BEAT = [
       if (s.on) {
         const w = weightsAt(s.x, s.y);
         const sig = voiceSignature(paramsAt(s.x, s.y, w));
-        const c = mixc(sig.rgb, [20, 23, 46], 0.2);
+        const c = mixc(sig.rgb, [20, 23, 46], 0.08);
         el.style.setProperty('--c', `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
         el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
@@ -1423,25 +1709,39 @@ const DEMO_BEAT = [
      of the map, not just a single fixed sound. Edits apply immediately and
      last for the session; Reset this drum restores its shipped tuning.
      ========================================================================== */
+  const MODULES = [
+    { id: 'body', label: 'Body', accent: '--m-body' },
+    { id: 'noise', label: 'Noise', accent: '--m-noise' },
+    { id: 'metal', label: 'Metal', accent: '--m-metal' },
+    { id: 'res', label: 'Resonator', accent: '--m-res' },
+    { id: 'filter', label: 'Filter', accent: '--m-filter' },
+    { id: 'out', label: 'Shape & out', accent: '--m-out' },
+  ];
   const PARAM_SPECS = [
-    { key: 'f', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz' },
-    { key: 'pEnv', label: 'Pitch sweep depth', min: 0, max: 5, step: 0.05, unit: 'oct' },
-    { key: 'pDec', label: 'Pitch sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's' },
-    { key: 'tone', label: 'Body level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'tDec', label: 'Body decay', min: 0.02, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'fm', label: 'Body FM crack', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'noise', label: 'Noise level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'nDec', label: 'Noise decay', min: 0.01, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'burst', label: 'Clap-style bursts', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'metal', label: 'Metal level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'mDec', label: 'Metal decay', min: 0.02, max: 1.2, step: 0.005, unit: 's' },
-    { key: 'mPitch', label: 'Metal pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x' },
-    { key: 'hp', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz' },
-    { key: 'lp', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz' },
-    { key: 'q', label: 'Resonance', min: 0, max: 10, step: 0.1, unit: 'q' },
-    { key: 'drive', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'atk', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
-    { key: 'lvl', label: 'Output level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
+    { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
+    { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
+    { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
+    { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
+    { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+    { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
+    { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
+    { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
+    { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
+    { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
+    { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
+    { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
+    { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
+    { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
+    { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
   ];
   function fmtParam(unit, v) {
     if (unit === 'hz') return fmtHz(v);
@@ -1449,6 +1749,7 @@ const DEMO_BEAT = [
     if (unit === 'oct') return v.toFixed(2) + ' oct';
     if (unit === 'x') return '\u00d7' + v.toFixed(2);
     if (unit === 'q') return v.toFixed(1);
+    if (unit === 'shape') return v < 0.2 ? 'string' : v < 0.4 ? 'tube' : v < 0.6 ? 'skin' : v < 0.8 ? 'plate' : 'bar';
     return Math.round(v * 100) + '%';
   }
 
@@ -1486,11 +1787,21 @@ const DEMO_BEAT = [
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
   }
+  const moduleGrids = {};
+  for (const m of MODULES) {
+    const el = document.createElement('div');
+    el.className = 'module'; el.style.setProperty('--accent', `var(${m.accent})`);
+    el.innerHTML = '<h3></h3><div class="knobgrid"></div>';
+    el.querySelector('h3').textContent = m.label;
+    engineParams.appendChild(el);
+    moduleGrids[m.id] = el.querySelector('.knobgrid');
+  }
   const paramRows = PARAM_SPECS.map((spec) => {
-    const container = document.createElement('div'); container.className = 'field';
-    engineParams.appendChild(container);
-    const slider = createHSlider(container, {
-      min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key],
+    const container = document.createElement('div');
+    moduleGrids[spec.mod].appendChild(container);
+    const slider = createKnob(container, {
+      min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key], log: spec.log,
+      def: () => ORIGINAL_PARAMS[+engineSelect.value][spec.key],
       label: spec.label, fmt: (v) => fmtParam(spec.unit, v),
       onInput: (v) => {
         const a = ANCHORS[+engineSelect.value];
@@ -1561,18 +1872,21 @@ const DEMO_BEAT = [
       const sig = voiceSignature(paramsAt(s.x, s.y));
       const base = px2(i, colW);
       if (i === cur) {
-        lg.fillStyle = 'rgba(255,255,255,.06)';
+        lg.fillStyle = 'rgba(43,232,255,.14)';
         lg.fillRect(base, 0, colW, H);
       }
       rows.forEach((row, ri) => {
         const top = ri * rowH, h = rowH - gap;
         const v = clamp(s[row.key], 0, 1);
-        lg.fillStyle = on ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)';
+        lg.fillStyle = on ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)';
         lg.fillRect(base + gap / 2, top + gap / 2, colW - gap, h - gap / 2);
         const barH = Math.max(2 * u, v * (h - gap / 2));
         const rgb = on ? sig.rgb : [90, 92, 112];
-        lg.fillStyle = rgbs(rgb, on ? 0.92 : 0.5);
-        lg.fillRect(base + gap / 2, top + (h - gap / 2) - barH + gap / 2, colW - gap, barH);
+        const barTop = top + (h - gap / 2) - barH + gap / 2;
+        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.5);
+        lg.fillRect(base + gap / 2, barTop, colW - gap, barH);
+        lg.fillStyle = on ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.25)';
+        lg.fillRect(base + gap / 2, barTop, colW - gap, Math.min(barH, 3 * u));
         // a neutral mark at the middle of the decay row shows "no change"
         if (row.key === 'decay') {
           lg.fillStyle = 'rgba(255,255,255,.4)';
@@ -1660,60 +1974,88 @@ const DEMO_BEAT = [
   });
   $('#laneHint').textContent = LANE_HINT.prob;
 
-  /* ---------- hslider: a rectangular, directly-draggable control. Click
-     anywhere on the track to jump there, drag to sweep, arrow keys to
-     nudge. The parameter name sits inside the bar on the left, the live
-     value on the right (see .hslider in template.html). ---------- */
-  function createHSlider(container, opts) {
-    container.innerHTML = '<div class="hslider" tabindex="0" role="slider"><div class="hslider-fill"></div><span class="hslider-label"></span><span class="hslider-value"></span></div>';
-    const el = container.querySelector('.hslider');
-    const fill = el.querySelector('.hslider-fill');
-    const labelEl = el.querySelector('.hslider-label');
-    const valueEl = el.querySelector('.hslider-value');
-    labelEl.textContent = opts.label;
-    el.setAttribute('aria-label', opts.label);
+  /* ---------- knob: drag up/right to turn up, down/left to turn down
+     (Shift for fine), double-tap to reset, arrow keys to nudge. A 270
+     degree arc shows the value; bipolar knobs fill from 12 o'clock. log
+     knobs move evenly in ratio (pitches, times), not in Hz or seconds.
+     Same API the old hslider had: { value, set(v) }. ---------- */
+  function createKnob(container, opts) {
+    container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
+      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
+      '<div class="knob-cap"></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
+    const el = container.querySelector('.knob');
+    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
+    el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
+    el.querySelector('.knob-label').textContent = opts.label;
+    el.setAttribute('aria-label', opts.ariaLabel || opts.label);
     el.setAttribute('aria-valuemin', opts.min);
     el.setAttribute('aria-valuemax', opts.max);
     const step = opts.step || 1;
+    const initial = opts.value;
     let value = opts.value;
-    const snap = (v) => Math.min(opts.max, Math.max(opts.min, Math.round((v - opts.min) / step) * step + opts.min));
+    const useLog = !!opts.log && opts.min > 0;
+    const toPos = (v) => useLog ? Math.log(v / opts.min) / Math.log(opts.max / opts.min) : (v - opts.min) / (opts.max - opts.min);
+    const fromPos = (p) => useLog ? opts.min * Math.pow(opts.max / opts.min, p) : opts.min + p * (opts.max - opts.min);
+    const snap = (v) => {
+      const q = Math.round((v - opts.min) / step) * step + opts.min;
+      return Math.min(opts.max, Math.max(opts.min, +q.toFixed(6)));
+    };
     function render() {
-      const frac = (value - opts.min) / (opts.max - opts.min);
-      fill.style.width = (frac * 100) + '%';
+      const pos = clamp(toPos(value), 0, 1);
+      const ang = -KNOB_SWEEP / 2 + pos * KNOB_SWEEP;
+      const from = opts.bipolar ? 0 : -KNOB_SWEEP / 2;
+      valPath.setAttribute('d', arcPath(from, ang));
+      valPath.style.opacity = !opts.bipolar && pos < 0.004 ? 0 : 1;
+      el.style.setProperty('--rot', ang + 'deg');
       valueEl.textContent = opts.fmt ? opts.fmt(value) : String(value);
       el.setAttribute('aria-valuenow', value);
+      el.setAttribute('aria-valuetext', valueEl.textContent);
     }
-    function fromClientX(clientX) {
-      const r = el.getBoundingClientRect();
-      const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-      value = snap(opts.min + frac * (opts.max - opts.min));
-      render();
-    }
-    let dragging = false;
+    const emit = () => { if (opts.onInput) opts.onInput(value); };
+    let drag = null, lastTap = 0;
     el.addEventListener('pointerdown', (e) => {
-      dragging = true;
+      e.preventDefault();
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
-      fromClientX(e.clientX);
-      if (opts.onInput) opts.onInput(value);
+      el.focus({ preventScroll: true });
+      const t = performance.now();
+      if (t - lastTap < 320) {
+        // double-tap: back to the default (for drums, their shipped tuning)
+        lastTap = 0;
+        value = snap(typeof opts.def === 'function' ? opts.def() : (opts.def != null ? opts.def : initial));
+        render(); emit();
+        if (opts.onChange) opts.onChange(value);
+        return;
+      }
+      lastTap = t;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, pos: clamp(toPos(value), 0, 1) };
+      el.classList.add('active');
       if (opts.onPointerDown) opts.onPointerDown(value);
     });
-    el.addEventListener('pointermove', (e) => { if (dragging) { fromClientX(e.clientX); if (opts.onInput) opts.onInput(value); } });
-    const end = () => {
-      if (!dragging) return;
-      dragging = false;
+    el.addEventListener('pointermove', (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const travel = e.shiftKey ? 800 : 200;
+      const p = clamp(drag.pos + ((e.clientX - drag.x) - (e.clientY - drag.y)) / travel, 0, 1);
+      const v = snap(fromPos(p));
+      if (v !== value) { value = v; render(); emit(); }
+    });
+    const end = (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      drag = null; el.classList.remove('active');
       if (opts.onPointerUp) opts.onPointerUp(value);
       if (opts.onChange) opts.onChange(value);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
     el.addEventListener('keydown', (e) => {
-      let d = 0;
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') d = -step;
-      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') d = step;
+      let dir = 0;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') dir = -1;
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') dir = 1;
       else return;
       e.preventDefault();
-      value = snap(value + d); render();
-      if (opts.onInput) opts.onInput(value);
+      const before = value;
+      value = snap(fromPos(clamp(toPos(value) + dir * (e.shiftKey ? 0.1 : 0.01), 0, 1)));
+      if (value === before) value = snap(value + dir * step); // coarse knobs: at least one step
+      render(); emit();
       if (opts.onChange) opts.onChange(value);
     });
     render();
@@ -1725,25 +2067,25 @@ const DEMO_BEAT = [
      releasing fires onRoll(strength) once, then the die eases back to the
      left on its own. ---------- */
   function createDiceSlider(container, label, onRoll) {
-    container.innerHTML = '<div class="hslider dicetrack" tabindex="0" role="slider" aria-label="' +
-      label + '"><div class="hslider-fill"></div><span class="hslider-label"></span><div class="die">\u2685</div></div>';
+    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die">\u2685</div></div>';
     const el = container.querySelector('.dicetrack');
-    const fill = el.querySelector('.hslider-fill');
-    const labelEl = el.querySelector('.hslider-label');
+    el.setAttribute('aria-label', label);
+    const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
-    labelEl.textContent = label;
-    const trackInset = 3, dieW = 30;
+    el.querySelector('.label').textContent = label;
+    const trackInset = 4, dieW = 34;
     function place(strength) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(0, r.width - dieW - trackInset * 2);
+      const travel = Math.max(0, r.width - dieW - trackInset * 2 - 4);
       die.style.left = (trackInset + strength * travel) + 'px';
-      fill.style.width = (strength * 100) + '%';
+      die.style.transform = `rotate(${strength * 720}deg)`;
+      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW / 2 : 0) + 'px';
     }
     place(0);
     let dragging = false;
     function fromClientX(clientX) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(1, r.width - dieW - trackInset * 2);
+      const travel = Math.max(1, r.width - dieW - trackInset * 2 - 4);
       const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW / 2) / travel));
       place(strength);
       return strength;
@@ -1763,6 +2105,11 @@ const DEMO_BEAT = [
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+    // keyboard: Enter rolls at half strength, digits 1-9 roll at 10-90%
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoll(0.5); }
+      else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); onRoll(+e.key / 10); }
+    });
   }
 
   /* kit-wide Decay trim: deliberately a multiplier, not a plain percentage
@@ -1783,21 +2130,25 @@ const DEMO_BEAT = [
   }
 
   /* ---------- controls ---------- */
-  const tempoSlider = createHSlider($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: () => history.commit() });
-  const swingSlider = createHSlider($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const quantizeSlider = createHSlider($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: () => history.commit() });
-  const tuneSlider = createHSlider($('#tuneField'), { min: -12, max: 12, step: 1, value: 0, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; readoutDirty = true; }, onChange: () => history.commit() });
-  const decaySlider = createHSlider($('#decayField'), { min: -100, max: 100, step: 1, value: 0, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); readoutDirty = true; }, onChange: () => history.commit() });
-  const driveSlider = createHSlider($('#driveField'), { min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: (v) => v + '%', onInput: (v) => { trims.drive = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
+  const commit = () => history.commit();
+  const tempoSlider = createKnob($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: commit });
+  const swingSlider = createKnob($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: commit });
+  const quantizeSlider = createKnob($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: commit });
 
-  /* kit-wide macro mixes: shift the balance of every drum on the map at
-     once, independent of any single drum's own tuning. */
-  const macroEl = $('#macroParams');
-  const macroRow = (id) => { const d = document.createElement('div'); d.className = 'field'; d.id = id; macroEl.appendChild(d); return d; };
-  const macroPunchSlider = createHSlider(macroRow('macroPunch'), { min: 0, max: 300, step: 1, value: 100, label: 'Punch (attack)', fmt: (v) => v + '%', onInput: (v) => { trims.punch = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroToneSlider = createHSlider(macroRow('macroTone'), { min: 0, max: 200, step: 1, value: 100, label: 'Body mix', fmt: (v) => v + '%', onInput: (v) => { trims.toneMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroNoiseSlider = createHSlider(macroRow('macroNoise'), { min: 0, max: 200, step: 1, value: 100, label: 'Noise mix', fmt: (v) => v + '%', onInput: (v) => { trims.noiseMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
-  const macroMetalSlider = createHSlider(macroRow('macroMetal'), { min: 0, max: 200, step: 1, value: 100, label: 'Metal mix', fmt: (v) => v + '%', onInput: (v) => { trims.metalMix = v / 100; readoutDirty = true; }, onChange: () => history.commit() });
+  /* kit-wide trims and macro mixes: shift every drum on the map at once,
+     independent of any single drum's own tuning. */
+  const kitEl = $('#kitKnobs');
+  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit }, o)); };
+  const pct = (v) => v + '%';
+  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
+  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
+  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
+  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
+  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
+  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
+  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
+  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
+  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
   $('#play').addEventListener('click', () => setPlaying(!playing));
   $('#record').addEventListener('click', () => setRecording(!recording));
@@ -1831,7 +2182,7 @@ const DEMO_BEAT = [
     restore(s) {
       seq.steps = JSON.parse(JSON.stringify(s.steps));
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
-      Object.assign(trims, s.trims);
+      Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing; quantizeN = s.quantizeN;
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
@@ -1842,6 +2193,8 @@ const DEMO_BEAT = [
       tuneSlider.set(trims.tune);
       decaySlider.set(kitDecaySliderFromValue(trims.decay));
       driveSlider.set(Math.round(trims.drive * 100));
+      foldSlider.set(Math.round((trims.fold || 0) * 100));
+      macroResSlider.set(Math.round((trims.resMix == null ? 1 : trims.resMix) * 100));
       macroPunchSlider.set(Math.round(trims.punch * 100));
       macroToneSlider.set(Math.round(trims.toneMix * 100));
       macroNoiseSlider.set(Math.round(trims.noiseMix * 100));
@@ -1924,6 +2277,18 @@ const DEMO_BEAT = [
   });
   window.addEventListener('blur', () => { keyHeld.clear(); seq.releaseAll(); });
 
+  /* ---------- HUD over the pad: what you're on, how it's blended, where
+     the playhead is ---------- */
+  const hudName = $('#hudName'), hudMix = $('#hudMix'), hudMeta = $('#hudMeta'), hudXY = $('#hudXY');
+  function renderHud() {
+    const f = seq.focus();
+    const top = nearest(weightsAt(f.x, f.y), 2);
+    hudName.textContent = (f.kind === 'step' ? `#${f.index + 1} ` : '') + top[0].name;
+    hudMix.textContent = top.map((t) => `${Math.round(t.w * 100)}% ${t.name}`).join(' \u00b7 ');
+    hudMeta.innerHTML = `${tempo} BPM<br>${playing && cur >= 0 ? `<span class="now">STEP ${String(cur + 1).padStart(2, '0')}/16</span>` : 'STOPPED'}`;
+    hudXY.textContent = `X ${f.x.toFixed(2)}  Y ${f.y.toFixed(2)}`;
+  }
+
   /* ---------- frame loop ---------- */
   function frame(now) {
     const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
@@ -1941,9 +2306,9 @@ const DEMO_BEAT = [
     stepParticles(dt, now);
     if (particles.length) dirty = true;
 
-    if (headDirty) { updateHead(); headDirty = false; }
+    if (headDirty) { updateHead(); renderHud(); headDirty = false; }
     if (stepsDirty) { renderSteps(); stepsDirty = false; }
-    readoutDirty = false; // voice readout was removed; nothing consumes this flag anymore
+    if (readoutDirty || headDirty) { renderHud(); readoutDirty = false; }
     if (laneDirty) { drawLanes(); laneDirty = false; }
     if (dirty) { drawPad(now); dirty = false; }
     requestAnimationFrame(frame);
@@ -1967,7 +2332,7 @@ const DEMO_BEAT = [
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .hslider, .dicetrack, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, #laneCanvas, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

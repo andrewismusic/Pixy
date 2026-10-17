@@ -5,7 +5,8 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 ## Workflow
 
 - Edit `web/core.js`, `web/ui.js`, `web/template.html` — never `pixy.html` directly.
-- After any edit: `python3 web/build.py` and commit the regenerated `pixy.html` alongside the sources.
+- After any edit: `python3 web/build.py` and commit the regenerated `pixy.html` and `dist/pixy-artifact.html` alongside the sources.
+- Testing on a phone: publish `dist/pixy-artifact.html` to the private claude.ai artifact https://claude.ai/artifact/Ekz2ozza21qeJ1V8y9JxNq (pass it as `url` from a new session). Opening `pixy.html` from Files or a chat preview doesn't run scripts.
 - Tests: `node --test web/test/*.test.js`. Add tests for any change to `core.js` logic.
 - `core.js` ends with a Node `module.exports` block, introduced by the `// --- Node export` marker; `build.py` cuts at that marker. Keep the marker and add new exports there.
 - `core.js` must stay free of DOM/Canvas code; it's the portable model layer.

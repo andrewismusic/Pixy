@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pixy: an XY drum synth</title>
+<title>Pixy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -42,6 +43,7 @@
     --m-body: #FF5D8F; --m-noise: #C4BFDD; --m-metal: #2BE8FF; --m-res: #FFB020;
     --m-filter: #A08CFF; --m-out: #FF7A45; --m-kit: #F6F1E3; --m-seq: #F6F1E3;
     --spill-a: rgba(255,46,126,.10); --spill-b: rgba(43,232,255,.08);
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -52,6 +54,7 @@
   --m-body: #FF5D8F; --m-noise: #C4BFDD; --m-metal: #2BE8FF; --m-res: #FFB020;
   --m-filter: #A08CFF; --m-out: #FF7A45; --m-kit: #F6F1E3; --m-seq: #F6F1E3;
   --spill-a: rgba(255,46,126,.10); --spill-b: rgba(43,232,255,.08);
+    color-scheme: dark;
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 *, *::before, *::after { box-sizing: inherit; }
@@ -67,7 +70,7 @@ body {
   font: 500 15px/1.45 var(--font-body);
   -webkit-text-size-adjust: 100%;
 }
-.app { max-width: 760px; margin: 0 auto; padding: 14px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
+.app { max-width: 760px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
 /* ---------- keycap: the shared 3D button body. Raised on a hard shadow,
    pressing sinks it onto the shadow. ---------- */
@@ -280,7 +283,6 @@ h2 { font: 400 15px/1.2 var(--font-display); margin: 0; letter-spacing: .04em; t
 kbd { font: 700 12px var(--font-mono); padding: 1px 5px; border: 2px solid var(--edge); border-radius: 5px; background: var(--panel); color: var(--ink); box-shadow: 0 2px 0 var(--shadow); }
 
 @media (max-width: 640px) {
-  .app { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
   .navbtn { width: 38px; height: 38px; }
   .pagenav { gap: 5px; }

@@ -14,7 +14,9 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 ## Invariants (see handoff "Known rough edges")
 
 - Mono/choke silences other voices at the new voice's start time `t`, not `ctx.currentTime`.
-- Recording writes each step once, at its catch point (`RATCHET_CATCH` = halfway through the step): pad held or tapped since the last catch point, plus the ratchet bar's value. Moves after a step's catch point land on the next step.
+- Recording is gesture-based: a pad touch or ratchet-bar hold covers a step if it started before that step's catch point (`RATCHET_CATCH`, halfway) and was still held at it. A tap that starts and ends before one catch point still counts for that step (`pendingPress` / `pendingBar`, armed only when a gesture starts).
+- Smooth mode (the key beside record) changes only new touches: live pad hits are glide voices that follow the finger, and recorded steps store `auto`, `AUTO_POINTS` positions sampled from that one gesture after the step has passed. Stepped recording clears `auto`.
+- `playVoice(..., {glide: true})` builds every layer behind a mix gain so `glide()` can move pitch, filters, layer balance and level; layers silent at the strike ring as long as the longest layer. Without `glide` the voice must render byte-identically to before.
 - Ratchet bar values must divide a 16th into whole hits (`RATCHET_VALUES`); a recorded value applies to the whole step.
 - Swing is a percentage, 50 (straight) to 75; `swingOffset` turns it into a delay for odd steps.
 - While playing, live pad hits are scheduled only `LIVE_AHEAD` (35 ms) ahead so lifting a finger stops them promptly.

@@ -276,25 +276,32 @@ function makeNoise(ctx) {
   return buf;
 }
 
-function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
+/* the kit-wide macro mixes applied to one voice's parameters; 1 = unchanged */
+function mixedParams(P, trims) {
+  const m = (k) => (trims[k] == null ? 1 : trims[k]);
+  return Object.assign({}, BASE, P, {
+    tone: clamp(P.tone * m('toneMix'), 0, 2),
+    noise: clamp(P.noise * m('noiseMix'), 0, 2),
+    metal: clamp(P.metal * m('metalMix'), 0, 2),
+    res: clamp((P.res || 0) * m('resMix'), 0, 2),
+    atk: Math.max(0.0002, P.atk * m('punch')),
+  });
+}
+
+/* playVoice: one hit. Returns {end} or, with opts.glide, a handle whose
+   glide(P2, at) steers the still-ringing voice toward another point on the
+   map: pitch, filters, the balance of its layers and its level move; its
+   envelopes and decays stay as they were struck. A glide voice builds every
+   layer (silent ones at zero) so a layer can fade in mid-note, which costs
+   more nodes, so only smooth-mode hits ask for it. */
+const GLIDE_TAU = 0.012;
+function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
+  const glide = !!(opts && opts.glide);
   const tune = Math.pow(2, trims.tune / 12);
   const dm = trims.decay * (extraDecay == null ? 1 : extraDecay);
   const drive = clamp(P.drive + trims.drive, 0, 1);
   const fold = clamp((P.fold || 0) + (trims.fold || 0), 0, 1);
-  // kit-wide macro mixes: blend the whole kit's character without touching
-  // any single drum's own tuning. 1 = unchanged.
-  const toneMix = trims.toneMix == null ? 1 : trims.toneMix;
-  const noiseMix = trims.noiseMix == null ? 1 : trims.noiseMix;
-  const metalMix = trims.metalMix == null ? 1 : trims.metalMix;
-  const punch = trims.punch == null ? 1 : trims.punch;
-  const resMix = trims.resMix == null ? 1 : trims.resMix;
-  P = Object.assign({}, BASE, P, {
-    tone: clamp(P.tone * toneMix, 0, 2),
-    noise: clamp(P.noise * noiseMix, 0, 2),
-    metal: clamp(P.metal * metalMix, 0, 2),
-    res: clamp((P.res || 0) * resMix, 0, 2),
-    atk: Math.max(0.0002, P.atk * punch),
-  });
+  P = mixedParams(P, trims);
 
   const pre = ctx.createGain(); pre.gain.value = 1 + drive * 5;
   const shp = ctx.createWaveShaper(); shp.curve = SHAPER_CURVE;
@@ -312,15 +319,24 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
 
   let end = t;
   const stopAt = (node, time) => { node.stop(time); if (time > end) end = time; };
+  // glide voices: each layer's envelope runs at full scale into a mix gain
+  // that carries the layer's level, so the level can move later
+  const G = {};
+  const mixInto = (level, dest) => { const m = ctx.createGain(); m.gain.value = level; m.connect(dest); return m; };
+  // a layer that's silent when struck rings as long as the voice's longest
+  // layer, so a later glide can still fade it in
+  const on = (lvl) => lvl > 0.02;
+  const longest = Math.max(on(P.tone) ? P.tDec : 0, on(P.noise) ? P.nDec : 0, on(P.metal) ? P.mDec : 0, on(P.res) ? P.resDec : 0, 0.05);
+  const decOf = (lvl, d) => (glide && !on(lvl) ? longest : d);
 
-  if (P.tone > 0.02) {
+  if (P.tone > 0.02 || glide) {
     const f = P.f * tune, fs = f * Math.pow(2, P.pEnv), tau = Math.max(0.003, P.pDec / 3);
-    const dur = P.tDec * dm;
+    const dur = decOf(P.tone, P.tDec) * dm;
     const osc = ctx.createOscillator(); osc.type = 'sine';
     osc.frequency.setValueAtTime(fs, t);
     osc.frequency.setTargetAtTime(f, t, tau);
     const g = ctx.createGain();
-    ampEnv(g.gain, t, P.atk, P.tone, dur);
+    ampEnv(g.gain, t, P.atk, glide ? 1 : P.tone, dur);
     if (P.fm > 0.02) {
       const mod = ctx.createOscillator(); mod.type = 'sine';
       mod.frequency.setValueAtTime(fs * P.fmRatio, t);
@@ -330,12 +346,15 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
       mg.gain.setTargetAtTime(0, t, Math.max(0.008, dur * 0.25));
       mod.connect(mg); mg.connect(osc.frequency);
       mod.start(t); stopAt(mod, t + P.atk + dur + 0.05);
+      G.mod = mod;
     }
-    osc.connect(g); g.connect(bus);
+    osc.connect(g);
+    if (glide) { G.tone = mixInto(P.tone, bus); g.connect(G.tone); G.osc = osc; G.sweepEnd = t + P.pDec; }
+    else g.connect(bus);
     osc.start(t); stopAt(osc, t + P.atk + dur + 0.05);
   }
 
-  const wantN = P.noise > 0.02, wantM = P.metal > 0.02;
+  const wantN = P.noise > 0.02 || glide, wantM = P.metal > 0.02 || glide;
   if (wantN || wantM) {
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass';
     hp.frequency.value = P.hp; hp.Q.value = -3;
@@ -343,35 +362,40 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
     lp.frequency.value = Math.min(Math.max(P.lp, P.hp * 1.2), ctx.sampleRate * 0.45);
     lp.Q.value = P.q;
     hp.connect(lp); lp.connect(bus);
+    if (glide) { G.hp = hp; G.lp = lp; }
 
     if (wantN) {
-      const dur = P.nDec * dm;
+      const dur = decOf(P.noise, P.nDec) * dm;
       const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
       const ng = ctx.createGain();
-      const lead = noiseEnv(ng.gain, t, P.atk, P.noise, dur, P.burst);
-      src.connect(ng); ng.connect(hp);
+      const lead = noiseEnv(ng.gain, t, P.atk, glide ? 1 : P.noise, dur, P.burst);
+      src.connect(ng);
+      if (glide) { G.noise = mixInto(P.noise, hp); ng.connect(G.noise); } else ng.connect(hp);
       src.start(t, Math.random() * (noiseBuf.duration - 0.2));
       stopAt(src, t + lead + P.atk + dur + 0.05);
     }
     if (wantM) {
-      const dur = P.mDec * dm;
+      const dur = decOf(P.metal, P.mDec) * dm;
       const mg = ctx.createGain();
-      ampEnv(mg.gain, t, P.atk, P.metal * 0.35, dur);
+      ampEnv(mg.gain, t, P.atk, (glide ? 1 : P.metal) * 0.35, dur);
+      if (glide) G.metalOsc = [];
       for (const r of METAL_RATIOS) {
         const o = ctx.createOscillator(); o.type = 'square';
         o.frequency.value = r * P.mPitch * tune;
         o.connect(mg);
         o.start(t); stopAt(o, t + P.atk + dur + 0.05);
+        if (glide) G.metalOsc.push([o, r]);
       }
-      mg.connect(hp);
+      if (glide) { G.metal = mixInto(P.metal, hp); mg.connect(G.metal); } else mg.connect(hp);
     }
   }
 
-  if (P.res > 0.02) {
-    const sr = ctx.sampleRate, t60 = Math.min(4, P.resDec * dm);
+  if (P.res > 0.02 || glide) {
+    const sr = ctx.sampleRate, t60 = Math.min(4, decOf(P.res, P.resDec) * dm);
     const src = ctx.createBufferSource(); src.buffer = clickBuf(ctx);
     const rg = ctx.createGain(); rg.gain.value = P.res * 0.45;
     rg.connect(bus);
+    if (glide) { G.res = rg; G.modes = []; }
     modeRatios(P.resShape).forEach((r, k) => {
       const fr = P.resF * tune * r;
       if (fr > sr * 0.45) return;
@@ -382,12 +406,45 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay) {
       // so every mode starts at MODE_AMPS[k] whatever its pitch and ring
       const g = ctx.createGain(); g.gain.value = MODE_AMPS[k] * Q / (Math.sin(w0) * CLICK_AREA);
       src.connect(bp); bp.connect(g); g.connect(rg);
+      if (glide) G.modes.push([bp, k]);
     });
     src.start(t + P.atk);
     stopAt(src, t + P.atk + t60 + 0.02);
   }
-  return end;
+  if (!glide) return end;
+
+  return {
+    end,
+    glide(P2, at) {
+      at = Math.max(at, t);
+      const Q = mixedParams(P2, trims), to = (param, v) => param.setTargetAtTime(v, at, GLIDE_TAU);
+      // the body's pitch sweep keeps running; a glide during it retargets
+      // where the sweep lands
+      const f = Q.f * tune, when = Math.max(at, G.sweepEnd || at);
+      if (G.osc) G.osc.frequency.setTargetAtTime(f, when, GLIDE_TAU);
+      if (G.mod) G.mod.frequency.setTargetAtTime(f * Q.fmRatio, when, GLIDE_TAU);
+      if (G.tone) to(G.tone.gain, Q.tone);
+      if (G.noise) to(G.noise.gain, Q.noise);
+      if (G.metal) to(G.metal.gain, Q.metal);
+      if (G.metalOsc) for (const [o, r] of G.metalOsc) to(o.frequency, r * Q.mPitch * tune);
+      if (G.hp) { to(G.hp.frequency, Q.hp); to(G.lp.frequency, Math.min(Math.max(Q.lp, Q.hp * 1.2), ctx.sampleRate * 0.45)); to(G.lp.Q, Q.q); }
+      if (G.res) {
+        to(G.res.gain, Q.res * 0.45);
+        const rr = modeRatios(Q.resShape);
+        for (const [bp, k] of G.modes) to(bp.frequency, Math.min(Q.resF * tune * rr[k], ctx.sampleRate * 0.45));
+      }
+      to(post.gain, Q.lvl * 0.9 / (1 + drive * 0.8));
+    },
+  };
 }
+
+/* autoAt: a smooth-recorded step's position at offset o (0..1 through the
+   step), linearly between its evenly spaced automation points */
+function autoAt(auto, o) {
+  const p = clamp(o, 0, 1) * (auto.length - 1), i = Math.min(auto.length - 2, Math.floor(p)), f = p - i;
+  return { x: auto[i].x + (auto[i + 1].x - auto[i].x) * f, y: auto[i].y + (auto[i + 1].y - auto[i].y) * f };
+}
+const AUTO_POINTS = 16; // automation points recorded per step in smooth mode (as Slicefield)
 
 class Engine {
   constructor(ctx) {
@@ -402,7 +459,7 @@ class Engine {
     comp.attack.value = 0.003; comp.release.value = 0.12;
     this.master.connect(comp); comp.connect(ctx.destination);
   }
-  trigger(P, t, extraDecay) {
+  trigger(P, t, extraDecay, opts) {
     const ctx = this.ctx;
     const now = ctx.currentTime;
     if (t === undefined || t < now) t = now;
@@ -427,8 +484,10 @@ class Engine {
     }
     const out = ctx.createGain();
     out.connect(this.master);
-    const end = playVoice(ctx, out, this.noise, P, this.trims, t, extraDecay);
+    const r = playVoice(ctx, out, this.noise, P, this.trims, t, extraDecay, opts);
+    const end = typeof r === 'number' ? r : r.end;
     this.voices.push({ out, end });
+    return typeof r === 'number' ? null : r;
   }
 }
 
@@ -647,6 +706,17 @@ class Sequence {
     const s = this.steps[i];
     s.x = x; s.y = y; s.on = true; s.set = true;
     s.ratchets = evenRatchets(x, y, hits);
+    s.auto = null;
+    this.onChange();
+  }
+  /* setAuto: a smooth-recorded gesture for one step, AUTO_POINTS evenly
+     spaced {x, y} through it. The step's own position becomes its start. */
+  setAuto(i, auto) {
+    const s = this.steps[i];
+    if (!s.on || !auto || auto.length < 2) return;
+    s.auto = auto.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }));
+    s.x = s.auto[0].x; s.y = s.auto[0].y;
+    for (const r of s.ratchets) { const q = autoAt(s.auto, r.offset); r.x = q.x; r.y = q.y; }
     this.onChange();
   }
   /* setRatchetHits: the ratchet bar recorded on its own, re-cutting an
@@ -681,6 +751,6 @@ const DEMO_BEAT = [
 if (typeof module !== "undefined") module.exports = {
   N_STEPS, SIGMA, clamp, BASE, ANCHOR_DEFS, ANCHORS, weightsAt, LOG_KEYS, GROUPS, paramsAt,
   colorAt, decayMultiplier, nearest, voiceSignature, METAL_RATIOS, BURST_GAP, SHAPER_CURVE,
-  foldCurve, modeRatios, modeQ, playVoice, Engine,
+  foldCurve, modeRatios, modeQ, playVoice, mixedParams, autoAt, AUTO_POINTS, Engine,
   LANE_DEFAULTS, freshStep, RATCHET_VALUES, ratchetHits, RATCHET_CATCH, slotDuration, catchStep, swingOffset, Sequence, DEMO_BEAT,
 };

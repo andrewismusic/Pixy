@@ -130,3 +130,26 @@ test('new synthesis params blend and default from BASE', () => {
   const marimba = C.ANCHORS.find((a) => a.name === 'marimba');
   assert.ok(C.paramsAt(marimba.x, marimba.y).res > 0.7);
 });
+
+test('autoAt interpolates between automation points', () => {
+  const auto = [{ x: 0, y: 1 }, { x: 0.5, y: 0.5 }, { x: 1, y: 0 }];
+  assert.deepEqual(C.autoAt(auto, 0), { x: 0, y: 1 });
+  const m = C.autoAt(auto, 0.25); near(m.x, 0.25); near(m.y, 0.75);
+  assert.deepEqual(C.autoAt(auto, 1), { x: 1, y: 0 });
+  assert.deepEqual(C.autoAt(auto, 2), { x: 1, y: 0 });
+});
+
+test('setAuto stores a gesture and moves ratchets onto it; recordStep clears it', () => {
+  const s = new C.Sequence();
+  s.recordStep(3, 0.1, 0.1, 2);
+  s.setAuto(3, Array.from({ length: C.AUTO_POINTS }, (_, k) => ({ x: k / (C.AUTO_POINTS - 1), y: 0.5 })));
+  assert.equal(s.steps[3].auto.length, C.AUTO_POINTS);
+  assert.equal(s.steps[3].x, 0);
+  near(s.steps[3].ratchets[0].x, 0.5);
+  s.setAuto(4, [{ x: 0, y: 0 }, { x: 1, y: 1 }]); // off step: ignored
+  assert.equal(s.steps[4].auto, undefined);
+  s.recordStep(3, 0.2, 0.2, 1);
+  assert.equal(s.steps[3].auto, null);
+  s.toggle(3);
+  assert.deepEqual(s.steps[3], C.freshStep());
+});

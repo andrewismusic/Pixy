@@ -112,13 +112,15 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12); touch-action: none; cursor: ns-resize; outline: none;
   user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
-.ratchet .rtick { position: absolute; left: 9px; right: 9px; height: 1.5px; border-radius: 1px; background: var(--edge); }
-.ratchet .rlabel { position: absolute; left: 0; right: 0; text-align: center; font: 500 9px/1 var(--font-mono); color: var(--muted); transform: translateY(50%); pointer-events: none; }
+/* each stop: its value with a short tick just under it */
+.ratchet .rstop { position: absolute; left: 0; right: 0; display: grid; justify-items: center; gap: 3px; transform: translateY(50%); pointer-events: none; }
+.ratchet .rstop span { font: 500 9px/1 var(--font-mono); color: var(--muted); }
+.ratchet .rstop i { width: 10px; height: 1.5px; border-radius: 1px; background: var(--edge); }
 .rthumb {
   position: absolute; left: 3px; right: 3px; height: 34px; border-radius: 9px; z-index: 1; transform: translateY(50%);
   display: grid; place-items: center; font: 700 11px/1 var(--font-mono); color: var(--ink);
   background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo)); border: 1.5px solid var(--edge); box-shadow: 0 3px 0 var(--shadow);
-  transition: bottom .3s cubic-bezier(.3, 1.45, .45, 1);
+  transition: bottom .16s cubic-bezier(.3, 1.7, .5, 1);
 }
 .ratchet.held .rthumb { transition: none; background: var(--hold); color: var(--on-ink); border-color: transparent; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold); }
 .ratchet:focus-visible .rthumb { outline: 2px solid var(--hold); outline-offset: 2px; }
@@ -158,7 +160,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
    whichever page is showing; it rolls home on release. */
 .dicefield { flex: none; }
 .dicetrack {
-  position: relative; width: 74px; height: 42px; border-radius: 10px; overflow: hidden; cursor: pointer;
+  --dh: 42px; position: relative; width: 104px; height: var(--dh); border-radius: 10px; overflow: hidden; cursor: pointer;
   background: var(--well); border: 1.5px solid var(--edge);
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
@@ -166,9 +168,9 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .dicetrack[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .dicetrack .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--hold); opacity: .85; }
 .dicetrack .die {
-  position: absolute; top: 4px; left: 4px; width: 31px; height: 31px; border-radius: 8px; z-index: 2;
-  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 5px;
-  background: linear-gradient(180deg, #FFFFFF, #E3E7EE); box-shadow: 0 2px 0 rgba(0,0,0,.35);
+  position: absolute; top: 0; left: 0; width: calc(var(--dh) - 3px); height: calc(var(--dh) - 3px); border-radius: 8.5px; z-index: 2;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--dh) * .2);
+  background: #F7F9FC;
   cursor: grab;
   transition: left .5s cubic-bezier(.3,.9,.3,1.1), transform .5s cubic-bezier(.3,.9,.3,1.1);
 }
@@ -188,7 +190,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .transport .knob { --kd: 48px; }
 .btn { font: 700 12.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
 .btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
-#play, #record { width: 54px; height: 54px; border-radius: 14px; flex: none; }
+#play, #record, #smooth { width: 54px; height: 54px; border-radius: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 #record { color: var(--rec); }
 /* record keeps its own red when armed rather than the indicator yellow */
 #record[aria-pressed="true"] { background: var(--rec); color: #fff; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--rec); }
@@ -270,11 +272,11 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
   .navbtn { width: 36px; height: 36px; }
   .pagenav { gap: 4px; }
   header.top { gap: 6px; }
-  .dicetrack { width: 64px; height: 38px; }
-  .dicetrack .die { width: 28px; height: 28px; top: 3.5px; left: 3.5px; padding: 4.5px; }
+  .dicetrack { --dh: 36px; width: 84px; }
   .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
-  .transport .knob { --kd: 44px; }
+  .transport .knob { --kd: 42px; }
+  #play, #record, #smooth { width: 48px; height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .step, .cap, .dicetrack .die { transition: none; }
@@ -326,6 +328,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes your live position into whichever step is passing">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
+          <button id="smooth" class="cap icon" type="button"></button>
           <div class="knobslot" id="tempoField"></div>
           <div class="knobslot" id="swingField"></div>
         </div>
@@ -401,6 +404,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
           <li>The <b>ratchet bar</b> beside the pad rests at 1/16 and springs back when you let go. Hold it higher to cut each step into 2, 3, 4 or 6 hits. While recording, whatever it reads is written into each step that passes; a move in the first half of a step counts for that step, a later one for the next.</li>
           <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. Hold the ratchet bar up at the same time to record ratchets, or use the bar on its own to re-cut steps that are already there.</li>
+          <li><b>Stepped / smooth</b> (the key beside record): stepped gives each hit one position. Smooth lets a ringing hit follow your finger, and recording keeps the whole gesture through each step and its ratchets. It only affects new touches, so one sequence can mix both.</li>
           <li><b>Choke</b> (the cut-off wave) makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
           <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
           <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>

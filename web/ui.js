@@ -58,6 +58,48 @@
     return P;
   }
 
+  /* stepped / smooth (the key beside record, as in Slicefield). Stepped:
+     a touch is one position per hit. Smooth: hits from the pad are glide
+     voices that follow the finger while they ring, and recording keeps
+     the whole gesture (AUTO_POINTS per step). It only changes new touches;
+     steps already recorded keep how they were made. */
+  let smooth = false;
+  let liveVoices = []; // glide handles of live pad hits still ringing
+  function playLive(x, y, t) {
+    const P = paramsAt(x, y);
+    if (engine) {
+      const h = engine.trigger(P, t, undefined, smooth ? { glide: true } : undefined);
+      if (h) liveVoices.push(h);
+    }
+    return P;
+  }
+  function glideLive(x, y) {
+    if (!smooth || !actx || !liveVoices.length) return;
+    const now = actx.currentTime, P = paramsAt(x, y);
+    liveVoices = liveVoices.filter((h) => h.end > now);
+    for (const h of liveVoices) h.glide(P, now);
+  }
+
+  /* the pad's recent path, for smooth recording: one id per gesture so a
+     step only ever samples the gesture that wrote it */
+  let gestureLog = [], gestureId = 0;
+  function logGesture(x, y) {
+    if (!actx) return;
+    const now = actx.currentTime;
+    gestureLog.push({ t: now, x, y, id: gestureId });
+    while (gestureLog.length && gestureLog[0].t < now - 4) gestureLog.shift();
+  }
+  function sampleGesture(id, start, dur) {
+    const pts = gestureLog.filter((g) => g.id === id);
+    if (!pts.length) return null;
+    return Array.from({ length: AUTO_POINTS }, (_, k) => {
+      const t = start + dur * k / (AUTO_POINTS - 1);
+      let q = pts[0];
+      for (const g of pts) { if (g.t <= t) q = g; else break; }
+      return { x: q.x, y: q.y };
+    });
+  }
+
   /* ratchet bar: rests at 1/16 and springs back when let go. Its value
      cuts each step into ratchetHits(n) even hits, both for live pad hits
      and, while recording, for what gets written into each step. */
@@ -79,7 +121,7 @@
   let padHoldTimer = null;
   function triggerLive() {
     const { x, y } = seq.cursor;
-    const P = playAt(x, y);
+    const P = playLive(x, y);
     spawnBurst(x, y, P, performance.now());
   }
   function startPadHold() {
@@ -118,7 +160,7 @@
     while (liveNext < now + LIVE_AHEAD) {
       if (liveNext > now - 0.03) {
         const t = Math.max(liveNext, now), { x, y } = seq.cursor;
-        liveQueue.push({ t, x, y, P: playAt(x, y, t) });
+        liveQueue.push({ t, x, y, P: playLive(x, y, t) });
       }
       liveNext = nextGridHit(liveNext + 1e-4);
     }
@@ -129,29 +171,45 @@
      pad if it's held or was tapped since the last catch point, and the
      ratchet bar's value. A move made after a step's catch point lands on
      the next step. */
-  let locks = [], pendingPress = null;
-  function lockStep(i) {
-    if (!recording) { pendingPress = null; return; }
-    const hits = ratchetHits(ratchetN);
-    if (seq.padHeld()) { seq.recordStep(i, seq.cursor.x, seq.cursor.y, hits); pendingPress = null; }
-    else if (pendingPress) { seq.recordStep(i, pendingPress.x, pendingPress.y, hits); pendingPress = null; }
-    else if (ratchetHeld) seq.setRatchetHits(i, hits);
+  /* Gestures have a start and an end, and each gets the catch window: a
+     gesture covers a step if it began before that step's catch point and
+     was still held at it. A tap that starts and ends before one catch point
+     (pendingPress / pendingBar) still counts for that step. */
+  let locks = [], finals = [], pendingPress = null, pendingBar = null;
+  function lockStep(L) {
+    const i = L.i;
+    if (!recording) { pendingPress = pendingBar = null; return; }
+    const barN = ratchetHeld ? ratchetN : pendingBar ? pendingBar.n : 16;
+    const hits = ratchetHits(barN);
+    const pad = seq.padHeld() ? { x: seq.cursor.x, y: seq.cursor.y, id: gestureId, smooth } : pendingPress;
+    if (pad) {
+      seq.recordStep(i, pad.x, pad.y, hits);
+      // smooth: the step's automation is sampled once the step has passed
+      if (pad.smooth) finals.push({ i, t: L.S + L.dur, S: L.S, dur: L.dur, id: pad.id });
+    } else if (ratchetHeld || pendingBar) seq.setRatchetHits(i, hits);
+    pendingPress = pendingBar = null;
+  }
+  function finalizeStep(F) {
+    const auto = sampleGesture(F.id, F.S, F.dur);
+    if (auto && auto.some((q) => q.x !== auto[0].x || q.y !== auto[0].y)) seq.setAuto(F.i, auto);
   }
   function tickLocks() {
     const now = actx.currentTime;
-    while (locks.length && locks[0].t <= now) lockStep(locks.shift().i);
+    while (locks.length && locks[0].t <= now) lockStep(locks.shift());
+    while (finals.length && finals[0].t <= now) finalizeStep(finals.shift());
   }
 
   function audition(x, y, kind) {
     const now = performance.now();
     ensureAudio();
     lastAud = { t: now, x, y };
-    if (kind === 'move') return; // the live clock handles retriggering while held
+    if (kind === 'move') { logGesture(x, y); glideLive(x, y); return; } // the live clock handles retriggering
     if (kind === 'press') {
-      if (playing) { liveNext = 0; if (recording) pendingPress = { x, y }; }
+      gestureId++; logGesture(x, y);
+      if (playing) { liveNext = 0; if (recording) pendingPress = { x, y, id: gestureId, smooth }; }
       else startPadHold();
     }
-    const P = playAt(x, y);
+    const P = playLive(x, y);
     spawnBurst(x, y, P, now);
   }
 
@@ -166,9 +224,11 @@
       const r = seq.trial(i);
       const fired = r.fired, decMult = r.decMult;
       let P = null;
-      if (fired) {
+      const s = seq.steps[i];
+      if (fired && s.auto) {
+        P = playAuto(s, i, r, t, dur - sw, decMult);
+      } else if (fired) {
         P = playAt(r.x, r.y, t, decMult);
-        const s = seq.steps[i];
         if (Array.isArray(s.ratchets) && s.ratchets.length) {
           for (const rr of s.ratchets) {
             const rt = t + rr.offset * (dur - sw); // ratchets fit inside a swung step
@@ -178,12 +238,33 @@
         }
       }
       queue.push({ i, t, fired, x: r.x, y: r.y, P });
-      locks.push({ i, t: nextBase + RATCHET_CATCH * dur });
+      locks.push({ i, t: nextBase + RATCHET_CATCH * dur, S: nextBase, dur });
       nextBase += dur;
       stepIdx = (stepIdx + 1) % N_STEPS;
     }
     tickLocks();
     tickLive();
+  }
+
+  /* a smooth-recorded step: each hit (the primary and every ratchet) is a
+     glide voice that follows the recorded gesture until the next hit. A
+     drift roll from the lanes shifts the whole gesture. */
+  function playAuto(s, i, r, t, span, decMult) {
+    const dx = r.x - s.x, dy = r.y - s.y;
+    const at = (o) => { const q = autoAt(s.auto, o); return { x: clamp(q.x + dx, 0, 1), y: clamp(q.y + dy, 0, 1) }; };
+    const offs = [0, ...s.ratchets.map((rr) => rr.offset)];
+    let P0 = null;
+    offs.forEach((o, k) => {
+      const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = paramsAt(q.x, q.y);
+      const h = engine ? engine.trigger(P, ht, decMult, { glide: true }) : null;
+      if (h) for (let j = 1; j < AUTO_POINTS; j++) {
+        const oo = j / (AUTO_POINTS - 1);
+        if (oo > o && oo <= o2) { const qq = at(oo); h.glide(paramsAt(qq.x, qq.y), t + oo * span); }
+      }
+      if (k) queue.push({ i, t: ht, fired: true, x: q.x, y: q.y, P, ratchet: true });
+      else P0 = P;
+    });
+    return P0;
   }
 
   function setPlaying(on) {
@@ -192,13 +273,13 @@
     if (on) {
       ensureAudio();
       stopPadHold();
-      stepIdx = 0; queue = []; locks = []; liveNext = 0; pendingPress = null;
+      stepIdx = 0; queue = []; locks = []; finals = []; liveNext = 0; pendingPress = pendingBar = null;
       nextBase = actx.currentTime + 0.06;
       playing = true;
       tick();
       timer = setInterval(tick, 25);
     } else {
-      clearInterval(timer); timer = null; queue = []; locks = []; cur = -1; headDirty = true;
+      clearInterval(timer); timer = null; queue = []; locks = []; finals = []; cur = -1; headDirty = true;
       playing = false;
       if (seq.padHeld()) startPadHold();
     }
@@ -561,7 +642,7 @@
         el.style.setProperty('--dy', s.y.toFixed(3));
         const hits = 1 + (Array.isArray(s.ratchets) ? s.ratchets.length : 0);
         el.querySelector('.hits').textContent = hits > 1 ? '\u2022'.repeat(hits) : '';
-        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}${hits > 1 ? `, ${hits} hits` : ''}, ${Math.round(s.prob * 100)} percent chance`);
+        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}${s.auto ? ', smooth' : ''}${hits > 1 ? `, ${hits} hits` : ''}, ${Math.round(s.prob * 100)} percent chance`);
       } else {
         el.querySelector('.hits').textContent = '';
         el.setAttribute('aria-label', `Step ${i + 1}, off`);
@@ -937,20 +1018,20 @@
     el.title = label;
     const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
-    const trackInset = 4, dieW = () => die.offsetWidth || 31;
+    const dieW = () => die.offsetWidth || 36;
     function place(strength) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(0, r.width - dieW() - trackInset * 2 - 3);
-      die.style.left = (trackInset + strength * travel) + 'px';
-      die.style.transform = `rotate(${strength * 540}deg)`;
-      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW() / 2 : 0) + 'px';
+      const travel = Math.max(0, el.clientWidth - dieW());
+      die.style.left = (strength * travel) + 'px';
+      die.style.transform = `rotate(${strength * 450}deg)`;
+      fill.style.width = (strength > 0 ? strength * travel + dieW() / 2 : 0) + 'px';
     }
     place(0);
     let dragging = false;
     function fromClientX(clientX) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(1, r.width - dieW() - trackInset * 2 - 3);
-      const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW() / 2) / travel));
+      const travel = Math.max(1, el.clientWidth - dieW());
+      const strength = Math.min(1, Math.max(0, (clientX - r.left - dieW() / 2) / travel));
       place(strength);
       return strength;
     }
@@ -982,12 +1063,13 @@
      while the key is held. ---------- */
   function createRatchetBar(el) {
     const thumb = el.querySelector('.rthumb');
-    const PAD = 22, last = RATCHET_VALUES.length - 1;
+    const PAD = 24, last = RATCHET_VALUES.length - 1;
     const yFor = (i) => { const h = el.clientHeight; return PAD + (h - PAD * 2) * (i / last); };
     function layout() {
-      el.querySelectorAll('.rtick').forEach((t) => t.remove());
-      RATCHET_VALUES.forEach((_, i) => {
-        const t = document.createElement('i'); t.className = 'rtick'; t.style.bottom = yFor(i) + 'px'; el.appendChild(t);
+      el.querySelectorAll('.rstop').forEach((t) => t.remove());
+      RATCHET_VALUES.forEach((v, i) => {
+        const t = document.createElement('div'); t.className = 'rstop'; t.style.bottom = yFor(i) + 'px';
+        t.innerHTML = `<span>${v}</span><i></i>`; el.appendChild(t);
       });
       show(RATCHET_VALUES.indexOf(ratchetN));
     }
@@ -1001,6 +1083,8 @@
       i = clamp(i, 0, last);
       el.classList.toggle('held', held);
       if (RATCHET_VALUES[i] !== ratchetN || held !== ratchetHeld) setRatchet(RATCHET_VALUES[i], held);
+      // while a quick hold is pending, remember the highest value it reached
+      if (held && pendingBar) pendingBar.n = Math.max(pendingBar.n, RATCHET_VALUES[i]);
       show(i);
     }
     const fromY = (e) => { const r = el.getBoundingClientRect(); return Math.round(clamp((r.bottom - e.clientY - PAD) / (r.height - PAD * 2), 0, 1) * last); };
@@ -1009,6 +1093,8 @@
       e.preventDefault(); ensureAudio();
       drag = e.pointerId;
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      // a gesture starts: if it's let go before the next catch point it still counts
+      if (recording && playing) pendingBar = { n: 16 };
       set(fromY(e), true);
     });
     el.addEventListener('pointermove', (e) => { if (drag === e.pointerId) set(fromY(e), true); });
@@ -1018,6 +1104,7 @@
     el.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       e.preventDefault();
+      if (!ratchetHeld && recording && playing) pendingBar = { n: 16 };
       set(RATCHET_VALUES.indexOf(ratchetN) + (e.key === 'ArrowUp' ? 1 : -1), true);
     });
     el.addEventListener('keyup', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { set(0, false); history.commit(); } });
@@ -1065,6 +1152,18 @@
   const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
   $('#play').addEventListener('click', () => setPlaying(!playing));
+  const smoothBtn = $('#smooth');
+  const SMOOTH_ICON = {
+    stepped: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15H6V9H10V12H14V5H18"/></svg>',
+    smooth: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15C4.5 15 4.5 9 7 9S9.5 12 12 12S13.5 5 18 5"/></svg>',
+  };
+  function paintSmooth() {
+    smoothBtn.innerHTML = SMOOTH_ICON[smooth ? 'smooth' : 'stepped'];
+    smoothBtn.setAttribute('aria-label', smooth ? 'Smooth: touches glide' : 'Stepped: one position per hit');
+    smoothBtn.title = smooth ? 'Smooth: the sound follows your finger, and recording keeps the whole gesture' : 'Stepped: each hit takes one position';
+  }
+  smoothBtn.addEventListener('click', () => { smooth = !smooth; paintSmooth(); });
+  paintSmooth();
   $('#record').addEventListener('click', () => setRecording(!recording));
   $('#clear').addEventListener('click', () => { seq.clear(); history.commit(); });
   const selBtn = $('#select');

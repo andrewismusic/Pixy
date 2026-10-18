@@ -700,7 +700,7 @@ function mixedParams(P, trims) {
   });
 }
 
-/* playVoice: one hit. Returns {end} or, with opts.glide, a handle whose
+/* playVoice: one hit. Returns {end, srcs} or, with opts.glide, a handle whose
    glide(P2, at) steers the still-ringing voice toward another point on the
    map: pitch, filters, the balance of its layers and its level move; its
    envelopes and decays stay as they were struck. A glide voice builds every
@@ -730,7 +730,8 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
   }
 
   let end = t;
-  const stopAt = (node, time) => { node.stop(time); if (time > end) end = time; };
+  const srcs = []; // every source, so a stolen voice can be stopped outright
+  const stopAt = (node, time) => { node.stop(time); srcs.push(node); if (time > end) end = time; };
   // glide voices: each layer's envelope runs at full scale into a mix gain
   // that carries the layer's level, so the level can move later
   const G = {};
@@ -823,10 +824,10 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
     src.start(t + P.atk);
     stopAt(src, t + P.atk + t60 + 0.02);
   }
-  if (!glide) return end;
+  if (!glide) return { end, srcs };
 
   return {
-    end,
+    end, srcs,
     glide(P2, at) {
       at = Math.max(at, t);
       const Q = mixedParams(P2, trims), to = (param, v) => param.setTargetAtTime(v, at, GLIDE_TAU);
@@ -858,6 +859,7 @@ function autoAt(auto, o) {
 }
 const AUTO_POINTS = 16; // automation points recorded per step in smooth mode (as Slicefield)
 
+const MAX_VOICES = 14;
 class Engine {
   constructor(ctx) {
     this.ctx = ctx;
@@ -871,6 +873,14 @@ class Engine {
     comp.attack.value = 0.003; comp.release.value = 0.12;
     this.master.connect(comp); comp.connect(ctx.destination);
   }
+  /* stop a voice: a short fade, then its sources are stopped outright so a
+     stolen voice stops costing CPU (fading alone left every oscillator
+     running to its natural end, hundreds of them under dense ratchets) */
+  silence(v, at) {
+    try { v.out.gain.cancelScheduledValues(at); } catch (_) {}
+    v.out.gain.setTargetAtTime(0, at, 0.006);
+    for (const n of v.srcs) { try { n.stop(at + 0.04); } catch (_) {} }
+  }
   trigger(P, t, extraDecay, opts) {
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -882,24 +892,21 @@ class Engine {
       // often sets a little into the future) -- not at `now`, which would
       // choke every voice the instant it's merely scheduled, well before
       // its turn actually arrives.
-      for (const v of this.voices) {
-        if (v.end > t) {
-          try { v.out.gain.cancelScheduledValues(t); } catch (_) {}
-          v.out.gain.setTargetAtTime(0, t, 0.006);
-        }
-      }
+      for (const v of this.voices) if (v.end > t) this.silence(v, t);
       this.voices = [];
     }
-    while (this.voices.length >= 14) {
-      const old = this.voices.shift();
-      old.out.gain.setTargetAtTime(0, now, 0.01);
-    }
+    while (this.voices.length >= MAX_VOICES) this.silence(this.voices.shift(), Math.max(now, t - 0.002));
     const out = ctx.createGain();
     out.connect(this.master);
     const r = playVoice(ctx, out, this.noise, P, this.trims, t, extraDecay, opts);
-    const end = typeof r === 'number' ? r : r.end;
-    this.voices.push({ out, end });
-    return typeof r === 'number' ? null : r;
+    const v = { out, t, end: r.end, srcs: r.srcs, glide: r.glide };
+    this.voices.push(v);
+    // once every source has ended, unhook the voice so its nodes can be
+    // collected; Safari holds on to finished nodes that stay connected
+    let left = r.srcs.length;
+    const done = () => { if (--left === 0) { try { out.disconnect(); } catch (_) {} } };
+    for (const n of r.srcs) n.addEventListener('ended', done, { once: true });
+    return v; // v.glide(P2, at) exists for glide voices
   }
 }
 
@@ -1131,14 +1138,6 @@ class Sequence {
     for (const r of s.ratchets) { const q = autoAt(s.auto, r.offset); r.x = q.x; r.y = q.y; }
     this.onChange();
   }
-  /* setRatchetHits: the ratchet bar recorded on its own, re-cutting an
-     existing step into `hits` even hits at its own sound */
-  setRatchetHits(i, hits) {
-    const s = this.steps[i];
-    if (!s.on) return;
-    s.ratchets = evenRatchets(s.x, s.y, hits);
-    this.onChange();
-  }
   setLane(i, key, value) {
     if (!(key in LANE_DEFAULTS)) return;
     this.steps[i][key] = clamp(value, 0, 1);
@@ -1231,7 +1230,7 @@ const DEMO_BEAT = [
     const P = paramsAt(x, y);
     if (engine) {
       const h = engine.trigger(P, t, undefined, smooth ? { glide: true } : undefined);
-      if (h) liveVoices.push(h);
+      if (h.glide) liveVoices.push(h);
     }
     return P;
   }
@@ -1333,6 +1332,15 @@ const DEMO_BEAT = [
      pad if it's held or was tapped since the last catch point, and the
      ratchet bar's value. A move made after a step's catch point lands on
      the next step. */
+  /* replace while recording: a step that's being recorded over doesn't
+     also play what it held before, so you hear what you're writing */
+  let storedVoices = [];
+  function silenceStored(i) {
+    const now = actx.currentTime;
+    storedVoices = storedVoices.filter((s) => s.v.end > now);
+    for (const s of storedVoices) if (s.i === i) engine.silence(s.v, now);
+  }
+
   /* Gestures have a start and an end, and each gets the catch window: a
      gesture covers a step if it began before that step's catch point and
      was still held at it. A tap that starts and ends before one catch point
@@ -1344,11 +1352,13 @@ const DEMO_BEAT = [
     const barN = ratchetHeld ? ratchetN : pendingBar ? pendingBar.n : 16;
     const hits = ratchetHits(barN);
     const pad = seq.padHeld() ? { x: seq.cursor.x, y: seq.cursor.y, id: gestureId, smooth } : pendingPress;
+    // only pad recordings write; the ratchet bar sets how many hits, and
+    // whatever it reads replaces the step's old ratchets (1/16 clears them)
     if (pad) {
       seq.recordStep(i, pad.x, pad.y, hits);
       // smooth: the step's automation is sampled once the step has passed
       if (pad.smooth) finals.push({ i, t: L.S + L.dur, S: L.S, dur: L.dur, id: pad.id });
-    } else if (ratchetHeld || pendingBar) seq.setRatchetHits(i, hits);
+    }
     pendingPress = pendingBar = null;
   }
   function finalizeStep(F) {
@@ -1368,7 +1378,14 @@ const DEMO_BEAT = [
     if (kind === 'move') { logGesture(x, y); glideLive(x, y); return; } // the live clock handles retriggering
     if (kind === 'press') {
       gestureId++; logGesture(x, y);
-      if (playing) { liveNext = 0; if (recording) pendingPress = { x, y, id: gestureId, smooth }; }
+      if (playing) {
+        liveNext = 0;
+        if (recording) {
+          pendingPress = { x, y, id: gestureId, smooth };
+          const { barStart, stepDur } = gridAnchor();
+          silenceStored(((catchStep(actx.currentTime, barStart, stepDur) % N_STEPS) + N_STEPS) % N_STEPS);
+        }
+      }
       else startPadHold();
     }
     const P = playLive(x, y);
@@ -1387,25 +1404,34 @@ const DEMO_BEAT = [
       const fired = r.fired, decMult = r.decMult;
       let P = null;
       const s = seq.steps[i];
-      if (fired && s.auto) {
+      const replacing = recording && seq.padHeld(); // the live pad stands in for this step
+      if (fired && replacing) {
+        P = null;
+      } else if (fired && s.auto) {
         P = playAuto(s, i, r, t, dur - sw, decMult);
       } else if (fired) {
-        P = playAt(r.x, r.y, t, decMult);
+        P = playStored(i, r.x, r.y, t, decMult);
         if (Array.isArray(s.ratchets) && s.ratchets.length) {
           for (const rr of s.ratchets) {
             const rt = t + rr.offset * (dur - sw); // ratchets fit inside a swung step
-            const rP = playAt(rr.x, rr.y, rt, decMult);
+            const rP = playStored(i, rr.x, rr.y, rt, decMult);
             queue.push({ i, t: rt, fired: true, x: rr.x, y: rr.y, P: rP, ratchet: true });
           }
         }
       }
-      queue.push({ i, t, fired, x: r.x, y: r.y, P });
+      queue.push({ i, t, fired: fired && !!P, x: r.x, y: r.y, P });
       locks.push({ i, t: nextBase + RATCHET_CATCH * dur, S: nextBase, dur });
       nextBase += dur;
       stepIdx = (stepIdx + 1) % N_STEPS;
     }
     tickLocks();
     tickLive();
+  }
+
+  function playStored(i, x, y, t, decMult) {
+    const P = paramsAt(x, y);
+    if (engine) storedVoices.push({ i, v: engine.trigger(P, t, decMult) });
+    return P;
   }
 
   /* a smooth-recorded step: each hit (the primary and every ratchet) is a
@@ -1419,7 +1445,8 @@ const DEMO_BEAT = [
     offs.forEach((o, k) => {
       const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = paramsAt(q.x, q.y);
       const h = engine ? engine.trigger(P, ht, decMult, { glide: true }) : null;
-      if (h) for (let j = 1; j < AUTO_POINTS; j++) {
+      if (h) storedVoices.push({ i, v: h });
+      if (h && h.glide) for (let j = 1; j < AUTO_POINTS; j++) {
         const oo = j / (AUTO_POINTS - 1);
         if (oo > o && oo <= o2) { const qq = at(oo); h.glide(paramsAt(qq.x, qq.y), t + oo * span); }
       }
@@ -2256,7 +2283,7 @@ const DEMO_BEAT = [
       drag = e.pointerId;
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
       // a gesture starts: if it's let go before the next catch point it still counts
-      if (recording && playing) pendingBar = { n: 16 };
+      pendingBar = { n: 16 };
       set(fromY(e), true);
     });
     el.addEventListener('pointermove', (e) => { if (drag === e.pointerId) set(fromY(e), true); });
@@ -2266,7 +2293,7 @@ const DEMO_BEAT = [
     el.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       e.preventDefault();
-      if (!ratchetHeld && recording && playing) pendingBar = { n: 16 };
+      if (!ratchetHeld) pendingBar = { n: 16 };
       set(RATCHET_VALUES.indexOf(ratchetN) + (e.key === 'ArrowUp' ? 1 : -1), true);
     });
     el.addEventListener('keyup', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { set(0, false); history.commit(); } });
@@ -2313,7 +2340,16 @@ const DEMO_BEAT = [
   const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
   const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
-  $('#play').addEventListener('click', () => setPlaying(!playing));
+  /* press: act on touch-down. iOS sends no click for a tap made while
+     another finger is down (holding the pad or the ratchet bar), and an
+     instrument's transport should answer the moment it's touched anyway.
+     Keyboard activation still comes through click. */
+  function press(el, fn) {
+    let viaPointer = false;
+    el.addEventListener('pointerdown', (e) => { if (e.button > 0) return; e.preventDefault(); viaPointer = true; fn(); });
+    el.addEventListener('click', () => { if (viaPointer) { viaPointer = false; return; } fn(); });
+  }
+  press($('#play'), () => setPlaying(!playing));
   const smoothBtn = $('#smooth');
   const SMOOTH_ICON = {
     stepped: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15H6V9H10V12H14V5H18"/></svg>',
@@ -2324,18 +2360,18 @@ const DEMO_BEAT = [
     smoothBtn.setAttribute('aria-label', smooth ? 'Smooth: touches glide' : 'Stepped: one position per hit');
     smoothBtn.title = smooth ? 'Smooth: the sound follows your finger, and recording keeps the whole gesture' : 'Stepped: each hit takes one position';
   }
-  smoothBtn.addEventListener('click', () => { smooth = !smooth; paintSmooth(); });
+  press(smoothBtn, () => { smooth = !smooth; paintSmooth(); });
   paintSmooth();
-  $('#record').addEventListener('click', () => setRecording(!recording));
+  press($('#record'), () => setRecording(!recording));
   $('#clear').addEventListener('click', () => { seq.clear(); history.commit(); });
   const selBtn = $('#select');
-  selBtn.addEventListener('click', () => {
+  press(selBtn, () => {
     const v = selBtn.getAttribute('aria-pressed') !== 'true';
     selBtn.setAttribute('aria-pressed', v); seq.setSelect(v);
   });
 
   const monoBtn = $('#mono');
-  monoBtn.addEventListener('click', () => {
+  press(monoBtn, () => {
     const v = monoBtn.getAttribute('aria-pressed') !== 'true';
     monoBtn.setAttribute('aria-pressed', String(v));
     if (engine) engine.mono = v;

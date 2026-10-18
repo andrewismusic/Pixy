@@ -288,7 +288,7 @@ function mixedParams(P, trims) {
   });
 }
 
-/* playVoice: one hit. Returns {end} or, with opts.glide, a handle whose
+/* playVoice: one hit. Returns {end, srcs} or, with opts.glide, a handle whose
    glide(P2, at) steers the still-ringing voice toward another point on the
    map: pitch, filters, the balance of its layers and its level move; its
    envelopes and decays stay as they were struck. A glide voice builds every
@@ -318,7 +318,8 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
   }
 
   let end = t;
-  const stopAt = (node, time) => { node.stop(time); if (time > end) end = time; };
+  const srcs = []; // every source, so a stolen voice can be stopped outright
+  const stopAt = (node, time) => { node.stop(time); srcs.push(node); if (time > end) end = time; };
   // glide voices: each layer's envelope runs at full scale into a mix gain
   // that carries the layer's level, so the level can move later
   const G = {};
@@ -411,10 +412,10 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
     src.start(t + P.atk);
     stopAt(src, t + P.atk + t60 + 0.02);
   }
-  if (!glide) return end;
+  if (!glide) return { end, srcs };
 
   return {
-    end,
+    end, srcs,
     glide(P2, at) {
       at = Math.max(at, t);
       const Q = mixedParams(P2, trims), to = (param, v) => param.setTargetAtTime(v, at, GLIDE_TAU);
@@ -446,6 +447,7 @@ function autoAt(auto, o) {
 }
 const AUTO_POINTS = 16; // automation points recorded per step in smooth mode (as Slicefield)
 
+const MAX_VOICES = 14;
 class Engine {
   constructor(ctx) {
     this.ctx = ctx;
@@ -459,6 +461,14 @@ class Engine {
     comp.attack.value = 0.003; comp.release.value = 0.12;
     this.master.connect(comp); comp.connect(ctx.destination);
   }
+  /* stop a voice: a short fade, then its sources are stopped outright so a
+     stolen voice stops costing CPU (fading alone left every oscillator
+     running to its natural end, hundreds of them under dense ratchets) */
+  silence(v, at) {
+    try { v.out.gain.cancelScheduledValues(at); } catch (_) {}
+    v.out.gain.setTargetAtTime(0, at, 0.006);
+    for (const n of v.srcs) { try { n.stop(at + 0.04); } catch (_) {} }
+  }
   trigger(P, t, extraDecay, opts) {
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -470,24 +480,21 @@ class Engine {
       // often sets a little into the future) -- not at `now`, which would
       // choke every voice the instant it's merely scheduled, well before
       // its turn actually arrives.
-      for (const v of this.voices) {
-        if (v.end > t) {
-          try { v.out.gain.cancelScheduledValues(t); } catch (_) {}
-          v.out.gain.setTargetAtTime(0, t, 0.006);
-        }
-      }
+      for (const v of this.voices) if (v.end > t) this.silence(v, t);
       this.voices = [];
     }
-    while (this.voices.length >= 14) {
-      const old = this.voices.shift();
-      old.out.gain.setTargetAtTime(0, now, 0.01);
-    }
+    while (this.voices.length >= MAX_VOICES) this.silence(this.voices.shift(), Math.max(now, t - 0.002));
     const out = ctx.createGain();
     out.connect(this.master);
     const r = playVoice(ctx, out, this.noise, P, this.trims, t, extraDecay, opts);
-    const end = typeof r === 'number' ? r : r.end;
-    this.voices.push({ out, end });
-    return typeof r === 'number' ? null : r;
+    const v = { out, t, end: r.end, srcs: r.srcs, glide: r.glide };
+    this.voices.push(v);
+    // once every source has ended, unhook the voice so its nodes can be
+    // collected; Safari holds on to finished nodes that stay connected
+    let left = r.srcs.length;
+    const done = () => { if (--left === 0) { try { out.disconnect(); } catch (_) {} } };
+    for (const n of r.srcs) n.addEventListener('ended', done, { once: true });
+    return v; // v.glide(P2, at) exists for glide voices
   }
 }
 
@@ -717,14 +724,6 @@ class Sequence {
     s.auto = auto.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }));
     s.x = s.auto[0].x; s.y = s.auto[0].y;
     for (const r of s.ratchets) { const q = autoAt(s.auto, r.offset); r.x = q.x; r.y = q.y; }
-    this.onChange();
-  }
-  /* setRatchetHits: the ratchet bar recorded on its own, re-cutting an
-     existing step into `hits` even hits at its own sound */
-  setRatchetHits(i, hits) {
-    const s = this.steps[i];
-    if (!s.on) return;
-    s.ratchets = evenRatchets(s.x, s.y, hits);
     this.onChange();
   }
   setLane(i, key, value) {

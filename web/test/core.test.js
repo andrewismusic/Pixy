@@ -49,18 +49,16 @@ test('swingOffset: 50% straight, 75% delays the off-beat by half a step', () => 
   near(C.swingOffset(2, 75, dur), 0);
 });
 
-test('recordStep writes even ratchets; setRatchetHits re-cuts only steps that are on', () => {
+test('recordStep writes even ratchets and replaces whatever the step had', () => {
   const s = new C.Sequence();
   s.recordStep(5, 0.2, 0.3, 4);
   assert.deepEqual(s.steps[5].ratchets.map((r) => r.offset), [0.25, 0.5, 0.75]);
   assert.equal(s.steps[5].on, true);
-  s.recordStep(5, 0.2, 0.3, 1);
-  assert.deepEqual(s.steps[5].ratchets, []);
-  s.setRatchetHits(6, 3);
-  assert.equal(s.steps[6].on, false);
-  s.setRatchetHits(5, 3);
+  s.recordStep(5, 0.4, 0.3, 3);
   assert.deepEqual(s.steps[5].ratchets.map((r) => +r.offset.toFixed(3)), [0.333, 0.667]);
-  assert.equal(s.steps[5].ratchets[0].x, 0.2);
+  assert.equal(s.steps[5].ratchets[0].x, 0.4);
+  s.recordStep(5, 0.2, 0.3, 1); // a plain 1/16 recording clears ratchets
+  assert.deepEqual(s.steps[5].ratchets, []);
 });
 
 test('toggling a step off fully resets it', () => {

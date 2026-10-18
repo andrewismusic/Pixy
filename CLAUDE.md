@@ -14,7 +14,10 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 ## Invariants (see handoff "Known rough edges")
 
 - Mono/choke silences other voices at the new voice's start time `t`, not `ctx.currentTime`.
-- Recording clamps `safeNow = max(now, anchorTime)` before quantizing ratchets.
+- Recording writes each step once, at its catch point (`RATCHET_CATCH` = halfway through the step): pad held or tapped since the last catch point, plus the ratchet bar's value. Moves after a step's catch point land on the next step.
+- Ratchet bar values must divide a 16th into whole hits (`RATCHET_VALUES`); a recorded value applies to the whole step.
+- Swing is a percentage, 50 (straight) to 75; `swingOffset` turns it into a delay for odd steps.
+- While playing, live pad hits are scheduled only `LIVE_AHEAD` (35 ms) ahead so lifting a finger stops them promptly.
 - Toggling a step off resets it fully via `freshStep()`.
 - Resonator exciter sources must outlive the ring: Chromium stops processing a biquad ~0.28 s after its input source ends.
 - New synth params default in `BASE` so the original 14 anchors render byte-identically; check with an offline render before/after.
@@ -26,3 +29,5 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 - Sound colours (`voiceSignature` hue, orange -> pink -> violet) stay clear of yellow and cyan.
 - Raised controls use `.cap` and sink when pressed or on; knob arcs take their colour from the module accent (`--m-*`).
 - Check both light and dark themes, at phone width (430px).
+- No explanatory text at the top of pages, and no boxes around pages or engine sections.
+- `design/style-board.html` is the working style board (artifact https://claude.ai/artifact/8KpJmX9YTn1KA2oiTf6vxX); the space direction there isn't in the app yet.

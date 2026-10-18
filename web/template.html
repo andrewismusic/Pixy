@@ -78,8 +78,8 @@ body {
   transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold);
 }
 
-header.top { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-h1 { font: 700 clamp(26px, 6vw, 34px)/1 var(--font-ui); letter-spacing: .16em; margin: 0; }
+header.top { margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-ui); letter-spacing: .16em; margin: 0 auto 0 0; }
 h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-transform: uppercase; text-wrap: balance; }
 
 .pagenav { display: flex; gap: 7px; flex: none; }
@@ -93,9 +93,10 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .page.active { display: block; }
 .page.leaving { position: absolute; top: 0; left: 6px; right: 6px; pointer-events: none; }
 
-/* ---------- pad ---------- */
+/* ---------- pad, with the ratchet bar on its right ---------- */
+.padrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; max-width: 768px; margin: 0 auto; }
 .padwrap {
-  position: relative; max-width: 720px; margin: 0 auto; aspect-ratio: 1 / 1;
+  position: relative; max-width: 100%; aspect-ratio: 1 / 1;
   border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: #070912;
   box-shadow: 0 5px 0 var(--shadow);
 }
@@ -105,12 +106,25 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
 #pad:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
+/* ratchet bar: rests at 1/16 at the bottom and springs back when let go */
+.ratchet {
+  position: relative; border-radius: 12px; background: var(--well); border: 1.5px solid var(--edge);
+  box-shadow: inset 0 2px 0 rgba(0,0,0,.12); touch-action: none; cursor: ns-resize; outline: none;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.ratchet .rtick { position: absolute; left: 9px; right: 9px; height: 1.5px; border-radius: 1px; background: var(--edge); }
+.ratchet .rlabel { position: absolute; left: 0; right: 0; text-align: center; font: 500 9px/1 var(--font-mono); color: var(--muted); transform: translateY(50%); pointer-events: none; }
+.rthumb {
+  position: absolute; left: 3px; right: 3px; height: 34px; border-radius: 9px; z-index: 1; transform: translateY(50%);
+  display: grid; place-items: center; font: 700 11px/1 var(--font-mono); color: var(--ink);
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo)); border: 1.5px solid var(--edge); box-shadow: 0 3px 0 var(--shadow);
+  transition: bottom .3s cubic-bezier(.3, 1.45, .45, 1);
+}
+.ratchet.held .rthumb { transition: none; background: var(--hold); color: var(--on-ink); border-color: transparent; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold); }
+.ratchet:focus-visible .rthumb { outline: 2px solid var(--hold); outline-offset: 2px; }
 
 /* ---------- panels ---------- */
-.panel {
-  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 14px; padding: 14px 14px 16px;
-  box-shadow: 0 5px 0 var(--shadow);
-}
+.panel { padding-top: 6px; }
 .panel .sub { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; max-width: 65ch; }
 
 /* ---------- knob ---------- */
@@ -139,19 +153,20 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
 
-/* ---------- dice slider: the die is the key itself, five pips on its
-   face. Drag it right for more randomness; it rolls home on release. */
-.dicefield { margin-top: 16px; }
+/* ---------- dice: a short track in the top bar. The die is the key
+   itself, five pips on its face. Drag it right for a stronger roll of
+   whichever page is showing; it rolls home on release. */
+.dicefield { flex: none; }
 .dicetrack {
-  position: relative; height: 44px; border-radius: 10px; overflow: hidden; cursor: pointer;
+  position: relative; width: 74px; height: 42px; border-radius: 10px; overflow: hidden; cursor: pointer;
   background: var(--well); border: 1.5px solid var(--edge);
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
+.dicetrack[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .dicetrack .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--hold); opacity: .85; }
-.dicetrack .label { position: absolute; left: 52px; top: 50%; transform: translateY(-50%); font: 700 12px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .12em; pointer-events: none; }
 .dicetrack .die {
-  position: absolute; top: 5px; left: 5px; width: 31px; height: 31px; border-radius: 8px; z-index: 2;
+  position: absolute; top: 4px; left: 4px; width: 31px; height: 31px; border-radius: 8px; z-index: 2;
   display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 5px;
   background: linear-gradient(180deg, #FFFFFF, #E3E7EE); box-shadow: 0 2px 0 rgba(0,0,0,.35);
   cursor: grab;
@@ -173,8 +188,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .transport .knob { --kd: 48px; }
 .btn { font: 700 12.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
 .btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
-#play { width: 56px; height: 56px; border-radius: 14px; flex: none; }
-#record { width: 48px; height: 48px; border-radius: 12px; flex: none; color: var(--rec); }
+#play, #record { width: 54px; height: 54px; border-radius: 14px; flex: none; }
+#record { color: var(--rec); }
 /* record keeps its own red when armed rather than the indicator yellow */
 #record[aria-pressed="true"] { background: var(--rec); color: #fff; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--rec); }
 #record[aria-pressed="true"] svg { animation: recBlink 1s step-start infinite; }
@@ -207,6 +222,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 }
 .step.on .n { opacity: .9; }
 .step.on .dot { display: block; }
+/* ratchet hits: one pip per hit along the top edge */
+.step .hits { position: absolute; top: 4px; right: 6px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
 .cell.now .step { transform: translateY(-2px); box-shadow: 0 6px 0 var(--shadow), 0 0 0 2px var(--now); }
 .step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--hold); }
 .step:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
@@ -221,7 +238,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .tab { font: 700 11.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 12px; min-height: 36px; border-radius: 9px; }
 .btn.small { min-height: 36px; font-size: 11.5px; border-radius: 9px; }
 #laneCanvas {
-  display: block; width: 100%; height: min(58vh, 460px); margin-top: 10px; border-radius: 10px;
+  display: block; width: 100%; height: min(58vh, 460px); margin-top: 14px; border-radius: 10px;
   touch-action: none; cursor: crosshair; background: #070912; border: 1.5px solid var(--edge);
 }
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -235,11 +252,14 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
 .selwrap select { width: 100%; }
 .selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
-.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 14px; }
-.module { border: 1.5px solid var(--edge); border-radius: 12px; padding: 10px 10px 12px; background: var(--well); }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
+.module { padding-top: 10px; border-top: 1px solid var(--edge); }
 .module h3 { margin: 0; font: 700 11.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
-.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
+.module .knob { --kd: 42px; }
+.module .knob-label { font-size: 9px; }
+.module .knob-value { font-size: 10px; }
 
 .how { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
 .how b { color: var(--ink); font-weight: 700; }
@@ -247,8 +267,12 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
 
 @media (max-width: 640px) {
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
-  .navbtn { width: 38px; height: 38px; }
-  .pagenav { gap: 5px; }
+  .navbtn { width: 36px; height: 36px; }
+  .pagenav { gap: 4px; }
+  header.top { gap: 6px; }
+  .dicetrack { width: 64px; height: 38px; }
+  .dicetrack .die { width: 28px; height: 28px; top: 3.5px; left: 3.5px; padding: 4.5px; }
+  .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
   .transport .knob { --kd: 44px; }
 }
@@ -279,12 +303,18 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11" y="10.5" width="2" height="6.5" rx="1" fill="currentColor"/><circle cx="12" cy="7.2" r="1.4" fill="currentColor"/></svg>
       </button>
     </nav>
+    <div class="dicefield" id="diceField"></div>
   </header>
 
   <div class="pages" id="pages">
     <section class="page active" data-page="pad">
-      <div class="padwrap">
-        <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+      <div class="padrow">
+        <div class="padwrap">
+          <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+        </div>
+        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher to cut each step into more hits. Springs back to 1/16 when you let go.">
+          <div class="rthumb" id="rthumb">16</div>
+        </div>
       </div>
 
       <section class="seq" aria-label="Sequencer">
@@ -298,7 +328,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           </button>
           <div class="knobslot" id="tempoField"></div>
           <div class="knobslot" id="swingField"></div>
-          <div class="knobslot" id="quantizeField" title="Governs live pad-drag retriggering and recording resolution. 1/16 for normal beats; a finer setting lets you overdub ratchets, and can be changed mid-recording."></div>
         </div>
 
         <div id="steps" class="steps"></div>
@@ -311,11 +340,16 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <span class="gap"></span>
-          <button id="mono" class="btn cap" type="button" aria-pressed="false" title="Only one voice sounds at a time; a new hit cuts off whatever was still ringing">Choke</button>
-          <button id="select" class="btn cap" type="button" aria-pressed="false">Select</button>
-          <button id="clear" class="btn cap" type="button">Clear</button>
+          <button id="mono" class="btn cap icon" type="button" aria-pressed="false" aria-label="Choke" title="Choke: a new hit cuts off whatever is still ringing">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.2-6 2.4-6 3.6 0s2.4 6 3.6 0 2.2-4.4 3.3 0"/><path d="M15.5 4.5v15" stroke-width="2.4"/><path d="M18.5 12h3.5" opacity=".45"/></svg>
+          </button>
+          <button id="select" class="btn cap icon" type="button" aria-pressed="false" aria-label="Select" title="Select: steps you tap stay held, so the pad updates them">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3.2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          </button>
+          <button id="clear" class="btn cap icon" type="button" aria-label="Clear" title="Clear all steps">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 7V4.5h4V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>
+          </button>
         </div>
-        <div class="dicefield" id="seqDiceField"></div>
       </section>
     </section>
 
@@ -331,7 +365,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
           <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
         </div>
-        <p class="sub" id="laneHint"></p>
         <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
         <p class="lanereadout" id="laneReadout">&nbsp;</p>
       </div>
@@ -340,22 +373,18 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
     <section class="page" data-page="kit">
       <section class="panel" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
         <h2 id="tweakH">Whole kit</h2>
-        <p class="sub">These shift every sound on the map at once. Double-tap a knob to reset it.</p>
         <div class="knobgrid" id="kitKnobs"></div>
-        <div class="dicefield" id="kitDiceField"></div>
       </section>
     </section>
 
     <section class="page" data-page="engine">
       <section class="panel" aria-labelledby="engineH">
         <h2 id="engineH">Drum engine</h2>
-        <p class="sub">Each drum is a control point the whole map blends toward, so shaping it reshapes nearby sounds too.</p>
         <div class="enginepick">
           <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
           <button id="engineReset" class="btn cap small" type="button">Reset</button>
         </div>
         <div id="engineParams" class="modules"></div>
-        <div class="dicefield" id="drumDiceField"></div>
       </section>
     </section>
 
@@ -366,16 +395,16 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <li><b>Tap a step</b> to switch it on or off. A new step takes the sound your cursor was last on; switching one off clears it completely, so tapping it back on starts fresh.</li>
           <li><b>Hold the pad, then tap a step</b> to give that step the sound under your finger.</li>
           <li><b>Hold one or more steps, then touch the pad</b> and those steps take the point you touched last.</li>
-          <li>Only one pointer? <b>Select</b> latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
+          <li>Only one pointer? <b>Select</b> (the dotted square) latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
           <li><b>Hold a step, then tap another</b> to copy the first step's sound onto the second.</li>
           <li><b>Knobs</b>: drag up or right to turn up, down or left to turn down. Hold <kbd>Shift</kbd> for fine moves, double-tap to reset.</li>
           <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
-          <li><b>Quantize</b> sets how finely holding the pad retriggers (1/16 for a normal beat, finer for ratchets), live or while recording &mdash; and can be changed on the fly.</li>
-          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. A finer quantize setting overdubs ratchets into that step without changing its 16-step grid.</li>
-          <li><b>Choke</b> makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
+          <li>The <b>ratchet bar</b> beside the pad rests at 1/16 and springs back when you let go. Hold it higher to cut each step into 2, 3, 4 or 6 hits. While recording, whatever it reads is written into each step that passes; a move in the first half of a step counts for that step, a later one for the next.</li>
+          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. Hold the ratchet bar up at the same time to record ratchets, or use the bar on its own to re-cut steps that are already there.</li>
+          <li><b>Choke</b> (the cut-off wave) makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
           <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
           <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>
-          <li>Each <b>die</b> randomizes by how far you drag it right (or tap a spot on its track) &mdash; for the sequence, the selected drum (on the drum-engine page), or the whole kit (on the kit page).</li>
+          <li>The <b>die</b> in the top bar randomizes whichever page you're on: the sequence, the current lane, the whole kit or the drum you're editing. Drag it further right for a stronger roll.</li>
           <li>Swipe left or right, or use the icons beside the title, to switch between the pad, lanes, whole kit, drum engine and this page.</li>
         </ul>
       </section>

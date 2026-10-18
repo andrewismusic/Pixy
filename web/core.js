@@ -457,32 +457,29 @@ const LANE_DEFAULTS = {
 };
 const freshStep = () => Object.assign({ on: false, x: 0.5, y: 0.5, set: false, ratchets: [] }, LANE_DEFAULTS);
 
-/* Quantization: live pad-drag retriggering and recording resolution.
-   N is notes-per-beat-quarter*4, i.e. "1/N". 16 is the sequencer's native
-   16th-note grid; finer values (24,32,40,48,64) only add sub-hits
-   ("ratchets") inside the fixed 16 step boxes. */
-const QUANT_VALUES = [16, 24, 32, 40, 48, 64];
+/* Ratchet bar: the vertical bar beside the pad. It rests at 1/16 and
+   springs back when let go. Every setting fits a whole number of hits into
+   one 16th step, because a recorded setting applies to the whole step. */
+const RATCHET_VALUES = [16, 32, 48, 64, 96];
+const ratchetHits = (n) => Math.max(1, Math.round(n / 16));
 function slotDuration(tempo, quantN) {
   return (60 / tempo) * (4 / quantN);
 }
-/* quantizedSlot: snap a real timestamp (seconds, same clock as the live
-   scheduler) onto the quantize grid, anchored at barStart/stepDur (the
-   16th-note grid origin + duration the scheduler is already using).
-   Returns {stepIndex (0..15, wrapped), offset (0..1 within that 16th),
-   time (the snapped absolute time)}. Works for any quantN because the
-   16th-step index is always floor(slot / stepsPerSixteenth) and the
-   offset is the fractional remainder, regardless of subdivision ratio. */
-function quantizedSlot(atTime, barStart, stepDur, tempo, quantN) {
-  const qDur = slotDuration(tempo, quantN);
-  const stepsPerSixteenth = stepDur / qDur; // how many quant-slots fit in one 16th
-  const totalSlots = Math.round((atTime - barStart) / qDur);
-  const slotTime = barStart + totalSlots * qDur;
-  const sixteenthSlot = totalSlots / stepsPerSixteenth;
-  let stepIndex = Math.floor(sixteenthSlot + 1e-9);
-  const offset = clamp(sixteenthSlot - stepIndex, 0, 1 - 1e-9);
-  stepIndex = ((stepIndex % N_STEPS) + N_STEPS) % N_STEPS;
-  return { stepIndex, offset: offset < 1e-6 ? 0 : offset, time: slotTime };
+/* Catch window: a move made in the first RATCHET_CATCH of a step counts
+   for that step; a later one is held for the next. catchStep returns the
+   (unwrapped) step index a move at time t is written to. With 0.5 this is
+   rounding to the nearest 16th. */
+const RATCHET_CATCH = 0.5;
+function catchStep(t, barStart, stepDur, catchFrac) {
+  const c = catchFrac == null ? RATCHET_CATCH : catchFrac;
+  return Math.floor((t - barStart) / stepDur + (1 - c) + 1e-9);
 }
+/* swing as a percentage, 50 (straight) .. 75: the off-beat 16th sits that
+   far through each pair of 16ths, so 75% delays it by half a step. */
+function swingOffset(stepIndex, swingPct, stepDur) {
+  return stepIndex % 2 === 1 ? clamp(2 * swingPct / 100 - 1, 0, 1) * stepDur : 0;
+}
+const evenRatchets = (x, y, hits) => Array.from({ length: hits - 1 }, (_, k) => ({ offset: (k + 1) / hits, x, y }));
 
 class Sequence {
   constructor(onChange, onAudition) {
@@ -644,6 +641,22 @@ class Sequence {
     }
     this.onChange();
   }
+  /* recordStep: a recorded pad hit for one whole step, played `hits`
+     times evenly through it (1 = no ratchet) */
+  recordStep(i, x, y, hits) {
+    const s = this.steps[i];
+    s.x = x; s.y = y; s.on = true; s.set = true;
+    s.ratchets = evenRatchets(x, y, hits);
+    this.onChange();
+  }
+  /* setRatchetHits: the ratchet bar recorded on its own, re-cutting an
+     existing step into `hits` even hits at its own sound */
+  setRatchetHits(i, hits) {
+    const s = this.steps[i];
+    if (!s.on) return;
+    s.ratchets = evenRatchets(s.x, s.y, hits);
+    this.onChange();
+  }
   setLane(i, key, value) {
     if (!(key in LANE_DEFAULTS)) return;
     this.steps[i][key] = clamp(value, 0, 1);
@@ -669,5 +682,5 @@ if (typeof module !== "undefined") module.exports = {
   N_STEPS, SIGMA, clamp, BASE, ANCHOR_DEFS, ANCHORS, weightsAt, LOG_KEYS, GROUPS, paramsAt,
   colorAt, decayMultiplier, nearest, voiceSignature, METAL_RATIOS, BURST_GAP, SHAPER_CURVE,
   foldCurve, modeRatios, modeQ, playVoice, Engine,
-  LANE_DEFAULTS, freshStep, QUANT_VALUES, slotDuration, quantizedSlot, Sequence, DEMO_BEAT,
+  LANE_DEFAULTS, freshStep, RATCHET_VALUES, ratchetHits, RATCHET_CATCH, slotDuration, catchStep, swingOffset, Sequence, DEMO_BEAT,
 };

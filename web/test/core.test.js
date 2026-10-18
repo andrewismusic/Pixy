@@ -25,20 +25,42 @@ test('decayMultiplier spans 0.25x..4x with 0.5 neutral', () => {
   near(C.decayMultiplier(-3), 0.25);
 });
 
-test('quantizedSlot snaps to the 1/16 grid and finer grids', () => {
-  const tempo = 120, stepDur = C.slotDuration(tempo, 16);
-  near(stepDur, 0.125);
-  let q = C.quantizedSlot(0.13, 0, stepDur, tempo, 16);
-  assert.equal(q.stepIndex, 1); assert.equal(q.offset, 0); near(q.time, 0.125);
-  // 1/32: halfway into step 3
-  q = C.quantizedSlot(3.5 * stepDur + 0.001, 0, stepDur, tempo, 32);
-  assert.equal(q.stepIndex, 3); near(q.offset, 0.5);
-  // 1/24 (non power of two): one third into step 0
-  q = C.quantizedSlot(stepDur * (2 / 3), 0, stepDur, tempo, 24);
-  assert.equal(q.stepIndex, 0); near(q.offset, 2 / 3, 1e-6);
-  // wraps past the bar
-  q = C.quantizedSlot(17 * stepDur, 0, stepDur, tempo, 16);
-  assert.equal(q.stepIndex, 1);
+test('catchStep: early moves count for this step, late ones for the next', () => {
+  const dur = C.slotDuration(120, 16);
+  near(dur, 0.125);
+  assert.equal(C.catchStep(3 * dur + 0.2 * dur, 0, dur), 3);
+  assert.equal(C.catchStep(3 * dur + 0.49 * dur, 0, dur), 3);
+  assert.equal(C.catchStep(3 * dur + 0.5 * dur, 0, dur), 4);
+  assert.equal(C.catchStep(3 * dur + 0.9 * dur, 0, dur), 4);
+  assert.equal(C.catchStep(3 * dur + 0.7 * dur, 0, dur, 0.8), 3);
+  assert.equal(C.catchStep(17 * dur, 0, dur), 17); // unwrapped
+});
+
+test('ratchet values fit whole hits into a step', () => {
+  for (const n of C.RATCHET_VALUES) assert.equal(n % 16, 0);
+  assert.deepEqual(C.RATCHET_VALUES.map(C.ratchetHits), [1, 2, 3, 4, 6]);
+});
+
+test('swingOffset: 50% straight, 75% delays the off-beat by half a step', () => {
+  const dur = 0.125;
+  near(C.swingOffset(1, 50, dur), 0);
+  near(C.swingOffset(1, 75, dur), dur / 2);
+  near(C.swingOffset(3, 66, dur), 0.32 * dur);
+  near(C.swingOffset(2, 75, dur), 0);
+});
+
+test('recordStep writes even ratchets; setRatchetHits re-cuts only steps that are on', () => {
+  const s = new C.Sequence();
+  s.recordStep(5, 0.2, 0.3, 4);
+  assert.deepEqual(s.steps[5].ratchets.map((r) => r.offset), [0.25, 0.5, 0.75]);
+  assert.equal(s.steps[5].on, true);
+  s.recordStep(5, 0.2, 0.3, 1);
+  assert.deepEqual(s.steps[5].ratchets, []);
+  s.setRatchetHits(6, 3);
+  assert.equal(s.steps[6].on, false);
+  s.setRatchetHits(5, 3);
+  assert.deepEqual(s.steps[5].ratchets.map((r) => +r.offset.toFixed(3)), [0.333, 0.667]);
+  assert.equal(s.steps[5].ratchets[0].x, 0.2);
 });
 
 test('toggling a step off fully resets it', () => {

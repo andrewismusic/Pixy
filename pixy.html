@@ -78,8 +78,8 @@ body {
   transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold);
 }
 
-header.top { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-h1 { font: 700 clamp(26px, 6vw, 34px)/1 var(--font-ui); letter-spacing: .16em; margin: 0; }
+header.top { margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-ui); letter-spacing: .16em; margin: 0 auto 0 0; }
 h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-transform: uppercase; text-wrap: balance; }
 
 .pagenav { display: flex; gap: 7px; flex: none; }
@@ -93,9 +93,10 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .page.active { display: block; }
 .page.leaving { position: absolute; top: 0; left: 6px; right: 6px; pointer-events: none; }
 
-/* ---------- pad ---------- */
+/* ---------- pad, with the ratchet bar on its right ---------- */
+.padrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; max-width: 768px; margin: 0 auto; }
 .padwrap {
-  position: relative; max-width: 720px; margin: 0 auto; aspect-ratio: 1 / 1;
+  position: relative; max-width: 100%; aspect-ratio: 1 / 1;
   border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: #070912;
   box-shadow: 0 5px 0 var(--shadow);
 }
@@ -105,12 +106,25 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
 #pad:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
+/* ratchet bar: rests at 1/16 at the bottom and springs back when let go */
+.ratchet {
+  position: relative; border-radius: 12px; background: var(--well); border: 1.5px solid var(--edge);
+  box-shadow: inset 0 2px 0 rgba(0,0,0,.12); touch-action: none; cursor: ns-resize; outline: none;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.ratchet .rtick { position: absolute; left: 9px; right: 9px; height: 1.5px; border-radius: 1px; background: var(--edge); }
+.ratchet .rlabel { position: absolute; left: 0; right: 0; text-align: center; font: 500 9px/1 var(--font-mono); color: var(--muted); transform: translateY(50%); pointer-events: none; }
+.rthumb {
+  position: absolute; left: 3px; right: 3px; height: 34px; border-radius: 9px; z-index: 1; transform: translateY(50%);
+  display: grid; place-items: center; font: 700 11px/1 var(--font-mono); color: var(--ink);
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo)); border: 1.5px solid var(--edge); box-shadow: 0 3px 0 var(--shadow);
+  transition: bottom .3s cubic-bezier(.3, 1.45, .45, 1);
+}
+.ratchet.held .rthumb { transition: none; background: var(--hold); color: var(--on-ink); border-color: transparent; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold); }
+.ratchet:focus-visible .rthumb { outline: 2px solid var(--hold); outline-offset: 2px; }
 
 /* ---------- panels ---------- */
-.panel {
-  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 14px; padding: 14px 14px 16px;
-  box-shadow: 0 5px 0 var(--shadow);
-}
+.panel { padding-top: 6px; }
 .panel .sub { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; max-width: 65ch; }
 
 /* ---------- knob ---------- */
@@ -139,19 +153,20 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
 
-/* ---------- dice slider: the die is the key itself, five pips on its
-   face. Drag it right for more randomness; it rolls home on release. */
-.dicefield { margin-top: 16px; }
+/* ---------- dice: a short track in the top bar. The die is the key
+   itself, five pips on its face. Drag it right for a stronger roll of
+   whichever page is showing; it rolls home on release. */
+.dicefield { flex: none; }
 .dicetrack {
-  position: relative; height: 44px; border-radius: 10px; overflow: hidden; cursor: pointer;
+  position: relative; width: 74px; height: 42px; border-radius: 10px; overflow: hidden; cursor: pointer;
   background: var(--well); border: 1.5px solid var(--edge);
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
+.dicetrack[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .dicetrack .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--hold); opacity: .85; }
-.dicetrack .label { position: absolute; left: 52px; top: 50%; transform: translateY(-50%); font: 700 12px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .12em; pointer-events: none; }
 .dicetrack .die {
-  position: absolute; top: 5px; left: 5px; width: 31px; height: 31px; border-radius: 8px; z-index: 2;
+  position: absolute; top: 4px; left: 4px; width: 31px; height: 31px; border-radius: 8px; z-index: 2;
   display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 5px;
   background: linear-gradient(180deg, #FFFFFF, #E3E7EE); box-shadow: 0 2px 0 rgba(0,0,0,.35);
   cursor: grab;
@@ -173,8 +188,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .transport .knob { --kd: 48px; }
 .btn { font: 700 12.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
 .btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
-#play { width: 56px; height: 56px; border-radius: 14px; flex: none; }
-#record { width: 48px; height: 48px; border-radius: 12px; flex: none; color: var(--rec); }
+#play, #record { width: 54px; height: 54px; border-radius: 14px; flex: none; }
+#record { color: var(--rec); }
 /* record keeps its own red when armed rather than the indicator yellow */
 #record[aria-pressed="true"] { background: var(--rec); color: #fff; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--rec); }
 #record[aria-pressed="true"] svg { animation: recBlink 1s step-start infinite; }
@@ -207,6 +222,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 }
 .step.on .n { opacity: .9; }
 .step.on .dot { display: block; }
+/* ratchet hits: one pip per hit along the top edge */
+.step .hits { position: absolute; top: 4px; right: 6px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
 .cell.now .step { transform: translateY(-2px); box-shadow: 0 6px 0 var(--shadow), 0 0 0 2px var(--now); }
 .step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--hold); }
 .step:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
@@ -221,7 +238,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .tab { font: 700 11.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 12px; min-height: 36px; border-radius: 9px; }
 .btn.small { min-height: 36px; font-size: 11.5px; border-radius: 9px; }
 #laneCanvas {
-  display: block; width: 100%; height: min(58vh, 460px); margin-top: 10px; border-radius: 10px;
+  display: block; width: 100%; height: min(58vh, 460px); margin-top: 14px; border-radius: 10px;
   touch-action: none; cursor: crosshair; background: #070912; border: 1.5px solid var(--edge);
 }
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -235,11 +252,14 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
 .selwrap select { width: 100%; }
 .selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
-.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 14px; }
-.module { border: 1.5px solid var(--edge); border-radius: 12px; padding: 10px 10px 12px; background: var(--well); }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
+.module { padding-top: 10px; border-top: 1px solid var(--edge); }
 .module h3 { margin: 0; font: 700 11.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
-.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
+.module .knob { --kd: 42px; }
+.module .knob-label { font-size: 9px; }
+.module .knob-value { font-size: 10px; }
 
 .how { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
 .how b { color: var(--ink); font-weight: 700; }
@@ -247,8 +267,12 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
 
 @media (max-width: 640px) {
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
-  .navbtn { width: 38px; height: 38px; }
-  .pagenav { gap: 5px; }
+  .navbtn { width: 36px; height: 36px; }
+  .pagenav { gap: 4px; }
+  header.top { gap: 6px; }
+  .dicetrack { width: 64px; height: 38px; }
+  .dicetrack .die { width: 28px; height: 28px; top: 3.5px; left: 3.5px; padding: 4.5px; }
+  .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
   .transport .knob { --kd: 44px; }
 }
@@ -279,12 +303,18 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11" y="10.5" width="2" height="6.5" rx="1" fill="currentColor"/><circle cx="12" cy="7.2" r="1.4" fill="currentColor"/></svg>
       </button>
     </nav>
+    <div class="dicefield" id="diceField"></div>
   </header>
 
   <div class="pages" id="pages">
     <section class="page active" data-page="pad">
-      <div class="padwrap">
-        <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+      <div class="padrow">
+        <div class="padwrap">
+          <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+        </div>
+        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher to cut each step into more hits. Springs back to 1/16 when you let go.">
+          <div class="rthumb" id="rthumb">16</div>
+        </div>
       </div>
 
       <section class="seq" aria-label="Sequencer">
@@ -298,7 +328,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           </button>
           <div class="knobslot" id="tempoField"></div>
           <div class="knobslot" id="swingField"></div>
-          <div class="knobslot" id="quantizeField" title="Governs live pad-drag retriggering and recording resolution. 1/16 for normal beats; a finer setting lets you overdub ratchets, and can be changed mid-recording."></div>
         </div>
 
         <div id="steps" class="steps"></div>
@@ -311,11 +340,16 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <span class="gap"></span>
-          <button id="mono" class="btn cap" type="button" aria-pressed="false" title="Only one voice sounds at a time; a new hit cuts off whatever was still ringing">Choke</button>
-          <button id="select" class="btn cap" type="button" aria-pressed="false">Select</button>
-          <button id="clear" class="btn cap" type="button">Clear</button>
+          <button id="mono" class="btn cap icon" type="button" aria-pressed="false" aria-label="Choke" title="Choke: a new hit cuts off whatever is still ringing">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.2-6 2.4-6 3.6 0s2.4 6 3.6 0 2.2-4.4 3.3 0"/><path d="M15.5 4.5v15" stroke-width="2.4"/><path d="M18.5 12h3.5" opacity=".45"/></svg>
+          </button>
+          <button id="select" class="btn cap icon" type="button" aria-pressed="false" aria-label="Select" title="Select: steps you tap stay held, so the pad updates them">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3.2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          </button>
+          <button id="clear" class="btn cap icon" type="button" aria-label="Clear" title="Clear all steps">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 7V4.5h4V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>
+          </button>
         </div>
-        <div class="dicefield" id="seqDiceField"></div>
       </section>
     </section>
 
@@ -331,7 +365,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
           <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
         </div>
-        <p class="sub" id="laneHint"></p>
         <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
         <p class="lanereadout" id="laneReadout">&nbsp;</p>
       </div>
@@ -340,22 +373,18 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
     <section class="page" data-page="kit">
       <section class="panel" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
         <h2 id="tweakH">Whole kit</h2>
-        <p class="sub">These shift every sound on the map at once. Double-tap a knob to reset it.</p>
         <div class="knobgrid" id="kitKnobs"></div>
-        <div class="dicefield" id="kitDiceField"></div>
       </section>
     </section>
 
     <section class="page" data-page="engine">
       <section class="panel" aria-labelledby="engineH">
         <h2 id="engineH">Drum engine</h2>
-        <p class="sub">Each drum is a control point the whole map blends toward, so shaping it reshapes nearby sounds too.</p>
         <div class="enginepick">
           <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
           <button id="engineReset" class="btn cap small" type="button">Reset</button>
         </div>
         <div id="engineParams" class="modules"></div>
-        <div class="dicefield" id="drumDiceField"></div>
       </section>
     </section>
 
@@ -366,16 +395,16 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <li><b>Tap a step</b> to switch it on or off. A new step takes the sound your cursor was last on; switching one off clears it completely, so tapping it back on starts fresh.</li>
           <li><b>Hold the pad, then tap a step</b> to give that step the sound under your finger.</li>
           <li><b>Hold one or more steps, then touch the pad</b> and those steps take the point you touched last.</li>
-          <li>Only one pointer? <b>Select</b> latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
+          <li>Only one pointer? <b>Select</b> (the dotted square) latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
           <li><b>Hold a step, then tap another</b> to copy the first step's sound onto the second.</li>
           <li><b>Knobs</b>: drag up or right to turn up, down or left to turn down. Hold <kbd>Shift</kbd> for fine moves, double-tap to reset.</li>
           <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
-          <li><b>Quantize</b> sets how finely holding the pad retriggers (1/16 for a normal beat, finer for ratchets), live or while recording &mdash; and can be changed on the fly.</li>
-          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. A finer quantize setting overdubs ratchets into that step without changing its 16-step grid.</li>
-          <li><b>Choke</b> makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
+          <li>The <b>ratchet bar</b> beside the pad rests at 1/16 and springs back when you let go. Hold it higher to cut each step into 2, 3, 4 or 6 hits. While recording, whatever it reads is written into each step that passes; a move in the first half of a step counts for that step, a later one for the next.</li>
+          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. Hold the ratchet bar up at the same time to record ratchets, or use the bar on its own to re-cut steps that are already there.</li>
+          <li><b>Choke</b> (the cut-off wave) makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
           <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
           <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>
-          <li>Each <b>die</b> randomizes by how far you drag it right (or tap a spot on its track) &mdash; for the sequence, the selected drum (on the drum-engine page), or the whole kit (on the kit page).</li>
+          <li>The <b>die</b> in the top bar randomizes whichever page you're on: the sequence, the current lane, the whole kit or the drum you're editing. Drag it further right for a stronger roll.</li>
           <li>Swipe left or right, or use the icons beside the title, to switch between the pad, lanes, whole kit, drum engine and this page.</li>
         </ul>
       </section>
@@ -843,32 +872,29 @@ const LANE_DEFAULTS = {
 };
 const freshStep = () => Object.assign({ on: false, x: 0.5, y: 0.5, set: false, ratchets: [] }, LANE_DEFAULTS);
 
-/* Quantization: live pad-drag retriggering and recording resolution.
-   N is notes-per-beat-quarter*4, i.e. "1/N". 16 is the sequencer's native
-   16th-note grid; finer values (24,32,40,48,64) only add sub-hits
-   ("ratchets") inside the fixed 16 step boxes. */
-const QUANT_VALUES = [16, 24, 32, 40, 48, 64];
+/* Ratchet bar: the vertical bar beside the pad. It rests at 1/16 and
+   springs back when let go. Every setting fits a whole number of hits into
+   one 16th step, because a recorded setting applies to the whole step. */
+const RATCHET_VALUES = [16, 32, 48, 64, 96];
+const ratchetHits = (n) => Math.max(1, Math.round(n / 16));
 function slotDuration(tempo, quantN) {
   return (60 / tempo) * (4 / quantN);
 }
-/* quantizedSlot: snap a real timestamp (seconds, same clock as the live
-   scheduler) onto the quantize grid, anchored at barStart/stepDur (the
-   16th-note grid origin + duration the scheduler is already using).
-   Returns {stepIndex (0..15, wrapped), offset (0..1 within that 16th),
-   time (the snapped absolute time)}. Works for any quantN because the
-   16th-step index is always floor(slot / stepsPerSixteenth) and the
-   offset is the fractional remainder, regardless of subdivision ratio. */
-function quantizedSlot(atTime, barStart, stepDur, tempo, quantN) {
-  const qDur = slotDuration(tempo, quantN);
-  const stepsPerSixteenth = stepDur / qDur; // how many quant-slots fit in one 16th
-  const totalSlots = Math.round((atTime - barStart) / qDur);
-  const slotTime = barStart + totalSlots * qDur;
-  const sixteenthSlot = totalSlots / stepsPerSixteenth;
-  let stepIndex = Math.floor(sixteenthSlot + 1e-9);
-  const offset = clamp(sixteenthSlot - stepIndex, 0, 1 - 1e-9);
-  stepIndex = ((stepIndex % N_STEPS) + N_STEPS) % N_STEPS;
-  return { stepIndex, offset: offset < 1e-6 ? 0 : offset, time: slotTime };
+/* Catch window: a move made in the first RATCHET_CATCH of a step counts
+   for that step; a later one is held for the next. catchStep returns the
+   (unwrapped) step index a move at time t is written to. With 0.5 this is
+   rounding to the nearest 16th. */
+const RATCHET_CATCH = 0.5;
+function catchStep(t, barStart, stepDur, catchFrac) {
+  const c = catchFrac == null ? RATCHET_CATCH : catchFrac;
+  return Math.floor((t - barStart) / stepDur + (1 - c) + 1e-9);
 }
+/* swing as a percentage, 50 (straight) .. 75: the off-beat 16th sits that
+   far through each pair of 16ths, so 75% delays it by half a step. */
+function swingOffset(stepIndex, swingPct, stepDur) {
+  return stepIndex % 2 === 1 ? clamp(2 * swingPct / 100 - 1, 0, 1) * stepDur : 0;
+}
+const evenRatchets = (x, y, hits) => Array.from({ length: hits - 1 }, (_, k) => ({ offset: (k + 1) / hits, x, y }));
 
 class Sequence {
   constructor(onChange, onAudition) {
@@ -1030,6 +1056,22 @@ class Sequence {
     }
     this.onChange();
   }
+  /* recordStep: a recorded pad hit for one whole step, played `hits`
+     times evenly through it (1 = no ratchet) */
+  recordStep(i, x, y, hits) {
+    const s = this.steps[i];
+    s.x = x; s.y = y; s.on = true; s.set = true;
+    s.ratchets = evenRatchets(x, y, hits);
+    this.onChange();
+  }
+  /* setRatchetHits: the ratchet bar recorded on its own, re-cutting an
+     existing step into `hits` even hits at its own sound */
+  setRatchetHits(i, hits) {
+    const s = this.steps[i];
+    if (!s.on) return;
+    s.ratchets = evenRatchets(s.x, s.y, hits);
+    this.onChange();
+  }
   setLane(i, key, value) {
     if (!(key in LANE_DEFAULTS)) return;
     this.steps[i][key] = clamp(value, 0, 1);
@@ -1077,7 +1119,7 @@ const DEMO_BEAT = [
   let actx = null, engine = null;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
-  let tempo = 118, swing = 0;
+  let tempo = 118, swing = 50; // swing in percent: 50 straight .. 75
   const trims = { tune: 0, decay: 1, drive: 0, fold: 0, toneMix: 1, noiseMix: 1, metalMix: 1, resMix: 1, punch: 1 };
   let cur = -1;
   let lastAud = { t: 0, x: 0, y: 0 };
@@ -1111,83 +1153,98 @@ const DEMO_BEAT = [
     return P;
   }
 
-  /* quantize: governs both live pad-drag retriggering and recording
-     resolution. 16 is the sequencer's native grid; finer values let you
-     overdub ratchets (sub-hits within a single step box) while recording,
-     and can be changed on the fly, including mid-recording, since the
-     grid is recomputed fresh from the current tempo/anchor every time. */
-  let quantizeN = 16;
-  function setQuantize(n) {
-    if (!QUANT_VALUES.includes(n)) return;
-    quantizeN = n;
-    if (padHoldTimer) startPadHold(); // re-arm at the new rate immediately, mid-gesture
+  /* ratchet bar: rests at 1/16 and springs back when let go. Its value
+     cuts each step into ratchetHits(n) even hits, both for live pad hits
+     and, while recording, for what gets written into each step. */
+  let ratchetN = 16, ratchetHeld = false;
+  function setRatchet(n, held) {
+    ratchetN = n; ratchetHeld = held;
+    if (padHoldTimer) startPadHold(); // stopped: re-arm the retrigger at the new rate
   }
 
-  /* the 16th-note grid anchor the live quantizer snaps against: while
-     playing, phase-locked to the running scheduler (nextBase/stepIdx);
-     otherwise a free-running grid from time zero is just as good, since
-     there's no transport to lock to. */
+  /* the 16th-note grid the live clock locks to: while playing, phase-locked
+     to the running scheduler (nextBase/stepIdx); otherwise free-running from
+     time zero, since there's no transport to lock to. */
   function gridAnchor() {
     const dur = 60 / tempo / 4;
     return { stepDur: dur, barStart: playing ? nextBase - stepIdx * dur : 0 };
   }
 
-  /* a ratchet group must START on the 16th-note grid (a sequencer step),
-     even though the finger that opened it landed slightly early or late;
-     the whole group's timeline is anchored there, truncating or extending
-     it by at most half a 16th so it always begins on-step. Later hits in
-     the same held gesture are then quantized to the fine grid relative to
-     that corrected anchor, not to raw touch time. */
-  let recordGesture = null; // {stepIndex, anchorTime} while a recording gesture is open
-  function recordQuantizedHit(x, y) {
-    const dur16 = 60 / tempo / 4;
-    const now = actx.currentTime;
-    if (!recordGesture) {
-      const { barStart } = gridAnchor();
-      const snap16 = quantizedSlot(now, barStart, dur16, tempo, 16);
-      recordGesture = { stepIndex: snap16.stepIndex, anchorTime: snap16.time };
-      seq.liveWriteSlot(recordGesture.stepIndex, 0, x, y);
-      return;
-    }
-    // never let a quick hit land "before" the corrected anchor: the start
-    // was just truncated/extended forward onto the grid, so a touch that's
-    // still earlier in real time than that anchor belongs right at it, not
-    // wrapped back into the previous step.
-    const safeNow = Math.max(now, recordGesture.anchorTime);
-    const slot = quantizedSlot(safeNow, recordGesture.anchorTime, dur16, tempo, quantizeN);
-    const absStep = (recordGesture.stepIndex + slot.stepIndex) % N_STEPS;
-    seq.liveWriteSlot(absStep, slot.offset, x, y);
-  }
-
-  /* while the pad is held, trigger (and, if recording, write) at the
-     quantize slider's rate, using whatever point the finger is on right
-     now -- this covers both "moving across the pad" and "holding still",
-     and works whether or not the sequence is playing. */
+  /* stopped: holding the pad retriggers at the bar's rate, free-running */
   let padHoldTimer = null;
   function triggerLive() {
     const { x, y } = seq.cursor;
     const P = playAt(x, y);
     spawnBurst(x, y, P, performance.now());
-    if (recording && playing) recordQuantizedHit(x, y);
   }
   function startPadHold() {
     stopPadHold();
-    padHoldTimer = setInterval(triggerLive, Math.max(30, slotDuration(tempo, quantizeN) * 1000));
+    if (playing) return;
+    padHoldTimer = setInterval(triggerLive, Math.max(30, slotDuration(tempo, ratchetN) * 1000));
   }
   function stopPadHold() {
     if (padHoldTimer) { clearInterval(padHoldTimer); padHoldTimer = null; }
-    recordGesture = null;
+  }
+
+  /* playing: while the pad is held, hits land on the grid, each step cut by
+     the bar's current value (swung steps are cut within their shortened
+     span). They're scheduled only ~35 ms ahead, so lifting a finger stops
+     them promptly and bar moves are heard at once. */
+  const LIVE_AHEAD = 0.035;
+  let liveNext = 0, liveQueue = [];
+  function nextGridHit(T) {
+    const { barStart, stepDur } = gridAnchor();
+    const n = ratchetHits(ratchetN);
+    let st = Math.floor((T - barStart) / stepDur);
+    for (let k = 0; k < 3; k++, st++) {
+      const start = barStart + st * stepDur, sw = swingOffset(((st % N_STEPS) + N_STEPS) % N_STEPS, swing, stepDur);
+      for (let j = 0; j < n; j++) {
+        const h = start + sw + j * (stepDur - sw) / n;
+        if (h >= T - 1e-6) return h;
+      }
+    }
+    return T + stepDur;
+  }
+  function tickLive() {
+    if (!seq.padHeld()) { liveNext = 0; return; }
+    const now = actx.currentTime;
+    // the first grid hit after a press keeps clear of the press's own hit
+    if (!liveNext) liveNext = nextGridHit(now + 0.6 * slotDuration(tempo, ratchetN));
+    while (liveNext < now + LIVE_AHEAD) {
+      if (liveNext > now - 0.03) {
+        const t = Math.max(liveNext, now), { x, y } = seq.cursor;
+        liveQueue.push({ t, x, y, P: playAt(x, y, t) });
+      }
+      liveNext = nextGridHit(liveNext + 1e-4);
+    }
+  }
+
+  /* recording: each step is written once, at its catch point
+     (RATCHET_CATCH of the way through it), from whatever is true then: the
+     pad if it's held or was tapped since the last catch point, and the
+     ratchet bar's value. A move made after a step's catch point lands on
+     the next step. */
+  let locks = [], pendingPress = null;
+  function lockStep(i) {
+    if (!recording) { pendingPress = null; return; }
+    const hits = ratchetHits(ratchetN);
+    if (seq.padHeld()) { seq.recordStep(i, seq.cursor.x, seq.cursor.y, hits); pendingPress = null; }
+    else if (pendingPress) { seq.recordStep(i, pendingPress.x, pendingPress.y, hits); pendingPress = null; }
+    else if (ratchetHeld) seq.setRatchetHits(i, hits);
+  }
+  function tickLocks() {
+    const now = actx.currentTime;
+    while (locks.length && locks[0].t <= now) lockStep(locks.shift().i);
   }
 
   function audition(x, y, kind) {
     const now = performance.now();
     ensureAudio();
     lastAud = { t: now, x, y };
-    if (kind === 'move') return; // the pad-hold timer handles quantized retriggering while held
+    if (kind === 'move') return; // the live clock handles retriggering while held
     if (kind === 'press') {
-      stopPadHold();
-      if (recording && playing) recordQuantizedHit(x, y);
-      startPadHold();
+      if (playing) { liveNext = 0; if (recording) pendingPress = { x, y }; }
+      else startPadHold();
     }
     const P = playAt(x, y);
     spawnBurst(x, y, P, now);
@@ -1200,7 +1257,7 @@ const DEMO_BEAT = [
     const dur = 60 / tempo / 4;
     while (nextBase < actx.currentTime + 0.12) {
       const i = stepIdx;
-      const t = nextBase + (i % 2 === 1 ? swing * dur / 3 : 0);
+      const sw = swingOffset(i, swing, dur), t = nextBase + sw;
       const r = seq.trial(i);
       const fired = r.fired, decMult = r.decMult;
       let P = null;
@@ -1209,16 +1266,19 @@ const DEMO_BEAT = [
         const s = seq.steps[i];
         if (Array.isArray(s.ratchets) && s.ratchets.length) {
           for (const rr of s.ratchets) {
-            const rt = t + rr.offset * dur;
+            const rt = t + rr.offset * (dur - sw); // ratchets fit inside a swung step
             const rP = playAt(rr.x, rr.y, rt, decMult);
             queue.push({ i, t: rt, fired: true, x: rr.x, y: rr.y, P: rP, ratchet: true });
           }
         }
       }
       queue.push({ i, t, fired, x: r.x, y: r.y, P });
+      locks.push({ i, t: nextBase + RATCHET_CATCH * dur });
       nextBase += dur;
       stepIdx = (stepIdx + 1) % N_STEPS;
     }
+    tickLocks();
+    tickLive();
   }
 
   function setPlaying(on) {
@@ -1226,14 +1286,17 @@ const DEMO_BEAT = [
     if (on === playing) return;
     if (on) {
       ensureAudio();
-      stepIdx = 0; queue = [];
+      stopPadHold();
+      stepIdx = 0; queue = []; locks = []; liveNext = 0; pendingPress = null;
       nextBase = actx.currentTime + 0.06;
+      playing = true;
       tick();
       timer = setInterval(tick, 25);
     } else {
-      clearInterval(timer); timer = null; queue = []; cur = -1; headDirty = true;
+      clearInterval(timer); timer = null; queue = []; locks = []; cur = -1; headDirty = true;
+      playing = false;
+      if (seq.padHeld()) startPadHold();
     }
-    playing = on;
     btn.setAttribute('aria-label', on ? 'Stop' : 'Play');
     btn.title = on ? 'Stop' : 'Play';
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1522,7 +1585,7 @@ const DEMO_BEAT = [
     const p = toXY(e);
     seq.padMove(p.x, p.y);
   });
-  const padUp = (e) => { seq.padRelease(e.pointerId); if (!seq.padHeld()) stopPadHold(); history.commit(); };
+  const padUp = (e) => { seq.padRelease(e.pointerId); if (!seq.padHeld()) { stopPadHold(); liveNext = 0; } history.commit(); };
   pad.addEventListener('pointerup', padUp);
   pad.addEventListener('pointercancel', padUp);
   pad.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1550,7 +1613,7 @@ const DEMO_BEAT = [
       const i = g * 4 + k;
       const cell = document.createElement('div');
       cell.className = 'cell';
-      cell.innerHTML = '<i class="led" aria-hidden="true"></i><button type="button" class="step"><span class="n"></span><span class="dot"></span></button>';
+      cell.innerHTML = '<i class="led" aria-hidden="true"></i><button type="button" class="step"><span class="n"></span><span class="dot"></span><span class="hits" aria-hidden="true"></span></button>';
       const btn = cell.querySelector('button');
       btn.querySelector('.n').textContent = String(i + 1);
       // A click that follows a pointer gesture was already handled by pointerdown/up;
@@ -1591,8 +1654,11 @@ const DEMO_BEAT = [
         el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
         el.style.setProperty('--dy', s.y.toFixed(3));
-        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}, ${Math.round(s.prob * 100)} percent chance`);
+        const hits = 1 + (Array.isArray(s.ratchets) ? s.ratchets.length : 0);
+        el.querySelector('.hits').textContent = hits > 1 ? '\u2022'.repeat(hits) : '';
+        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}${hits > 1 ? `, ${hits} hits` : ''}, ${Math.round(s.prob * 100)} percent chance`);
       } else {
+        el.querySelector('.hits').textContent = '';
         el.setAttribute('aria-label', `Step ${i + 1}, off`);
       }
     });
@@ -1683,7 +1749,7 @@ const DEMO_BEAT = [
     ensureAudio();
     const fire = () => { const P = playAt(a.x, a.y); spawnBurst(a.x, a.y, P, performance.now()); };
     fire();
-    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, quantizeN) * 1000);
+    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
   }
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
@@ -1742,12 +1808,6 @@ const DEMO_BEAT = [
     devx: { rows: [{ key: 'devXChance', label: 'chance of an X jump' }, { key: 'devXAmount', label: 'how far it can jump' }] },
     devy: { rows: [{ key: 'devYChance', label: 'chance of a Y jump' }, { key: 'devYAmount', label: 'how far it can jump' }] },
     decay: { rows: [{ key: 'decay', label: 'base decay' }, { key: 'decDevChance', label: 'chance of a decay jump' }, { key: 'decDevAmount', label: 'how far it can jump' }] },
-  };
-  const LANE_HINT = {
-    prob: 'Drag a bar up or down to set how often that step fires.',
-    devx: 'Top band: chance that step\u2019s X nudges off its spot. Bottom band: how far.',
-    devy: 'Top band: chance that step\u2019s Y nudges off its spot. Bottom band: how far.',
-    decay: 'Top: that step\u2019s own decay length (middle = unchanged). Middle: chance it jumps. Bottom: how far.',
   };
   let laneMode = 'prob';
 
@@ -1861,7 +1921,6 @@ const DEMO_BEAT = [
       document.querySelectorAll('.lanetabs .tab').forEach((b) => b.setAttribute('aria-selected', 'false'));
       btn.setAttribute('aria-selected', 'true');
       laneMode = btn.dataset.lane;
-      $('#laneHint').textContent = LANE_HINT[laneMode];
       $('#laneReadout').textContent = '\u00a0';
       laneDirty = true;
     });
@@ -1873,7 +1932,6 @@ const DEMO_BEAT = [
     };
     seq.resetLane(map[laneMode]);
   });
-  $('#laneHint').textContent = LANE_HINT.prob;
 
   /* ---------- knob: drag up/right to turn up, down/left to turn down
      (Shift for fine), double-tap to reset, arrow keys to nudge. A 270
@@ -1968,26 +2026,26 @@ const DEMO_BEAT = [
      releasing fires onRoll(strength) once, then the die eases back to the
      left on its own. ---------- */
   function createDiceSlider(container, label, onRoll) {
-    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>';
+    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>';
     const el = container.querySelector('.dicetrack');
     el.setAttribute('aria-label', label);
+    el.title = label;
     const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
-    el.querySelector('.label').textContent = label;
-    const trackInset = 5, dieW = 31;
+    const trackInset = 4, dieW = () => die.offsetWidth || 31;
     function place(strength) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(0, r.width - dieW - trackInset * 2 - 4);
+      const travel = Math.max(0, r.width - dieW() - trackInset * 2 - 3);
       die.style.left = (trackInset + strength * travel) + 'px';
-      die.style.transform = `rotate(${strength * 720}deg)`;
-      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW / 2 : 0) + 'px';
+      die.style.transform = `rotate(${strength * 540}deg)`;
+      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW() / 2 : 0) + 'px';
     }
     place(0);
     let dragging = false;
     function fromClientX(clientX) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(1, r.width - dieW - trackInset * 2 - 4);
-      const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW / 2) / travel));
+      const travel = Math.max(1, r.width - dieW() - trackInset * 2 - 3);
+      const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW() / 2) / travel));
       place(strength);
       return strength;
     }
@@ -2011,6 +2069,56 @@ const DEMO_BEAT = [
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoll(0.5); }
       else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); onRoll(+e.key / 10); }
     });
+    return el;
+  }
+
+  /* ---------- ratchet bar widget: drag up for more hits per step; it
+     springs back to 1/16 the moment it's let go. Arrow up/down move it
+     while the key is held. ---------- */
+  function createRatchetBar(el) {
+    const thumb = el.querySelector('.rthumb');
+    const PAD = 22, last = RATCHET_VALUES.length - 1;
+    const yFor = (i) => { const h = el.clientHeight; return PAD + (h - PAD * 2) * (i / last); };
+    function layout() {
+      el.querySelectorAll('.rtick').forEach((t) => t.remove());
+      RATCHET_VALUES.forEach((_, i) => {
+        const t = document.createElement('i'); t.className = 'rtick'; t.style.bottom = yFor(i) + 'px'; el.appendChild(t);
+      });
+      show(RATCHET_VALUES.indexOf(ratchetN));
+    }
+    function show(i) {
+      thumb.style.bottom = yFor(i) + 'px';
+      thumb.textContent = RATCHET_VALUES[i];
+      el.setAttribute('aria-valuenow', RATCHET_VALUES[i]);
+      el.setAttribute('aria-valuetext', '1/' + RATCHET_VALUES[i]);
+    }
+    function set(i, held) {
+      i = clamp(i, 0, last);
+      el.classList.toggle('held', held);
+      if (RATCHET_VALUES[i] !== ratchetN || held !== ratchetHeld) setRatchet(RATCHET_VALUES[i], held);
+      show(i);
+    }
+    const fromY = (e) => { const r = el.getBoundingClientRect(); return Math.round(clamp((r.bottom - e.clientY - PAD) / (r.height - PAD * 2), 0, 1) * last); };
+    let drag = null;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); ensureAudio();
+      drag = e.pointerId;
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      set(fromY(e), true);
+    });
+    el.addEventListener('pointermove', (e) => { if (drag === e.pointerId) set(fromY(e), true); });
+    const end = (e) => { if (drag !== e.pointerId) return; drag = null; set(0, false); history.commit(); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      set(RATCHET_VALUES.indexOf(ratchetN) + (e.key === 'ArrowUp' ? 1 : -1), true);
+    });
+    el.addEventListener('keyup', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { set(0, false); history.commit(); } });
+    el.addEventListener('blur', () => { if (ratchetHeld && drag === null) set(0, false); });
+    new ResizeObserver(layout).observe(el);
+    layout();
   }
 
   /* kit-wide Decay trim: deliberately a multiplier, not a plain percentage
@@ -2033,8 +2141,8 @@ const DEMO_BEAT = [
   /* ---------- controls ---------- */
   const commit = () => history.commit();
   const tempoSlider = createKnob($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: commit });
-  const swingSlider = createKnob($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: commit });
-  const quantizeSlider = createKnob($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: commit });
+  const swingSlider = createKnob($('#swingField'), { min: 50, max: 75, step: 1, value: 50, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v; readoutDirty = true; }, onChange: commit });
+  createRatchetBar($('#ratchet'));
 
   /* kit-wide trims and macro mixes: shift every drum on the map at once,
      independent of any single drum's own tuning. */
@@ -2077,20 +2185,18 @@ const DEMO_BEAT = [
       return {
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
-        trims: { ...trims }, tempo, swing, quantizeN, mono: pendingMono,
+        trims: { ...trims }, tempo, swing, mono: pendingMono,
       };
     },
     restore(s) {
       seq.steps = JSON.parse(JSON.stringify(s.steps));
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
-      tempo = s.tempo; swing = s.swing; quantizeN = s.quantizeN;
+      tempo = s.tempo; swing = s.swing;
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
-      swingSlider.set(Math.round(swing * 100));
+      swingSlider.set(swing);
       monoBtn.setAttribute('aria-pressed', String(s.mono));
-      const qi = QUANT_VALUES.indexOf(quantizeN);
-      if (qi >= 0) quantizeSlider.set(qi);
       tuneSlider.set(trims.tune);
       decaySlider.set(kitDecaySliderFromValue(trims.decay));
       driveSlider.set(Math.round(trims.drive * 100));
@@ -2147,9 +2253,27 @@ const DEMO_BEAT = [
     stepsDirty = readoutDirty = laneDirty = true;
     history.commit();
   }
-  createDiceSlider($('#seqDiceField'), 'Randomize sequence', randomizeSequence);
-  createDiceSlider($('#drumDiceField'), 'Randomize this drum', randomizeDrum);
-  createDiceSlider($('#kitDiceField'), 'Randomize kit', randomizeKit);
+  function randomizeLane(strength) {
+    for (const s of seq.steps) {
+      if (!s.on) continue;
+      for (const row of LANES[laneMode].rows) s[row.key] = clamp(s[row.key] + (Math.random() * 2 - 1) * strength, 0, 1);
+    }
+    seq.onChange();
+    history.commit();
+  }
+  const DICE = {
+    pad: ['Randomize sequence', randomizeSequence],
+    lanes: ['Randomize this lane', randomizeLane],
+    kit: ['Randomize whole kit', randomizeKit],
+    engine: ['Randomize this drum', randomizeDrum],
+  };
+  const dice = createDiceSlider($('#diceField'), DICE.pad[0], (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
+  function updateDice() {
+    const d = DICE[currentPage];
+    dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
+    dice.title = d ? d[0] : '';
+    dice.setAttribute('aria-disabled', String(!d));
+  }
 
   history.commit(); // baseline
   $('#undo').addEventListener('click', () => history.undo());
@@ -2192,6 +2316,10 @@ const DEMO_BEAT = [
         headDirty = dirty = laneDirty = true;
       }
     }
+    if (actx && liveQueue.length) {
+      const ct = actx.currentTime;
+      while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
+    }
     stepParticles(dt, now);
     if (particles.length) dirty = true;
 
@@ -2222,6 +2350,7 @@ const DEMO_BEAT = [
     const to = document.querySelector(`.page[data-page="${page}"]`);
     const dir = PAGE_ORDER.indexOf(page) > PAGE_ORDER.indexOf(currentPage) ? 1 : -1;
     currentPage = page;
+    updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
@@ -2248,7 +2377,7 @@ const DEMO_BEAT = [
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, .ratchet, #laneCanvas, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

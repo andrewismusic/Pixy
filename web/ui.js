@@ -24,7 +24,7 @@
   let actx = null, engine = null;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
-  let tempo = 118, swing = 0;
+  let tempo = 118, swing = 50; // swing in percent: 50 straight .. 75
   const trims = { tune: 0, decay: 1, drive: 0, fold: 0, toneMix: 1, noiseMix: 1, metalMix: 1, resMix: 1, punch: 1 };
   let cur = -1;
   let lastAud = { t: 0, x: 0, y: 0 };
@@ -58,83 +58,98 @@
     return P;
   }
 
-  /* quantize: governs both live pad-drag retriggering and recording
-     resolution. 16 is the sequencer's native grid; finer values let you
-     overdub ratchets (sub-hits within a single step box) while recording,
-     and can be changed on the fly, including mid-recording, since the
-     grid is recomputed fresh from the current tempo/anchor every time. */
-  let quantizeN = 16;
-  function setQuantize(n) {
-    if (!QUANT_VALUES.includes(n)) return;
-    quantizeN = n;
-    if (padHoldTimer) startPadHold(); // re-arm at the new rate immediately, mid-gesture
+  /* ratchet bar: rests at 1/16 and springs back when let go. Its value
+     cuts each step into ratchetHits(n) even hits, both for live pad hits
+     and, while recording, for what gets written into each step. */
+  let ratchetN = 16, ratchetHeld = false;
+  function setRatchet(n, held) {
+    ratchetN = n; ratchetHeld = held;
+    if (padHoldTimer) startPadHold(); // stopped: re-arm the retrigger at the new rate
   }
 
-  /* the 16th-note grid anchor the live quantizer snaps against: while
-     playing, phase-locked to the running scheduler (nextBase/stepIdx);
-     otherwise a free-running grid from time zero is just as good, since
-     there's no transport to lock to. */
+  /* the 16th-note grid the live clock locks to: while playing, phase-locked
+     to the running scheduler (nextBase/stepIdx); otherwise free-running from
+     time zero, since there's no transport to lock to. */
   function gridAnchor() {
     const dur = 60 / tempo / 4;
     return { stepDur: dur, barStart: playing ? nextBase - stepIdx * dur : 0 };
   }
 
-  /* a ratchet group must START on the 16th-note grid (a sequencer step),
-     even though the finger that opened it landed slightly early or late;
-     the whole group's timeline is anchored there, truncating or extending
-     it by at most half a 16th so it always begins on-step. Later hits in
-     the same held gesture are then quantized to the fine grid relative to
-     that corrected anchor, not to raw touch time. */
-  let recordGesture = null; // {stepIndex, anchorTime} while a recording gesture is open
-  function recordQuantizedHit(x, y) {
-    const dur16 = 60 / tempo / 4;
-    const now = actx.currentTime;
-    if (!recordGesture) {
-      const { barStart } = gridAnchor();
-      const snap16 = quantizedSlot(now, barStart, dur16, tempo, 16);
-      recordGesture = { stepIndex: snap16.stepIndex, anchorTime: snap16.time };
-      seq.liveWriteSlot(recordGesture.stepIndex, 0, x, y);
-      return;
-    }
-    // never let a quick hit land "before" the corrected anchor: the start
-    // was just truncated/extended forward onto the grid, so a touch that's
-    // still earlier in real time than that anchor belongs right at it, not
-    // wrapped back into the previous step.
-    const safeNow = Math.max(now, recordGesture.anchorTime);
-    const slot = quantizedSlot(safeNow, recordGesture.anchorTime, dur16, tempo, quantizeN);
-    const absStep = (recordGesture.stepIndex + slot.stepIndex) % N_STEPS;
-    seq.liveWriteSlot(absStep, slot.offset, x, y);
-  }
-
-  /* while the pad is held, trigger (and, if recording, write) at the
-     quantize slider's rate, using whatever point the finger is on right
-     now -- this covers both "moving across the pad" and "holding still",
-     and works whether or not the sequence is playing. */
+  /* stopped: holding the pad retriggers at the bar's rate, free-running */
   let padHoldTimer = null;
   function triggerLive() {
     const { x, y } = seq.cursor;
     const P = playAt(x, y);
     spawnBurst(x, y, P, performance.now());
-    if (recording && playing) recordQuantizedHit(x, y);
   }
   function startPadHold() {
     stopPadHold();
-    padHoldTimer = setInterval(triggerLive, Math.max(30, slotDuration(tempo, quantizeN) * 1000));
+    if (playing) return;
+    padHoldTimer = setInterval(triggerLive, Math.max(30, slotDuration(tempo, ratchetN) * 1000));
   }
   function stopPadHold() {
     if (padHoldTimer) { clearInterval(padHoldTimer); padHoldTimer = null; }
-    recordGesture = null;
+  }
+
+  /* playing: while the pad is held, hits land on the grid, each step cut by
+     the bar's current value (swung steps are cut within their shortened
+     span). They're scheduled only ~35 ms ahead, so lifting a finger stops
+     them promptly and bar moves are heard at once. */
+  const LIVE_AHEAD = 0.035;
+  let liveNext = 0, liveQueue = [];
+  function nextGridHit(T) {
+    const { barStart, stepDur } = gridAnchor();
+    const n = ratchetHits(ratchetN);
+    let st = Math.floor((T - barStart) / stepDur);
+    for (let k = 0; k < 3; k++, st++) {
+      const start = barStart + st * stepDur, sw = swingOffset(((st % N_STEPS) + N_STEPS) % N_STEPS, swing, stepDur);
+      for (let j = 0; j < n; j++) {
+        const h = start + sw + j * (stepDur - sw) / n;
+        if (h >= T - 1e-6) return h;
+      }
+    }
+    return T + stepDur;
+  }
+  function tickLive() {
+    if (!seq.padHeld()) { liveNext = 0; return; }
+    const now = actx.currentTime;
+    // the first grid hit after a press keeps clear of the press's own hit
+    if (!liveNext) liveNext = nextGridHit(now + 0.6 * slotDuration(tempo, ratchetN));
+    while (liveNext < now + LIVE_AHEAD) {
+      if (liveNext > now - 0.03) {
+        const t = Math.max(liveNext, now), { x, y } = seq.cursor;
+        liveQueue.push({ t, x, y, P: playAt(x, y, t) });
+      }
+      liveNext = nextGridHit(liveNext + 1e-4);
+    }
+  }
+
+  /* recording: each step is written once, at its catch point
+     (RATCHET_CATCH of the way through it), from whatever is true then: the
+     pad if it's held or was tapped since the last catch point, and the
+     ratchet bar's value. A move made after a step's catch point lands on
+     the next step. */
+  let locks = [], pendingPress = null;
+  function lockStep(i) {
+    if (!recording) { pendingPress = null; return; }
+    const hits = ratchetHits(ratchetN);
+    if (seq.padHeld()) { seq.recordStep(i, seq.cursor.x, seq.cursor.y, hits); pendingPress = null; }
+    else if (pendingPress) { seq.recordStep(i, pendingPress.x, pendingPress.y, hits); pendingPress = null; }
+    else if (ratchetHeld) seq.setRatchetHits(i, hits);
+  }
+  function tickLocks() {
+    const now = actx.currentTime;
+    while (locks.length && locks[0].t <= now) lockStep(locks.shift().i);
   }
 
   function audition(x, y, kind) {
     const now = performance.now();
     ensureAudio();
     lastAud = { t: now, x, y };
-    if (kind === 'move') return; // the pad-hold timer handles quantized retriggering while held
+    if (kind === 'move') return; // the live clock handles retriggering while held
     if (kind === 'press') {
-      stopPadHold();
-      if (recording && playing) recordQuantizedHit(x, y);
-      startPadHold();
+      if (playing) { liveNext = 0; if (recording) pendingPress = { x, y }; }
+      else startPadHold();
     }
     const P = playAt(x, y);
     spawnBurst(x, y, P, now);
@@ -147,7 +162,7 @@
     const dur = 60 / tempo / 4;
     while (nextBase < actx.currentTime + 0.12) {
       const i = stepIdx;
-      const t = nextBase + (i % 2 === 1 ? swing * dur / 3 : 0);
+      const sw = swingOffset(i, swing, dur), t = nextBase + sw;
       const r = seq.trial(i);
       const fired = r.fired, decMult = r.decMult;
       let P = null;
@@ -156,16 +171,19 @@
         const s = seq.steps[i];
         if (Array.isArray(s.ratchets) && s.ratchets.length) {
           for (const rr of s.ratchets) {
-            const rt = t + rr.offset * dur;
+            const rt = t + rr.offset * (dur - sw); // ratchets fit inside a swung step
             const rP = playAt(rr.x, rr.y, rt, decMult);
             queue.push({ i, t: rt, fired: true, x: rr.x, y: rr.y, P: rP, ratchet: true });
           }
         }
       }
       queue.push({ i, t, fired, x: r.x, y: r.y, P });
+      locks.push({ i, t: nextBase + RATCHET_CATCH * dur });
       nextBase += dur;
       stepIdx = (stepIdx + 1) % N_STEPS;
     }
+    tickLocks();
+    tickLive();
   }
 
   function setPlaying(on) {
@@ -173,14 +191,17 @@
     if (on === playing) return;
     if (on) {
       ensureAudio();
-      stepIdx = 0; queue = [];
+      stopPadHold();
+      stepIdx = 0; queue = []; locks = []; liveNext = 0; pendingPress = null;
       nextBase = actx.currentTime + 0.06;
+      playing = true;
       tick();
       timer = setInterval(tick, 25);
     } else {
-      clearInterval(timer); timer = null; queue = []; cur = -1; headDirty = true;
+      clearInterval(timer); timer = null; queue = []; locks = []; cur = -1; headDirty = true;
+      playing = false;
+      if (seq.padHeld()) startPadHold();
     }
-    playing = on;
     btn.setAttribute('aria-label', on ? 'Stop' : 'Play');
     btn.title = on ? 'Stop' : 'Play';
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -469,7 +490,7 @@
     const p = toXY(e);
     seq.padMove(p.x, p.y);
   });
-  const padUp = (e) => { seq.padRelease(e.pointerId); if (!seq.padHeld()) stopPadHold(); history.commit(); };
+  const padUp = (e) => { seq.padRelease(e.pointerId); if (!seq.padHeld()) { stopPadHold(); liveNext = 0; } history.commit(); };
   pad.addEventListener('pointerup', padUp);
   pad.addEventListener('pointercancel', padUp);
   pad.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -497,7 +518,7 @@
       const i = g * 4 + k;
       const cell = document.createElement('div');
       cell.className = 'cell';
-      cell.innerHTML = '<i class="led" aria-hidden="true"></i><button type="button" class="step"><span class="n"></span><span class="dot"></span></button>';
+      cell.innerHTML = '<i class="led" aria-hidden="true"></i><button type="button" class="step"><span class="n"></span><span class="dot"></span><span class="hits" aria-hidden="true"></span></button>';
       const btn = cell.querySelector('button');
       btn.querySelector('.n').textContent = String(i + 1);
       // A click that follows a pointer gesture was already handled by pointerdown/up;
@@ -538,8 +559,11 @@
         el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
         el.style.setProperty('--dy', s.y.toFixed(3));
-        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}, ${Math.round(s.prob * 100)} percent chance`);
+        const hits = 1 + (Array.isArray(s.ratchets) ? s.ratchets.length : 0);
+        el.querySelector('.hits').textContent = hits > 1 ? '\u2022'.repeat(hits) : '';
+        el.setAttribute('aria-label', `Step ${i + 1}, on, ${nearest(w, 1)[0].name}${hits > 1 ? `, ${hits} hits` : ''}, ${Math.round(s.prob * 100)} percent chance`);
       } else {
+        el.querySelector('.hits').textContent = '';
         el.setAttribute('aria-label', `Step ${i + 1}, off`);
       }
     });
@@ -630,7 +654,7 @@
     ensureAudio();
     const fire = () => { const P = playAt(a.x, a.y); spawnBurst(a.x, a.y, P, performance.now()); };
     fire();
-    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, quantizeN) * 1000);
+    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
   }
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
@@ -689,12 +713,6 @@
     devx: { rows: [{ key: 'devXChance', label: 'chance of an X jump' }, { key: 'devXAmount', label: 'how far it can jump' }] },
     devy: { rows: [{ key: 'devYChance', label: 'chance of a Y jump' }, { key: 'devYAmount', label: 'how far it can jump' }] },
     decay: { rows: [{ key: 'decay', label: 'base decay' }, { key: 'decDevChance', label: 'chance of a decay jump' }, { key: 'decDevAmount', label: 'how far it can jump' }] },
-  };
-  const LANE_HINT = {
-    prob: 'Drag a bar up or down to set how often that step fires.',
-    devx: 'Top band: chance that step\u2019s X nudges off its spot. Bottom band: how far.',
-    devy: 'Top band: chance that step\u2019s Y nudges off its spot. Bottom band: how far.',
-    decay: 'Top: that step\u2019s own decay length (middle = unchanged). Middle: chance it jumps. Bottom: how far.',
   };
   let laneMode = 'prob';
 
@@ -808,7 +826,6 @@
       document.querySelectorAll('.lanetabs .tab').forEach((b) => b.setAttribute('aria-selected', 'false'));
       btn.setAttribute('aria-selected', 'true');
       laneMode = btn.dataset.lane;
-      $('#laneHint').textContent = LANE_HINT[laneMode];
       $('#laneReadout').textContent = '\u00a0';
       laneDirty = true;
     });
@@ -820,7 +837,6 @@
     };
     seq.resetLane(map[laneMode]);
   });
-  $('#laneHint').textContent = LANE_HINT.prob;
 
   /* ---------- knob: drag up/right to turn up, down/left to turn down
      (Shift for fine), double-tap to reset, arrow keys to nudge. A 270
@@ -915,26 +931,26 @@
      releasing fires onRoll(strength) once, then the die eases back to the
      left on its own. ---------- */
   function createDiceSlider(container, label, onRoll) {
-    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="label"></span><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>';
+    container.innerHTML = '<div class="dicetrack" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>';
     const el = container.querySelector('.dicetrack');
     el.setAttribute('aria-label', label);
+    el.title = label;
     const fill = el.querySelector('.fill');
     const die = el.querySelector('.die');
-    el.querySelector('.label').textContent = label;
-    const trackInset = 5, dieW = 31;
+    const trackInset = 4, dieW = () => die.offsetWidth || 31;
     function place(strength) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(0, r.width - dieW - trackInset * 2 - 4);
+      const travel = Math.max(0, r.width - dieW() - trackInset * 2 - 3);
       die.style.left = (trackInset + strength * travel) + 'px';
-      die.style.transform = `rotate(${strength * 720}deg)`;
-      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW / 2 : 0) + 'px';
+      die.style.transform = `rotate(${strength * 540}deg)`;
+      fill.style.width = (strength > 0 ? trackInset + strength * travel + dieW() / 2 : 0) + 'px';
     }
     place(0);
     let dragging = false;
     function fromClientX(clientX) {
       const r = el.getBoundingClientRect();
-      const travel = Math.max(1, r.width - dieW - trackInset * 2 - 4);
-      const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW / 2) / travel));
+      const travel = Math.max(1, r.width - dieW() - trackInset * 2 - 3);
+      const strength = Math.min(1, Math.max(0, (clientX - r.left - trackInset - dieW() / 2) / travel));
       place(strength);
       return strength;
     }
@@ -958,6 +974,56 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRoll(0.5); }
       else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); onRoll(+e.key / 10); }
     });
+    return el;
+  }
+
+  /* ---------- ratchet bar widget: drag up for more hits per step; it
+     springs back to 1/16 the moment it's let go. Arrow up/down move it
+     while the key is held. ---------- */
+  function createRatchetBar(el) {
+    const thumb = el.querySelector('.rthumb');
+    const PAD = 22, last = RATCHET_VALUES.length - 1;
+    const yFor = (i) => { const h = el.clientHeight; return PAD + (h - PAD * 2) * (i / last); };
+    function layout() {
+      el.querySelectorAll('.rtick').forEach((t) => t.remove());
+      RATCHET_VALUES.forEach((_, i) => {
+        const t = document.createElement('i'); t.className = 'rtick'; t.style.bottom = yFor(i) + 'px'; el.appendChild(t);
+      });
+      show(RATCHET_VALUES.indexOf(ratchetN));
+    }
+    function show(i) {
+      thumb.style.bottom = yFor(i) + 'px';
+      thumb.textContent = RATCHET_VALUES[i];
+      el.setAttribute('aria-valuenow', RATCHET_VALUES[i]);
+      el.setAttribute('aria-valuetext', '1/' + RATCHET_VALUES[i]);
+    }
+    function set(i, held) {
+      i = clamp(i, 0, last);
+      el.classList.toggle('held', held);
+      if (RATCHET_VALUES[i] !== ratchetN || held !== ratchetHeld) setRatchet(RATCHET_VALUES[i], held);
+      show(i);
+    }
+    const fromY = (e) => { const r = el.getBoundingClientRect(); return Math.round(clamp((r.bottom - e.clientY - PAD) / (r.height - PAD * 2), 0, 1) * last); };
+    let drag = null;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); ensureAudio();
+      drag = e.pointerId;
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      set(fromY(e), true);
+    });
+    el.addEventListener('pointermove', (e) => { if (drag === e.pointerId) set(fromY(e), true); });
+    const end = (e) => { if (drag !== e.pointerId) return; drag = null; set(0, false); history.commit(); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      set(RATCHET_VALUES.indexOf(ratchetN) + (e.key === 'ArrowUp' ? 1 : -1), true);
+    });
+    el.addEventListener('keyup', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { set(0, false); history.commit(); } });
+    el.addEventListener('blur', () => { if (ratchetHeld && drag === null) set(0, false); });
+    new ResizeObserver(layout).observe(el);
+    layout();
   }
 
   /* kit-wide Decay trim: deliberately a multiplier, not a plain percentage
@@ -980,8 +1046,8 @@
   /* ---------- controls ---------- */
   const commit = () => history.commit();
   const tempoSlider = createKnob($('#tempoField'), { min: 60, max: 200, step: 1, value: tempo, label: 'Tempo', fmt: (v) => v + ' bpm', onInput: (v) => { tempo = v; readoutDirty = true; }, onChange: commit });
-  const swingSlider = createKnob($('#swingField'), { min: 0, max: 100, step: 1, value: 0, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v / 100; readoutDirty = true; }, onChange: commit });
-  const quantizeSlider = createKnob($('#quantizeField'), { min: 0, max: 5, step: 1, value: 0, label: 'Quantize', fmt: (v) => '1/' + QUANT_VALUES[v], onInput: (v) => setQuantize(QUANT_VALUES[v]), onChange: commit });
+  const swingSlider = createKnob($('#swingField'), { min: 50, max: 75, step: 1, value: 50, label: 'Swing', fmt: (v) => v + '%', onInput: (v) => { swing = v; readoutDirty = true; }, onChange: commit });
+  createRatchetBar($('#ratchet'));
 
   /* kit-wide trims and macro mixes: shift every drum on the map at once,
      independent of any single drum's own tuning. */
@@ -1024,20 +1090,18 @@
       return {
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
-        trims: { ...trims }, tempo, swing, quantizeN, mono: pendingMono,
+        trims: { ...trims }, tempo, swing, mono: pendingMono,
       };
     },
     restore(s) {
       seq.steps = JSON.parse(JSON.stringify(s.steps));
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
-      tempo = s.tempo; swing = s.swing; quantizeN = s.quantizeN;
+      tempo = s.tempo; swing = s.swing;
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
-      swingSlider.set(Math.round(swing * 100));
+      swingSlider.set(swing);
       monoBtn.setAttribute('aria-pressed', String(s.mono));
-      const qi = QUANT_VALUES.indexOf(quantizeN);
-      if (qi >= 0) quantizeSlider.set(qi);
       tuneSlider.set(trims.tune);
       decaySlider.set(kitDecaySliderFromValue(trims.decay));
       driveSlider.set(Math.round(trims.drive * 100));
@@ -1094,9 +1158,27 @@
     stepsDirty = readoutDirty = laneDirty = true;
     history.commit();
   }
-  createDiceSlider($('#seqDiceField'), 'Randomize sequence', randomizeSequence);
-  createDiceSlider($('#drumDiceField'), 'Randomize this drum', randomizeDrum);
-  createDiceSlider($('#kitDiceField'), 'Randomize kit', randomizeKit);
+  function randomizeLane(strength) {
+    for (const s of seq.steps) {
+      if (!s.on) continue;
+      for (const row of LANES[laneMode].rows) s[row.key] = clamp(s[row.key] + (Math.random() * 2 - 1) * strength, 0, 1);
+    }
+    seq.onChange();
+    history.commit();
+  }
+  const DICE = {
+    pad: ['Randomize sequence', randomizeSequence],
+    lanes: ['Randomize this lane', randomizeLane],
+    kit: ['Randomize whole kit', randomizeKit],
+    engine: ['Randomize this drum', randomizeDrum],
+  };
+  const dice = createDiceSlider($('#diceField'), DICE.pad[0], (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
+  function updateDice() {
+    const d = DICE[currentPage];
+    dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
+    dice.title = d ? d[0] : '';
+    dice.setAttribute('aria-disabled', String(!d));
+  }
 
   history.commit(); // baseline
   $('#undo').addEventListener('click', () => history.undo());
@@ -1139,6 +1221,10 @@
         headDirty = dirty = laneDirty = true;
       }
     }
+    if (actx && liveQueue.length) {
+      const ct = actx.currentTime;
+      while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
+    }
     stepParticles(dt, now);
     if (particles.length) dirty = true;
 
@@ -1169,6 +1255,7 @@
     const to = document.querySelector(`.page[data-page="${page}"]`);
     const dir = PAGE_ORDER.indexOf(page) > PAGE_ORDER.indexOf(currentPage) ? 1 : -1;
     currentPage = page;
+    updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
@@ -1195,7 +1282,7 @@
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, .ratchet, #laneCanvas, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

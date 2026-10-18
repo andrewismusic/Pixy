@@ -1,0 +1,907 @@
+<title>Pixy Style Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Michroma&family=Chakra+Petch:wght@400;500;600;700&family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: a single scrolling flight-deck board. A live mock of the main
+   screen up top, then the parts it's made of, then the two new systems
+   (orbital modulation, record timing), each with a working prototype.
+   Single dark look by choice: it's the inside of a ship at night. */
+:root {
+  color-scheme: dark;
+  --void: #04060B;      /* page / deep space */
+  --deck: #0A0E17;      /* panel surfaces */
+  --bay: #0E1320;       /* recessed wells, inactive keys */
+  --line: #1C2435;      /* hairlines */
+  --line-hi: #2B3650;   /* raised edges */
+  --ink: #E4E9F3;       /* primary text */
+  --dim: #8590A8;       /* secondary text */
+  --faint: #4C566C;     /* tertiary, ticks */
+  --on: #FFD21F;        /* indicator: on / selected / highlighted */
+  --now: #3BE0FF;       /* playhead */
+  --rec: #FF3B5C;       /* recording */
+  --m-body: #FF6B91; --m-noise: #A9B2C8; --m-metal: #7F9BFF; --m-res: #FFAA3D; --m-filter: #A98BFF; --m-out: #FF7D52;
+  --f-head: 'Oxanium', 'Eurostile', system-ui, sans-serif;
+  --f-ui: 'Oxanium', 'Eurostile', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --head-track: .16em;
+}
+:root[data-type="flightdeck"] { --f-head: 'Michroma', 'Eurostile', system-ui, sans-serif; --f-ui: 'Chakra Petch', system-ui, sans-serif; --head-track: .12em; }
+:root[data-type="terminal"] { --f-head: 'Share Tech Mono', ui-monospace, monospace; --f-ui: 'Share Tech Mono', ui-monospace, monospace; --f-mono: 'Share Tech Mono', ui-monospace, monospace; --head-track: .18em; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--void); }
+body {
+  margin: 0; color: var(--ink); background: var(--void);
+  font: 400 15px/1.5 var(--f-ui);
+}
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-block: 28px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--f-head); font-weight: 600; letter-spacing: var(--head-track); text-transform: uppercase; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1; }
+h2 { font-size: 15px; color: var(--ink); }
+h3 { font-size: 11.5px; color: var(--dim); }
+p { margin: 0; max-width: 64ch; color: var(--dim); }
+p b { color: var(--ink); font-weight: 600; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 500 11px/1.2 var(--f-mono); color: var(--faint); letter-spacing: .14em; text-transform: uppercase; }
+
+header.board { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 18px 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+header.board .title { display: grid; gap: 8px; }
+.switchers { display: flex; flex-wrap: wrap; gap: 14px 20px; }
+.switch { display: grid; gap: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--line-hi); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: 600 11px/1 var(--f-ui); letter-spacing: .1em; text-transform: uppercase;
+  padding: 9px 11px; background: var(--bay); color: var(--dim); border: 0; border-right: 1px solid var(--line-hi); cursor: pointer;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--on); color: #15120A; }
+.seg button:focus-visible { outline: 2px solid var(--on); outline-offset: -2px; }
+
+section.part { padding-top: 44px; display: grid; gap: 18px; }
+.parthead { display: grid; gap: 8px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- the mock device ---------- */
+.device {
+  width: 100%; max-width: 440px; margin: 0 auto; padding: 14px 14px 18px;
+  background: linear-gradient(180deg, #0B1019, #070A11); border: 1px solid var(--line-hi); border-radius: 26px;
+  box-shadow: 0 0 0 1px #000, 0 30px 60px -30px rgba(59,224,255,.12);
+  display: grid; gap: 14px;
+}
+.topbar { display: flex; align-items: center; gap: 8px; }
+.logo { font: 600 18px/1 var(--f-head); letter-spacing: .2em; margin-right: auto; }
+.navrow { display: flex; gap: 5px; }
+
+.key {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 38px; height: 38px; padding: 0 9px; border-radius: 9px;
+  border: 1px solid var(--line-hi); color: var(--ink); cursor: pointer;
+  background: linear-gradient(180deg, #1E2638, #141B29);
+  box-shadow: 0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.06);
+  transition: transform .07s, box-shadow .07s;
+  font: 600 11px/1 var(--f-ui); letter-spacing: .1em; text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+}
+.key:active, .key.pressed { transform: translateY(2px); box-shadow: 0 1px 0 #000, inset 0 1px 0 rgba(255,255,255,.06); }
+.key.on, .key[aria-pressed="true"] { background: var(--on); color: #15120A; border-color: transparent; transform: translateY(2px); box-shadow: 0 1px 0 #000, 0 0 16px -3px var(--on); }
+.key.rec { color: var(--rec); }
+.key.rec.on { background: var(--rec); color: #fff; box-shadow: 0 1px 0 #000, 0 0 16px -3px var(--rec); }
+.key:focus-visible { outline: 2px solid var(--on); outline-offset: 3px; }
+.key svg { display: block; }
+.key.big { width: 52px; height: 52px; border-radius: 13px; }
+
+/* mini dice: a short track in the top bar */
+.minidice {
+  position: relative; width: 74px; height: 38px; border-radius: 9px; background: var(--bay);
+  border: 1px solid var(--line-hi); box-shadow: inset 0 2px 0 rgba(0,0,0,.4); cursor: pointer; overflow: hidden;
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.minidice .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--on); opacity: .85; }
+.die {
+  position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 7px; z-index: 1;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 5px;
+  background: linear-gradient(180deg, #F6F8FB, #D9DEE7); box-shadow: 0 2px 0 rgba(0,0,0,.5);
+  transition: left .5s cubic-bezier(.3,.9,.3,1.1), transform .5s cubic-bezier(.3,.9,.3,1.1);
+}
+.die i { width: 4.5px; height: 4.5px; border-radius: 50%; background: #0A0E17; place-self: center; }
+.die i:nth-child(1) { grid-area: 1 / 1; } .die i:nth-child(2) { grid-area: 1 / 3; } .die i:nth-child(3) { grid-area: 2 / 2; }
+.die i:nth-child(4) { grid-area: 3 / 1; } .die i:nth-child(5) { grid-area: 3 / 3; }
+.minidice.dragging .die { transition: none; }
+
+.padrow { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 8px; }
+.padbox { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; border: 1px solid var(--line-hi); background: #03050A; }
+.padbox canvas { display: block; width: 100%; height: 100%; }
+
+/* vertical quantize slider: rests at 1/16 at the bottom, springs back */
+.qslider { position: relative; border-radius: 10px; background: var(--bay); border: 1px solid var(--line-hi); touch-action: none; cursor: ns-resize; -webkit-tap-highlight-color: transparent; }
+.qslider .tick { position: absolute; left: 0; right: 0; height: 1px; background: var(--line-hi); }
+.qslider .tlabel { position: absolute; right: 0; left: 0; text-align: center; font: 500 8.5px/1 var(--f-mono); color: var(--faint); transform: translateY(-50%); pointer-events: none; }
+.qslider .thumb {
+  position: absolute; left: 3px; right: 3px; height: 30px; border-radius: 7px; transform: translateY(50%);
+  background: linear-gradient(180deg, #2A3348, #1A2131); border: 1px solid var(--line-hi); box-shadow: 0 2px 0 #000;
+  display: grid; place-items: center; font: 700 9px/1 var(--f-mono); color: var(--ink);
+  transition: bottom .28s cubic-bezier(.3,1.4,.4,1);
+}
+.qslider.dragging .thumb { transition: none; background: var(--on); color: #15120A; border-color: transparent; box-shadow: 0 0 14px -2px var(--on); }
+
+.transport { display: flex; align-items: center; gap: 10px; }
+.transport .spacer { flex: 1; }
+.knobmini { display: grid; justify-items: center; gap: 2px; }
+.knobmini svg { display: block; }
+.knobmini .v { font: 500 10.5px/1 var(--f-mono); }
+.knobmini .l { font: 600 9px/1 var(--f-ui); letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+
+.steps { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; }
+.stp {
+  position: relative; aspect-ratio: 4 / 5; border-radius: 7px; border: 1px solid var(--line-hi); background: var(--bay);
+  box-shadow: 0 3px 0 #000; transition: transform .07s, box-shadow .07s;
+}
+.stp .n { position: absolute; top: 4px; left: 5px; font: 600 9px/1 var(--f-ui); color: var(--dim); }
+.stp.on { background: var(--c); border-color: rgba(0,0,0,.4); }
+.stp.on .n { color: rgba(0,0,0,.62); }
+.stp.now { transform: translateY(-2px); box-shadow: 0 5px 0 #000, 0 0 0 2px var(--now); }
+.stp.held { transform: translateY(2px); box-shadow: 0 1px 0 #000, 0 0 0 2px var(--on); }
+.toolsrow { display: flex; gap: 6px; }
+.toolsrow .spacer { flex: 1; }
+
+.callouts { display: grid; gap: 14px; align-content: start; }
+.callout { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; }
+.callout .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; justify-self: center; }
+
+/* ---------- swatches ---------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.sw { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--deck); }
+.sw .chip { height: 54px; }
+.sw .meta { padding: 8px 10px 10px; display: grid; gap: 2px; }
+.sw .name { font: 600 11px/1.2 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; }
+.sw .hex { font: 500 11px/1.2 var(--f-mono); color: var(--dim); }
+.sw .role { font-size: 12.5px; color: var(--dim); line-height: 1.35; }
+
+.palettes { display: grid; gap: 14px; }
+.pal { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--deck); cursor: pointer; text-align: left; color: inherit; font: inherit; }
+.pal[aria-pressed="true"] { border-color: var(--on); box-shadow: 0 0 0 1px var(--on); }
+.pal:focus-visible { outline: 2px solid var(--on); outline-offset: 2px; }
+.pal .pname { display: grid; gap: 4px; }
+.pal canvas { width: 100%; height: 46px; display: block; }
+@media (max-width: 560px) { .pal { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- type ---------- */
+.specimen { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--deck); }
+.specimen .big { font: 600 clamp(40px, 9vw, 72px)/1 var(--f-head); letter-spacing: .18em; }
+.specimen .row { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; }
+.specimen .lbl { font: 600 11px/1.2 var(--f-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.specimen .val { font: 500 22px/1.2 var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- component sheet ---------- */
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.cell { border: 1px solid var(--line); border-radius: 12px; background: var(--deck); padding: 14px; display: grid; gap: 12px; align-content: start; }
+.cell .demo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; min-height: 52px; }
+.icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 12px 8px; }
+.ic { display: grid; justify-items: center; gap: 6px; }
+.ic .cap { font: 500 9.5px/1.2 var(--f-mono); color: var(--dim); text-align: center; }
+
+/* ---------- orbits ---------- */
+.orbits { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.orb { border: 1px solid var(--line); border-radius: 12px; background: var(--deck); overflow: hidden; display: grid; }
+.orb canvas { display: block; width: 100%; aspect-ratio: 4 / 3; }
+.orb .meta { padding: 10px 12px 12px; display: grid; gap: 4px; border-top: 1px solid var(--line); }
+.orb .meta p { font-size: 13px; line-height: 1.4; }
+.orb .ctl { display: flex; align-items: center; gap: 8px; margin-top: 4px; font: 500 11px/1 var(--f-mono); color: var(--dim); }
+.orb input[type="range"] { flex: 1; accent-color: var(--on); min-width: 0; }
+.basic { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.basic .b { border: 1px solid var(--line); border-radius: 10px; background: var(--deck); padding: 8px; display: grid; gap: 6px; }
+.basic canvas { width: 100%; height: 40px; display: block; }
+
+/* ---------- timing ---------- */
+.timing { border: 1px solid var(--line); border-radius: 12px; background: var(--deck); padding: 14px; display: grid; gap: 12px; }
+.timing canvas { width: 100%; height: 150px; display: block; touch-action: none; cursor: ew-resize; }
+.timing .ctl { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font: 500 12px/1 var(--f-mono); color: var(--dim); }
+.timing input[type="range"] { accent-color: var(--on); width: 160px; }
+.readout { font: 500 13px/1.4 var(--f-mono); color: var(--ink); min-height: 1.4em; }
+
+.decisions { display: grid; gap: 10px; counter-reset: q; }
+.decisions li { list-style: none; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; color: var(--dim); }
+.decisions li::before { counter-increment: q; content: counter(q, decimal-leading-zero); font: 500 12px/1.6 var(--f-mono); color: var(--on); }
+.decisions { padding: 0; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) { .die, .qslider .thumb, .key, .stp { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="board">
+    <div class="title">
+      <span class="eyebrow">Pixy · style board · rev 01 · 18 Oct 2026</span>
+      <h1>Star chart</h1>
+      <p>The pad is a map of space. Every sequenced step is a star, and the sequence draws a constellation through them in playing order. Modulators are small moons in orbit around whatever they move.</p>
+    </div>
+    <div class="switchers">
+      <div class="switch"><span class="eyebrow">Type</span>
+        <div class="seg" id="typeSeg">
+          <button type="button" data-v="console" aria-pressed="true">Console</button>
+          <button type="button" data-v="flightdeck" aria-pressed="false">Flight deck</button>
+          <button type="button" data-v="terminal" aria-pressed="false">Terminal</button>
+        </div>
+      </div>
+      <div class="switch"><span class="eyebrow">Star colours</span>
+        <div class="seg" id="palSeg">
+          <button type="button" data-v="stellar" aria-pressed="true">Stellar</button>
+          <button type="button" data-v="nebula" aria-pressed="false">Nebula</button>
+          <button type="button" data-v="ion" aria-pressed="false">Ion</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== main screen mock ===================== -->
+  <section class="part" aria-labelledby="mainH">
+    <div class="parthead">
+      <span class="eyebrow">01 · Main screen</span>
+      <h2 id="mainH">The deck, live</h2>
+    </div>
+    <div class="grid2">
+      <div class="device" id="device">
+        <div class="topbar">
+          <span class="logo">PIXY</span>
+          <div class="navrow" role="group" aria-label="Pages">
+            <button class="key on" type="button" aria-label="Star chart" title="Star chart" data-icon="chart"></button>
+            <button class="key" type="button" aria-label="Lanes" title="Lanes" data-icon="lanes"></button>
+            <button class="key" type="button" aria-label="Whole kit" title="Whole kit" data-icon="kit"></button>
+            <button class="key" type="button" aria-label="Drum engine" title="Drum engine" data-icon="engine"></button>
+          </div>
+          <div class="minidice" id="miniDice" role="slider" tabindex="0" aria-label="Randomize this page" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="fill"></div><div class="die" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+
+        <div class="padrow">
+          <div class="padbox"><canvas id="chart" aria-label="Star chart pad: the demo beat as a constellation, with two modulator moons"></canvas></div>
+          <div class="qslider" id="qslider" role="slider" tabindex="0" aria-label="Ratchet" aria-valuetext="1/16">
+            <div class="thumb" id="qthumb">16</div>
+          </div>
+        </div>
+
+        <div class="transport">
+          <button class="key big" type="button" id="mockPlay" aria-pressed="true" aria-label="Play" data-icon="stop"></button>
+          <button class="key big rec" type="button" id="mockRec" aria-label="Record" data-icon="rec"></button>
+          <span class="spacer"></span>
+          <div class="knobmini"><svg width="44" height="44" data-knob="0.41" data-accent="#E4E9F3"></svg><span class="v">118 BPM</span><span class="l">Tempo</span></div>
+          <div class="knobmini"><svg width="44" height="44" data-knob="0.32" data-accent="#E4E9F3"></svg><span class="v">58%</span><span class="l">Swing</span></div>
+        </div>
+
+        <div class="steps" id="mockSteps"></div>
+
+        <div class="toolsrow">
+          <button class="key" type="button" aria-label="Undo" data-icon="undo"></button>
+          <button class="key" type="button" aria-label="Redo" data-icon="redo"></button>
+          <span class="spacer"></span>
+          <button class="key" type="button" aria-label="Choke" title="Choke" data-icon="choke"></button>
+          <button class="key" type="button" aria-label="Select" title="Select" data-icon="select"></button>
+          <button class="key" type="button" aria-label="Clear" title="Clear" data-icon="clear"></button>
+        </div>
+      </div>
+
+      <div class="callouts">
+        <div class="callout"><span class="dot" style="background:var(--ink)"></span><p><b>Stars are steps.</b> A step's star sits where its sound lives on the map, coloured by the sound itself. Brighter and bigger means louder.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--now)"></span><p><b>The constellation is the sequence.</b> Lines join the stars in playing order. The playhead runs along them in cyan, so you can watch the beat travel across the sky.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--m-body)"></span><p><b>Moons are modulators.</b> A moon circles the star it moves. Orbit size is depth, speed is rate, colour is the layer it targets. Steps 5 and 13 carry moons here.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--faint)"></span><p><b>Drums are fixed stars.</b> The 18 drum anchors show as faint points of the background sky. One lights up when a modulator is attached to that whole drum rather than to a step.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--on)"></span><p><b>Ratchet bar, right of the pad.</b> Rests at 1/16 and springs back when let go. Hold it higher while recording to write ratchets. Drag it here to feel the snap.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--on)"></span><p><b>Dice in the top bar.</b> One small die, always in reach, randomizes whichever page you're on. Drag it right for stronger rolls.</p></div>
+        <div class="callout"><span class="dot" style="background:var(--dim)"></span><p><b>Swing reads 50 to 75%.</b> 50% is straight, 75% puts the off-beat three quarters of the way to the next 16th. In theory 100% lands on it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== colour ===================== -->
+  <section class="part" aria-labelledby="colH">
+    <div class="parthead">
+      <span class="eyebrow">02 · Colour</span>
+      <h2 id="colH">Three lights and a sky</h2>
+      <p>The interface itself stays nearly colourless. Three signal colours each have one job, and the sounds bring the rest.</p>
+    </div>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#04060B"></div><div class="meta"><span class="name">Void</span><span class="hex">#04060B</span><span class="role">Page, pad sky</span></div></div>
+      <div class="sw"><div class="chip" style="background:#0A0E17"></div><div class="meta"><span class="name">Deck</span><span class="hex">#0A0E17</span><span class="role">Panel surfaces</span></div></div>
+      <div class="sw"><div class="chip" style="background:linear-gradient(180deg,#1E2638,#141B29)"></div><div class="meta"><span class="name">Key</span><span class="hex">#1E2638 → #141B29</span><span class="role">Raised controls</span></div></div>
+      <div class="sw"><div class="chip" style="background:#E4E9F3"></div><div class="meta"><span class="name">Ink</span><span class="hex">#E4E9F3</span><span class="role">Text, values, the cursor</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--on)"></div><div class="meta"><span class="name">Indicator</span><span class="hex">#FFD21F</span><span class="role">On, selected, highlighted</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--now)"></div><div class="meta"><span class="name">Playhead</span><span class="hex">#3BE0FF</span><span class="role">Playing now, nothing else</span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--rec)"></div><div class="meta"><span class="name">Record</span><span class="hex">#FF3B5C</span><span class="role">Armed and writing</span></div></div>
+    </div>
+    <h3>Star colours · pick one</h3>
+    <div class="palettes" id="palettes">
+      <button class="pal" type="button" data-v="stellar" aria-pressed="true"><span class="pname"><span class="name" style="font:600 12px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase">Stellar</span><span class="hex mono" style="font-size:11px;color:var(--dim)">M · K · G · F · A · B</span></span><canvas data-pal="stellar"></canvas></button>
+      <button class="pal" type="button" data-v="nebula" aria-pressed="false"><span class="pname"><span class="name" style="font:600 12px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase">Nebula</span><span class="hex mono" style="font-size:11px;color:var(--dim)">current build</span></span><canvas data-pal="nebula"></canvas></button>
+      <button class="pal" type="button" data-v="ion" aria-pressed="false"><span class="pname"><span class="name" style="font:600 12px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase">Ion</span><span class="hex mono" style="font-size:11px;color:var(--dim)">ember → ultraviolet</span></span><canvas data-pal="ion"></canvas></button>
+    </div>
+    <p><b>Stellar</b> follows real star classes: deep, low sounds glow like cool red M stars, and bright, high sounds burn blue-white like B stars. It's the most on-theme, and its blues are periwinkle rather than teal, so they stay clear of the playhead. <b>Nebula</b> is what the build uses today. <b>Ion</b> pushes saturation for punchier step tiles.</p>
+  </section>
+
+  <!-- ===================== type ===================== -->
+  <section class="part" aria-labelledby="typeH">
+    <div class="parthead">
+      <span class="eyebrow">03 · Type</span>
+      <h2 id="typeH">Ship's lettering</h2>
+      <p>Use the Type switch at the top to try each pairing across the whole board.</p>
+    </div>
+    <div class="specimen">
+      <div class="big">PIXY</div>
+      <div class="row"><span class="lbl">Tempo</span><span class="val">118 BPM</span><span class="lbl">Swing</span><span class="val">58%</span><span class="lbl">Ratchet</span><span class="val">1/32</span><span class="lbl">FM ratio</span><span class="val">×3.50</span></div>
+      <div class="row"><h2>Drum engine</h2><h3>Body · Noise · Metal · Resonator · Filter · Shape</h3></div>
+      <p>Running text for the info page sits here, set at 15px with roomy line spacing so a paragraph of instructions stays easy to read on a phone.</p>
+    </div>
+  </section>
+
+  <!-- ===================== components ===================== -->
+  <section class="part" aria-labelledby="compH">
+    <div class="parthead">
+      <span class="eyebrow">04 · Controls</span>
+      <h2 id="compH">Keys, knobs and icons</h2>
+    </div>
+    <div class="sheet">
+      <div class="cell"><h3>Keys</h3>
+        <div class="demo">
+          <button class="key" type="button">Rest</button>
+          <button class="key pressed" type="button">Pressed</button>
+          <button class="key on" type="button">On</button>
+          <button class="key rec on" type="button" aria-label="Recording" data-icon="rec"></button>
+        </div>
+        <p style="font-size:13px">Keys sit on a hard shadow and sink when pressed. Anything switched on stays sunk and lights yellow. Record lights red instead.</p>
+      </div>
+      <div class="cell"><h3>Transport</h3>
+        <div class="demo">
+          <button class="key big" type="button" aria-label="Play" data-icon="play"></button>
+          <button class="key big on" type="button" aria-label="Stop" data-icon="stop"></button>
+          <button class="key big rec" type="button" aria-label="Record" data-icon="rec"></button>
+          <button class="key big rec on" type="button" aria-label="Recording" data-icon="rec"></button>
+        </div>
+        <p style="font-size:13px">Play and record are the same size. Playing lights the play key yellow; it shows a stop square while running.</p>
+      </div>
+      <div class="cell"><h3>Knobs</h3>
+        <div class="demo">
+          <div class="knobmini"><svg width="52" height="52" data-knob="0.7" data-accent="#FF6B91"></svg><span class="v">330 ms</span><span class="l">Decay</span></div>
+          <div class="knobmini"><svg width="52" height="52" data-knob="0.55" data-accent="#7F9BFF" data-active="1"></svg><span class="v" style="background:var(--on);color:#15120A;padding:1px 4px;border-radius:3px">×1.41</span><span class="l">Turning</span></div>
+          <div class="knobmini"><svg width="52" height="52" data-knob="0.35" data-accent="#E4E9F3" data-bipolar="1"></svg><span class="v">−3 st</span><span class="l">Bipolar</span></div>
+        </div>
+      </div>
+      <div class="cell"><h3>Steps</h3>
+        <div class="demo" style="display:grid;grid-template-columns:repeat(4,44px);gap:8px">
+          <div class="stp"><span class="n">1</span></div>
+          <div class="stp on" style="--c:#FFB37A"><span class="n">2</span></div>
+          <div class="stp on now" style="--c:#C5D2FF"><span class="n">3</span></div>
+          <div class="stp on held" style="--c:#FFE7C4"><span class="n">4</span></div>
+        </div>
+        <p style="font-size:13px">Off, on, playing (lifted, cyan), held (sunk, yellow).</p>
+      </div>
+      <div class="cell" style="grid-column: 1 / -1"><h3>Icons</h3>
+        <div class="icons" id="iconSheet"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== orbits ===================== -->
+  <section class="part" aria-labelledby="orbH">
+    <div class="parthead">
+      <span class="eyebrow">05 · Modulation</span>
+      <h2 id="orbH">Orbital LFOs</h2>
+      <p>Each LFO is a body in orbit. The trace under each orbit is what the modulator outputs: the body's left-right position over time. These are real orbital solutions, computed live, not drawn curves.</p>
+    </div>
+    <div class="orbits" id="orbits"></div>
+    <h3>Standard shapes</h3>
+    <div class="basic" id="basic"></div>
+  </section>
+
+  <!-- ===================== timing ===================== -->
+  <section class="part" aria-labelledby="timH">
+    <div class="parthead">
+      <span class="eyebrow">06 · Recording</span>
+      <h2 id="timH">When does a ratchet move count?</h2>
+      <p>Ratchet bar moves are written per 16th: whatever the bar says applies to the whole step. A move made late in a step is more likely meant for the next one, so each step has a catch window. Drag across the timeline to drop a move and see where it lands.</p>
+    </div>
+    <div class="timing">
+      <canvas id="timing" aria-label="Timeline of four 16th steps with catch windows"></canvas>
+      <div class="ctl"><label for="win">Catch window</label><input id="win" type="range" min="10" max="90" value="50"><span id="winv">50%</span></div>
+      <div class="readout" id="tread">Tap or drag on the timeline.</div>
+    </div>
+    <ol class="decisions">
+      <li><span>Proposal: a move in the first <b>half</b> of a step counts for that step; a move in the second half is held for the next one. That's the same as rounding to the nearest 16th, which is how most drum machines quantize live input.</span></li>
+      <li><span>Letting go of the bar is a move too: it writes 1/16 into the next step it catches, so a ratchet ends cleanly.</span></li>
+      <li><span>While stopped, the bar just changes how fast the pad retriggers under your finger, as now.</span></li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  /* ---------- icons ---------- */
+  const I = {
+    chart: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 17l5-9 5 6 4-8" opacity=".55"/><circle cx="5" cy="17" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="2.2" fill="currentColor" stroke="none"/><circle cx="19" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>',
+    lanes: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>',
+    kit: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><circle cx="12" cy="16" r="1.3" fill="currentColor" stroke="none"/><path d="M6.2 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="8.8" cy="7.4" rx="2.6" ry="1.2"/><path d="M12.6 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="15.2" cy="7.4" rx="2.6" ry="1.2"/><path d="M1.2 4.6l4.4-1.4M3.4 4v17M22.8 4.6l-4.4-1.4M20.6 4v17"/></svg>',
+    engine: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="7" rx="8" ry="3.4"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3"/></svg>',
+    play: '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>',
+    rec: '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="6.5" fill="currentColor"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2"/></svg>',
+    redo: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2"/></svg>',
+    // choke: a ringing wave cut off by a wall
+    choke: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.2-6 2.4-6 3.6 0s2.4 6 3.6 0 2.2-4.4 3.3 0"/><path d="M15.5 4.5v15" stroke-width="2.4"/><path d="M18.5 12h3.5" opacity=".45"/></svg>',
+    select: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3.2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>',
+    clear: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 7V4.5h4V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>',
+    info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  };
+  $$('[data-icon]').forEach((el) => { el.innerHTML = I[el.dataset.icon]; });
+  const ICON_LIST = [['chart', 'Star chart (pad)'], ['lanes', 'Lanes'], ['kit', 'Whole kit'], ['engine', 'Drum engine'], ['info', 'Info'], ['play', 'Play'], ['stop', 'Stop'], ['rec', 'Record'], ['undo', 'Undo'], ['redo', 'Redo'], ['choke', 'Choke'], ['select', 'Select'], ['clear', 'Clear']];
+  $('#iconSheet').innerHTML = ICON_LIST.map(([k, n]) => `<div class="ic"><span class="key">${I[k]}</span><span class="cap">${n}</span></div>`).join('');
+
+  /* ---------- knobs (static drawings) ---------- */
+  function drawKnob(svg) {
+    const v = +svg.dataset.knob, acc = svg.dataset.accent, bip = !!svg.dataset.bipolar, act = !!svg.dataset.active;
+    const S = +svg.getAttribute('width'), c = S / 2, R = S / 2 - 4, sweep = 270;
+    const pt = (a) => [c + R * Math.sin(a * Math.PI / 180), c - R * Math.cos(a * Math.PI / 180)];
+    const arc = (a0, a1) => { const [x0, y0] = pt(Math.min(a0, a1)), [x1, y1] = pt(Math.max(a0, a1)); return `M${x0} ${y0}A${R} ${R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+    const ang = -sweep / 2 + v * sweep;
+    svg.setAttribute('viewBox', `0 0 ${S} ${S}`);
+    svg.innerHTML = `<path d="${arc(-135, 135)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3.5" stroke-linecap="round"/>` +
+      `<path d="${arc(bip ? 0 : -135, ang)}" fill="none" stroke="${acc}" stroke-width="3.5" stroke-linecap="round"/>` +
+      `<g transform="rotate(${ang} ${c} ${c})"><circle cx="${c}" cy="${c}" r="${S * 0.31}" fill="#1A2131" stroke="${act ? '#FFD21F' : '#2B3650'}" stroke-width="${act ? 2 : 1}"/>` +
+      `<rect x="${c - 1.2}" y="${c - S * 0.27}" width="2.4" height="${S * 0.11}" rx="1.2" fill="#E4E9F3"/></g>`;
+  }
+  $$('svg[data-knob]').forEach(drawKnob);
+
+  /* ---------- star colour palettes: t = 0 (deep/low) .. 1 (bright/high) ---------- */
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const ramp = (stops) => (t) => {
+    t = clamp(t, 0, 1) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(t)), f = t - i, a = hex(stops[i]), b = hex(stops[i + 1]);
+    return [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+  };
+  const hsl = (h, s, l) => { const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l); const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)); return [f(0) * 255, f(8) * 255, f(4) * 255]; };
+  const PALETTES = {
+    // M red dwarf -> K orange -> G pale gold -> F white -> A blue-white -> B blue
+    stellar: ramp(['#FF6A3D', '#FF9A4A', '#FFD9A8', '#F4F1FF', '#BFCBFF', '#8EA4FF']),
+    nebula: (t) => hsl((30 - 110 * t + 360) % 360, 0.68, 0.56),
+    ion: ramp(['#FF4D2E', '#FF2E7A', '#E040FB', '#9B5CFF', '#6E7BFF']),
+  };
+  let palName = 'stellar';
+  const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+  // the 18 drums: position on the map and brightness position t
+  const ANCHORS = [
+    ['kick', .12, .10, .40], ['sub', .31, .05, .21], ['low tom', .14, .34, .30], ['high tom', .14, .53, .35],
+    ['conga', .13, .75, .46], ['rim', .31, .87, .68], ['snare', .45, .42, .64], ['clap', .67, .30, .69],
+    ['closed hat', .70, .86, .93], ['open hat', .86, .72, .94], ['cymbal', .92, .93, .92], ['cowbell', .55, .68, .53],
+    ['zap', .86, .14, .42], ['rumble', .58, .08, .25], ['tabla', .30, .24, .41], ['marimba', .33, .63, .49],
+    ['bell', .84, .46, .56], ['fuzz', .46, .20, .33],
+  ];
+  function tAt(x, y) { // gaussian blend of anchor brightness, like the app's map
+    let s = 0, acc = 0;
+    for (const a of ANCHORS) { const d = (a[1] - x) ** 2 + (a[2] - y) ** 2, w = Math.exp(-d / (2 * 0.09 * 0.09)); s += w; acc += w * a[3]; }
+    return acc / (s || 1);
+  }
+  // demo beat from the app (step index, x, y)
+  const BEAT = [[0, .12, .10], [2, .70, .86], [3, .31, .87], [4, .45, .42], [6, .70, .86], [7, .86, .72], [8, .12, .10], [10, .70, .86], [11, .16, .14], [12, .55, .36], [13, .13, .72], [14, .70, .86], [15, .14, .34]];
+  const stepAt = new Map(BEAT.map((b) => [b[0], { x: b[1], y: b[2] }]));
+
+  function drawPalStrip(cv) {
+    const r = cv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.max(2, r.width * d); cv.height = Math.max(2, r.height * d);
+    const g = cv.getContext('2d'), f = PALETTES[cv.dataset.pal], W = cv.width, H = cv.height;
+    for (let i = 0; i < W; i++) { g.fillStyle = rgb(f(i / W)); g.fillRect(i, 0, 1.5, H * 0.38); }
+    const order = ANCHORS.slice().sort((a, b) => a[3] - b[3]);
+    order.forEach((a, k) => {
+      const x = (k + 0.5) / order.length * W, y = H * 0.72, rr = H * 0.13;
+      g.fillStyle = rgb(f(a[3]), 0.25); g.beginPath(); g.arc(x, y, rr * 1.9, 0, 6.283); g.fill();
+      g.fillStyle = rgb(f(a[3])); g.beginPath(); g.arc(x, y, rr, 0, 6.283); g.fill();
+    });
+  }
+  const palCanvases = $$('canvas[data-pal]');
+
+  /* ---------- switchers ---------- */
+  function bindSeg(seg, apply) {
+    $$('button', seg).forEach((b) => b.addEventListener('click', () => {
+      $$('button', seg).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      apply(b.dataset.v);
+    }));
+  }
+  bindSeg($('#typeSeg'), (v) => {
+    if (v === 'console') document.documentElement.removeAttribute('data-type'); else document.documentElement.setAttribute('data-type', v);
+  });
+  function setPalette(v) {
+    palName = v;
+    $$('#palSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === v)));
+    $$('.pal').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === v)));
+    buildSky(); renderSteps();
+  }
+  bindSeg($('#palSeg'), setPalette);
+  $$('.pal').forEach((b) => b.addEventListener('click', () => setPalette(b.dataset.v)));
+
+  /* ---------- canvas helper ---------- */
+  function fit(cv) {
+    const r = cv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+    const w = Math.max(2, Math.round(r.width * d)), h = Math.max(2, Math.round(r.height * d));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; return true; }
+    return false;
+  }
+
+  /* ---------- the star chart ---------- */
+  const chart = $('#chart'), cg = chart.getContext('2d');
+  let sky = null;
+  // deterministic background stars so the sky doesn't reshuffle on resize
+  const BG = (() => { let s = 7; const r = () => (s = (s * 16807) % 2147483647) / 2147483647; return Array.from({ length: 170 }, () => [r(), r(), r() ** 3, r()]); })();
+  function buildSky() {
+    fit(chart);
+    const W = chart.width, H = chart.height, off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    const g = off.getContext('2d'), f = PALETTES[palName];
+    g.fillStyle = '#03050A'; g.fillRect(0, 0, W, H);
+    // faint nebula: the sound map, very low
+    const N = 48, img = g.createImageData(N, N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const c = f(tAt((i + .5) / N, 1 - (j + .5) / N)), p = (j * N + i) * 4, k = 0.11;
+      img.data[p] = 3 + c[0] * k; img.data[p + 1] = 5 + c[1] * k; img.data[p + 2] = 10 + c[2] * k; img.data[p + 3] = 255;
+    }
+    const tmp = document.createElement('canvas'); tmp.width = N; tmp.height = N; tmp.getContext('2d').putImageData(img, 0, 0);
+    g.imageSmoothingQuality = 'high'; g.drawImage(tmp, 0, 0, W, H);
+    for (const [x, y, b, tw] of BG) { g.fillStyle = `rgba(220,228,255,${0.12 + b * 0.6})`; g.beginPath(); g.arc(x * W, y * H, (0.4 + b * 1.1) * (W / 400), 0, 6.283); g.fill(); }
+    // drums as fixed stars: tiny crosses
+    const u = W / 400;
+    for (const a of ANCHORS) {
+      const x = a[1] * W, y = (1 - a[2]) * H;
+      g.strokeStyle = rgb(f(a[3]), 0.35); g.lineWidth = 1 * u;
+      g.beginPath(); g.moveTo(x - 4 * u, y); g.lineTo(x + 4 * u, y); g.moveTo(x, y - 4 * u); g.lineTo(x, y + 4 * u); g.stroke();
+    }
+    sky = off;
+  }
+
+  let playing = true, t0 = performance.now();
+  const BPM = 118, stepDur = 60 / BPM / 4;
+  const MOONS = [ // step, orbit radius (px at 400), period s, colour, phase
+    { step: 13, r: 17, per: 2.2, col: '#FF6B91', ph: 0, ecc: 0 },
+    { step: 4, r: 15, per: 1.4, col: '#FFAA3D', ph: 1, ecc: 0.55 },
+    { step: 4, r: 25, per: 3.6, col: '#A98BFF', ph: 2.5, ecc: 0 },
+  ];
+  function curStep(now) { return playing ? Math.floor(((now - t0) / 1000) / stepDur) % 16 : -1; }
+  function stepFrac(now) { return playing ? (((now - t0) / 1000) / stepDur) % 1 : 0; }
+
+  function drawChart(now) {
+    if (fit(chart) || !sky) buildSky();
+    const W = chart.width, H = chart.height, u = W / 400, f = PALETTES[palName];
+    cg.drawImage(sky, 0, 0);
+    const P = (s) => [s.x * W, (1 - s.y) * H];
+    const order = [...stepAt.keys()].sort((a, b) => a - b);
+    // constellation lines, step order, closing the loop
+    cg.lineWidth = 1 * u; cg.strokeStyle = 'rgba(200,212,255,.22)';
+    cg.beginPath();
+    order.forEach((i, k) => { const [x, y] = P(stepAt.get(i)); if (k) cg.lineTo(x, y); else cg.moveTo(x, y); });
+    cg.closePath(); cg.stroke();
+    // playhead: the segment being travelled, lit cyan, with a comet head
+    const cs = curStep(now);
+    if (cs >= 0) {
+      let a = -1, b = -1;
+      for (let k = 0; k < order.length; k++) if (order[k] <= cs) a = k;
+      if (a < 0) a = order.length - 1;
+      b = (a + 1) % order.length;
+      const sa = order[a], sb = order[b];
+      const span = ((sb - sa + 16) % 16) || 16;
+      const prog = clamp((((cs - sa + 16) % 16) + stepFrac(now)) / span, 0, 1);
+      const [x0, y0] = P(stepAt.get(sa)), [x1, y1] = P(stepAt.get(sb));
+      const hx = lerp(x0, x1, prog), hy = lerp(y0, y1, prog);
+      const grad = cg.createLinearGradient(x0, y0, hx, hy);
+      grad.addColorStop(0, 'rgba(59,224,255,0)'); grad.addColorStop(1, 'rgba(59,224,255,.9)');
+      cg.strokeStyle = grad; cg.lineWidth = 2 * u;
+      cg.beginPath(); cg.moveTo(x0, y0); cg.lineTo(hx, hy); cg.stroke();
+      cg.fillStyle = '#3BE0FF'; cg.beginPath(); cg.arc(hx, hy, 2.2 * u, 0, 6.283); cg.fill();
+    }
+    // stars, deduplicated by position (several steps can share one)
+    const seen = new Map();
+    for (const i of order) { const s = stepAt.get(i), k = s.x + ',' + s.y; if (!seen.has(k)) seen.set(k, []); seen.get(k).push(i); }
+    for (const list of seen.values()) {
+      const s = stepAt.get(list[0]), [x, y] = P(s), c = f(tAt(s.x, s.y));
+      const lit = list.includes(cs);
+      const age = lit ? stepFrac(now) : 1;
+      const R = (4 + list.length * 0.9) * u;
+      const glow = cg.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
+      glow.addColorStop(0, rgb(c, lit ? 0.55 : 0.28)); glow.addColorStop(1, rgb(c, 0));
+      cg.fillStyle = glow; cg.beginPath(); cg.arc(x, y, R * 5, 0, 6.283); cg.fill();
+      // four-point diffraction spikes on bright stars
+      cg.strokeStyle = rgb(c, lit ? 0.75 : 0.35); cg.lineWidth = 1 * u;
+      const L = R * (lit ? 3.4 - age : 2.2);
+      cg.beginPath(); cg.moveTo(x - L, y); cg.lineTo(x + L, y); cg.moveTo(x, y - L); cg.lineTo(x, y + L); cg.stroke();
+      cg.fillStyle = rgb(c); cg.beginPath(); cg.arc(x, y, R * 0.55, 0, 6.283); cg.fill();
+      cg.fillStyle = 'rgba(255,255,255,.9)'; cg.beginPath(); cg.arc(x, y, R * 0.25, 0, 6.283); cg.fill();
+      if (lit) { cg.strokeStyle = 'rgba(59,224,255,.85)'; cg.lineWidth = 1.5 * u; cg.beginPath(); cg.arc(x, y, R * 1.6, 0, 6.283); cg.stroke(); }
+      // step numbers, small and quiet
+      cg.fillStyle = 'rgba(228,233,243,.55)'; cg.font = `500 ${8.5 * u}px "JetBrains Mono", monospace`;
+      cg.textAlign = 'left'; cg.textBaseline = 'middle';
+      cg.fillText(list.map((i) => i + 1).join(' '), x + R * 1.5 + 2 * u, y - R * 1.4);
+    }
+    // moons
+    const tsec = now / 1000;
+    for (const m of MOONS) {
+      const s = stepAt.get(m.step); if (!s) continue;
+      const [x, y] = P(s), R = m.r * u, b = R * Math.sqrt(1 - m.ecc * m.ecc);
+      // orbit path (faint)
+      cg.strokeStyle = 'rgba(200,212,255,.16)'; cg.lineWidth = 1 * u; cg.setLineDash([2 * u, 3 * u]);
+      cg.beginPath(); cg.ellipse(x - m.ecc * R, y, R, b, 0, 0, 6.283); cg.stroke(); cg.setLineDash([]);
+      // kepler position: the moon whips round the near side
+      const M = 2 * Math.PI * (reduce ? 0.2 : tsec / m.per) + m.ph;
+      const E = kepler(M, m.ecc);
+      const mx = x + R * (Math.cos(E) - m.ecc), my = y + b * Math.sin(E);
+      cg.fillStyle = m.col; cg.beginPath(); cg.arc(mx, my, 2.6 * u, 0, 6.283); cg.fill();
+      cg.strokeStyle = 'rgba(3,5,10,.9)'; cg.lineWidth = 1 * u; cg.stroke();
+    }
+    // the cursor: you
+    const cx = 0.38 * W, cy = (1 - 0.56) * H;
+    cg.fillStyle = 'rgba(3,5,10,.9)'; cg.beginPath(); cg.arc(cx, cy, 6.5 * u, 0, 6.283); cg.fill();
+    cg.fillStyle = '#fff'; cg.beginPath(); cg.arc(cx, cy, 4.5 * u, 0, 6.283); cg.fill();
+  }
+
+  function kepler(M, e) { // solve E - e sin E = M
+    let E = e < 0.8 ? M : Math.PI;
+    for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    return E;
+  }
+
+  /* ---------- mock steps ---------- */
+  const mockSteps = $('#mockSteps');
+  mockSteps.innerHTML = Array.from({ length: 16 }, (_, i) => `<div class="stp" data-i="${i}"><span class="n">${i + 1}</span></div>`).join('');
+  function renderSteps() {
+    const f = PALETTES[palName];
+    $$('.stp', mockSteps).forEach((el, i) => {
+      const s = stepAt.get(i);
+      el.classList.toggle('on', !!s);
+      if (s) el.style.setProperty('--c', rgb(f(tAt(s.x, s.y))));
+    });
+  }
+  renderSteps();
+  let lastCs = -2;
+  function tickSteps(now) {
+    const cs = curStep(now);
+    if (cs === lastCs) return;
+    lastCs = cs;
+    $$('.stp', mockSteps).forEach((el, i) => el.classList.toggle('now', i === cs));
+  }
+
+  $('#mockPlay').addEventListener('click', (e) => {
+    playing = !playing; t0 = performance.now();
+    e.currentTarget.setAttribute('aria-pressed', String(playing));
+    e.currentTarget.innerHTML = I[playing ? 'stop' : 'play'];
+  });
+  $('#mockRec').addEventListener('click', (e) => e.currentTarget.classList.toggle('on'));
+  $$('.navrow .key').forEach((b) => b.addEventListener('click', () => { $$('.navrow .key').forEach((x) => x.classList.toggle('on', x === b)); }));
+  $$('.toolsrow .key[data-icon="choke"], .toolsrow .key[data-icon="select"]').forEach((b) => b.addEventListener('click', () => b.classList.toggle('on')));
+
+  /* ---------- ratchet bar: rests at 1/16, springs back ---------- */
+  const QV = [16, 24, 32, 40, 48, 64];
+  const qs = $('#qslider'), qthumb = $('#qthumb');
+  function layoutQ() {
+    const h = qs.getBoundingClientRect().height, pad = 18;
+    qs.querySelectorAll('.tick,.tlabel').forEach((e) => e.remove());
+    QV.forEach((v, i) => {
+      const y = pad + (h - pad * 2) * (i / (QV.length - 1));
+      const t = document.createElement('div'); t.className = 'tick'; t.style.bottom = y + 'px'; qs.appendChild(t);
+    });
+    placeQ(0);
+  }
+  function placeQ(i) {
+    const h = qs.getBoundingClientRect().height, pad = 18;
+    qthumb.style.bottom = (pad + (h - pad * 2) * (i / (QV.length - 1))) + 'px';
+    qthumb.textContent = QV[i];
+    qs.setAttribute('aria-valuetext', '1/' + QV[i]);
+  }
+  let qdrag = null;
+  qs.addEventListener('pointerdown', (e) => { qdrag = e.pointerId; try { qs.setPointerCapture(e.pointerId); } catch (_) {} qs.classList.add('dragging'); moveQ(e); });
+  qs.addEventListener('pointermove', (e) => { if (qdrag === e.pointerId) moveQ(e); });
+  const qEnd = (e) => { if (qdrag !== e.pointerId) return; qdrag = null; qs.classList.remove('dragging'); placeQ(0); };
+  qs.addEventListener('pointerup', qEnd); qs.addEventListener('pointercancel', qEnd);
+  function moveQ(e) {
+    const r = qs.getBoundingClientRect(), pad = 18;
+    const f = clamp((r.bottom - e.clientY - pad) / (r.height - pad * 2), 0, 1);
+    placeQ(Math.round(f * (QV.length - 1)));
+  }
+  qs.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp') { e.preventDefault(); placeQ(3); setTimeout(() => placeQ(0), 400); } });
+
+  /* ---------- mini dice ---------- */
+  const md = $('#miniDice'), die = $('.die', md), mfill = $('.fill', md);
+  function placeDie(s) {
+    const w = md.getBoundingClientRect().width, travel = w - 28 - 8;
+    die.style.left = (4 + s * travel) + 'px'; die.style.transform = `rotate(${s * 540}deg)`;
+    mfill.style.width = s > 0 ? (4 + s * travel + 14) + 'px' : '0';
+  }
+  let ddrag = null;
+  const dieS = (e) => { const r = md.getBoundingClientRect(); return clamp((e.clientX - r.left - 18) / (r.width - 36), 0, 1); };
+  md.addEventListener('pointerdown', (e) => { ddrag = e.pointerId; try { md.setPointerCapture(e.pointerId); } catch (_) {} md.classList.add('dragging'); placeDie(dieS(e)); });
+  md.addEventListener('pointermove', (e) => { if (ddrag === e.pointerId) placeDie(dieS(e)); });
+  const dEnd = (e) => { if (ddrag !== e.pointerId) return; ddrag = null; md.classList.remove('dragging'); placeDie(0); };
+  md.addEventListener('pointerup', dEnd); md.addEventListener('pointercancel', dEnd);
+
+  /* ==========================================================================
+     Orbital LFOs. Each returns {x, y} (path, roughly -1..1) for phase p in
+     cycles; the LFO output is x. Every one is a real solution: Kepler's
+     equation, a precessing Kepler orbit, an L2 Lissajous (halo-family)
+     orbit, a geocentric planet with retrograde loops, a 2:1 resonance, and
+     the Chenciner–Montgomery three-body figure-eight.
+     ========================================================================== */
+  // three-body figure-eight: integrate once with leapfrog, sample by phase
+  const FIG8 = (() => {
+    const T = 6.32591398, steps = 4000, dt = T / steps;
+    let p = [[0.97000436, -0.24308753], [-0.97000436, 0.24308753], [0, 0]];
+    const v3 = [-0.93240737, -0.86473146];
+    let v = [[-v3[0] / 2, -v3[1] / 2], [-v3[0] / 2, -v3[1] / 2], [v3[0], v3[1]]];
+    const acc = (p) => p.map((pi, i) => {
+      let ax = 0, ay = 0;
+      p.forEach((pj, j) => { if (i === j) return; const dx = pj[0] - pi[0], dy = pj[1] - pi[1], r3 = Math.pow(dx * dx + dy * dy, 1.5); ax += dx / r3; ay += dy / r3; });
+      return [ax, ay];
+    });
+    const out = []; let a = acc(p);
+    for (let s = 0; s <= steps; s++) {
+      out.push(p.map((q) => [q[0], q[1]]));
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+      p = p.map((pi, i) => [pi[0] + v[i][0] * dt, pi[1] + v[i][1] * dt]);
+      a = acc(p);
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+    }
+    return out;
+  })();
+  const fig8At = (ph) => FIG8[Math.floor((((ph % 1) + 1) % 1) * (FIG8.length - 1))];
+
+  const ORBITS = [
+    { name: 'Circular', note: 'The baseline: a perfectly round orbit is a sine wave.', ctl: null,
+      at: (p) => ({ x: Math.cos(2 * Math.PI * p), y: Math.sin(2 * Math.PI * p) }) },
+    { name: 'Kepler', note: 'An elliptical orbit. The body crawls far out and whips past the star, so the wave lingers then snaps.', ctl: ['Eccentricity', 0, 0.9, 0.6],
+      at: (p, e) => { const E = kepler(2 * Math.PI * p, e), b = Math.sqrt(1 - e * e); return { x: (Math.cos(E) - e) / (1 + e), y: b * Math.sin(E) / (1 + e) }; } },
+    { name: 'Precession', note: 'A Kepler orbit whose long axis slowly turns, like Mercury’s. The snap drifts in and out of phase.', ctl: ['Precession', 0.02, 0.3, 0.12],
+      at: (p, k) => { const e = 0.5, E = kepler(2 * Math.PI * p, e), b = Math.sqrt(1 - e * e), x0 = (Math.cos(E) - e) / 1.5, y0 = b * Math.sin(E) / 1.5, w = 2 * Math.PI * k * p; return { x: x0 * Math.cos(w) - y0 * Math.sin(w), y: x0 * Math.sin(w) + y0 * Math.cos(w) }; }, cycles: 6 },
+    { name: 'Halo · L2', note: 'A Lissajous orbit around a Lagrange point, the kind JWST flies. Two near-equal frequencies beat slowly against each other.', ctl: ['Detune', 0.01, 0.25, 0.08],
+      at: (p, d) => ({ x: Math.sin(2 * Math.PI * p), y: 0.85 * Math.sin(2 * Math.PI * p * (1 + d) + 0.6) }), cycles: 8 },
+    { name: 'Retrograde', note: 'Mars seen from Earth. It mostly drifts one way, then loops back for a while. A ramp that stutters.', ctl: ['Period ratio', 1.3, 3, 1.88],
+      at: (p, k) => { const a1 = 2 * Math.PI * p * k, a2 = 2 * Math.PI * p; const x = 1.52 * Math.cos(a2) - Math.cos(a1), y = 1.52 * Math.sin(a2) - Math.sin(a1); return { x: x / 2.6, y: y / 2.6 }; }, cycles: 2 },
+    { name: 'Resonance 2:1', note: 'Two moons locked in a 2:1 resonance, like Io and Europa. The output is their combined pull: a repeating double pulse.', ctl: ['Balance', 0, 1, 0.5],
+      at: (p, m) => { const a = 2 * Math.PI * p; const x = (1 - m) * Math.cos(a) + m * Math.cos(2 * a); const y = (1 - m) * Math.sin(a) + m * Math.sin(2 * a); return { x, y, two: [[Math.cos(a), Math.sin(a)], [0.63 * Math.cos(2 * a), 0.63 * Math.sin(2 * a)]] }; } },
+    { name: 'Figure-eight', note: 'Three equal stars chasing each other on one figure-eight, a real three-body solution (Chenciner & Montgomery, 2000).', ctl: null,
+      at: (p) => { const s = fig8At(p); return { x: s[0][0] / 1.1, y: s[0][1] / 1.1, three: s }; } },
+  ];
+
+  const orbitsEl = $('#orbits');
+  ORBITS.forEach((o, i) => {
+    const el = document.createElement('div'); el.className = 'orb';
+    el.innerHTML = `<canvas aria-label="${o.name} orbit and its LFO output"></canvas><div class="meta"><h3>${o.name}</h3><p>${o.note}</p>` +
+      (o.ctl ? `<label class="ctl"><span>${o.ctl[0]}</span><input type="range" id="orb${i}" min="${o.ctl[1]}" max="${o.ctl[2]}" step="0.01" value="${o.ctl[3]}"><span class="v">${o.ctl[3]}</span></label>` : '') + '</div>';
+    orbitsEl.appendChild(el);
+    o.cv = $('canvas', el); o.g = o.cv.getContext('2d');
+    o.val = o.ctl ? o.ctl[3] : 0;
+    const inp = $('input', el);
+    if (inp) inp.addEventListener('input', () => { o.val = +inp.value; $('.v', el).textContent = (+inp.value).toFixed(2); });
+  });
+
+  function drawOrbit(o, now) {
+    fit(o.cv);
+    const g = o.g, W = o.cv.width, H = o.cv.height, u = W / 300;
+    g.fillStyle = '#03050A'; g.fillRect(0, 0, W, H);
+    const oh = H * 0.62, cx = W / 2, cy = oh / 2, R = Math.min(W * 0.4, oh * 0.42);
+    const cycles = o.cycles || 1, per = 3.2 * cycles;
+    const ph = reduce ? 0.3 : ((now / 1000) / per) % 1 * cycles;
+    // path
+    g.strokeStyle = 'rgba(200,212,255,.22)'; g.lineWidth = 1 * u; g.beginPath();
+    const N = 360 * cycles;
+    for (let k = 0; k <= N; k++) { const q = o.at(k / N * cycles, o.val); const X = cx + q.x * R, Y = cy - q.y * R; if (k) g.lineTo(X, Y); else g.moveTo(X, Y); }
+    g.stroke();
+    // central body
+    if (o.name !== 'Figure-eight' && o.name !== 'Halo · L2') {
+      const sx = cx; // the star (or Earth) sits at the origin
+      g.fillStyle = '#FFD9A8'; g.beginPath(); g.arc(sx, cy, 4 * u, 0, 6.283); g.fill();
+      g.fillStyle = 'rgba(255,217,168,.18)'; g.beginPath(); g.arc(sx, cy, 10 * u, 0, 6.283); g.fill();
+    }
+    if (o.name === 'Halo · L2') { g.strokeStyle = 'rgba(200,212,255,.4)'; g.beginPath(); g.moveTo(cx - 4 * u, cy); g.lineTo(cx + 4 * u, cy); g.moveTo(cx, cy - 4 * u); g.lineTo(cx, cy + 4 * u); g.stroke(); }
+    const q = o.at(ph, o.val);
+    if (q.three) {
+      ['#FF6B91', '#7F9BFF', '#FFAA3D'].forEach((c, k) => { g.fillStyle = c; g.beginPath(); g.arc(cx + q.three[k][0] / 1.1 * R, cy - q.three[k][1] / 1.1 * R, (k ? 3 : 4) * u, 0, 6.283); g.fill(); });
+    } else if (q.two) {
+      g.fillStyle = 'rgba(169,139,255,.8)'; g.beginPath(); g.arc(cx + q.two[1][0] * R, cy - q.two[1][1] * R, 3 * u, 0, 6.283); g.fill();
+      g.fillStyle = '#FF6B91'; g.beginPath(); g.arc(cx + q.two[0][0] * R, cy - q.two[0][1] * R, 3 * u, 0, 6.283); g.fill();
+      g.fillStyle = '#FFD21F'; g.beginPath(); g.arc(cx + q.x * R * 0.5, cy - q.y * R * 0.5, 2.5 * u, 0, 6.283); g.fill();
+    } else {
+      g.fillStyle = '#FF6B91'; g.beginPath(); g.arc(cx + q.x * R, cy - q.y * R, 4 * u, 0, 6.283); g.fill();
+    }
+    // projection line down to the trace
+    const bx = cx + q.x * R;
+    g.strokeStyle = 'rgba(255,210,31,.35)'; g.setLineDash([2 * u, 3 * u]); g.beginPath(); g.moveTo(bx, cy - q.y * R); g.lineTo(bx, oh + 4 * u); g.stroke(); g.setLineDash([]);
+    // LFO trace: x over one window, scrolling
+    const ty0 = oh + 8 * u, th = H - ty0 - 8 * u, mid = ty0 + th / 2;
+    g.strokeStyle = 'rgba(255,255,255,.07)'; g.beginPath(); g.moveTo(8 * u, mid); g.lineTo(W - 8 * u, mid); g.stroke();
+    g.strokeStyle = '#FFD21F'; g.lineWidth = 1.6 * u; g.beginPath();
+    const span = cycles * 1.0;
+    for (let k = 0; k <= 200; k++) {
+      const pp = ph - span + (k / 200) * span, v = o.at(pp, o.val).x;
+      const X = 8 * u + (W - 16 * u) * k / 200, Y = mid - clamp(v, -1.2, 1.2) * th / 2.4;
+      if (k) g.lineTo(X, Y); else g.moveTo(X, Y);
+    }
+    g.stroke();
+  }
+
+  /* ---------- standard shapes ---------- */
+  const BASIC = [
+    ['Sine', (p) => Math.sin(2 * Math.PI * p)],
+    ['Triangle', (p) => 1 - 4 * Math.abs(((p + 0.25) % 1) - 0.5)],
+    ['Saw', (p) => 2 * (p % 1) - 1],
+    ['Square', (p) => (p % 1 < 0.5 ? 1 : -1)],
+    ['Random', (p) => { const n = Math.floor(p * 4); const x = Math.sin(n * 91.7) * 43758.5; return 2 * (x - Math.floor(x)) - 1; }],
+  ];
+  const basicEl = $('#basic');
+  BASIC.forEach(([n]) => { const d = document.createElement('div'); d.className = 'b'; d.innerHTML = `<canvas aria-label="${n} wave"></canvas><h3>${n}</h3>`; basicEl.appendChild(d); });
+  function drawBasic() {
+    $$('canvas', basicEl).forEach((cv, i) => {
+      fit(cv); const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+      g.clearRect(0, 0, W, H); g.strokeStyle = '#E4E9F3'; g.lineWidth = 1.5 * (W / 120); g.beginPath();
+      for (let k = 0; k <= 160; k++) { const p = k / 160 * 2, v = BASIC[i][1](p); const X = W * k / 160, Y = H / 2 - v * H * 0.38; if (k) g.lineTo(X, Y); else g.moveTo(X, Y); }
+      g.stroke();
+    });
+  }
+
+  /* ---------- record timing demo ---------- */
+  const tcv = $('#timing'), tg = tcv.getContext('2d'), win = $('#win');
+  let mark = 1.35; // in steps, from the left edge of step 0
+  function drawTiming() {
+    fit(tcv);
+    const W = tcv.width, H = tcv.height, u = W / 600, n = 4, sw = (W - 20 * u) / n, x0 = 10 * u;
+    const w = +win.value / 100;
+    tg.clearRect(0, 0, W, H);
+    tg.font = `500 ${11 * u}px "JetBrains Mono", monospace`; tg.textBaseline = 'top'; tg.textAlign = 'left';
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * sw;
+      tg.fillStyle = 'rgba(255,210,31,.12)'; tg.fillRect(x, 26 * u, sw * w, H - 60 * u);
+      tg.fillStyle = 'rgba(255,255,255,.03)'; tg.fillRect(x + sw * w, 26 * u, sw * (1 - w), H - 60 * u);
+      tg.strokeStyle = '#2B3650'; tg.lineWidth = 1 * u; tg.beginPath(); tg.moveTo(x, 18 * u); tg.lineTo(x, H - 26 * u); tg.stroke();
+      tg.fillStyle = '#8590A8'; tg.fillText(`STEP ${i + 5}`, x + 6 * u, 6 * u);
+    }
+    tg.strokeStyle = '#2B3650'; tg.beginPath(); tg.moveTo(x0 + n * sw, 18 * u); tg.lineTo(x0 + n * sw, H - 26 * u); tg.stroke();
+    // the move and where it lands
+    const step = Math.floor(mark), frac = mark - step;
+    const lands = frac < w ? step : step + 1;
+    const mx = x0 + mark * sw;
+    tg.strokeStyle = '#FFD21F'; tg.lineWidth = 2 * u; tg.beginPath(); tg.moveTo(mx, 26 * u); tg.lineTo(mx, H - 34 * u); tg.stroke();
+    tg.fillStyle = '#FFD21F'; tg.beginPath(); tg.arc(mx, 26 * u, 4 * u, 0, 6.283); tg.fill();
+    if (lands < n) {
+      const lx = x0 + lands * sw;
+      tg.fillStyle = 'rgba(59,224,255,.18)'; tg.fillRect(lx, H - 24 * u, sw, 14 * u);
+      tg.fillStyle = '#3BE0FF'; tg.textBaseline = 'middle'; tg.fillText('1/32 here', lx + 6 * u, H - 17 * u);
+    }
+    $('#tread').textContent = `Move at ${Math.round(frac * 100)}% through step ${step + 5} → ${lands < n ? 'counts for step ' + (lands + 5) : 'counts for the next step'}${lands === step ? '' : ' (late, so held for the next one)'}.`;
+    $('#winv').textContent = win.value + '%';
+  }
+  win.addEventListener('input', drawTiming);
+  let tdrag = null;
+  const tSet = (e) => { const r = tcv.getBoundingClientRect(); mark = clamp((e.clientX - r.left - 10 * (r.width / 600)) / ((r.width - 20 * (r.width / 600)) / 4), 0, 3.999); drawTiming(); };
+  tcv.addEventListener('pointerdown', (e) => { tdrag = e.pointerId; try { tcv.setPointerCapture(e.pointerId); } catch (_) {} tSet(e); });
+  tcv.addEventListener('pointermove', (e) => { if (tdrag === e.pointerId) tSet(e); });
+  tcv.addEventListener('pointerup', () => { tdrag = null; });
+
+  /* ---------- loop ---------- */
+  function frame(now) {
+    drawChart(now); tickSteps(now);
+    ORBITS.forEach((o) => drawOrbit(o, now));
+    if (!reduce) requestAnimationFrame(frame);
+  }
+  function redrawStatic() { palCanvases.forEach(drawPalStrip); drawBasic(); drawTiming(); layoutQ(); placeDie(0); buildSky(); if (reduce) frame(performance.now()); }
+  new ResizeObserver(redrawStatic).observe(document.body);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawStatic);
+  redrawStatic();
+  requestAnimationFrame(frame);
+})();
+</script>

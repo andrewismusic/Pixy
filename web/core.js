@@ -737,6 +737,193 @@ class Sequence {
   }
 }
 
+/* ==========================================================================
+   Engine parameters: the drum-engine knobs, grouped by layer. Also the
+   ranges modulation works within.
+   ========================================================================== */
+const MODULES = [
+  { id: 'body', label: 'Body', accent: '--m-body' },
+  { id: 'noise', label: 'Noise', accent: '--m-noise' },
+  { id: 'metal', label: 'Metal', accent: '--m-metal' },
+  { id: 'res', label: 'Resonator', accent: '--m-res' },
+  { id: 'filter', label: 'Filter', accent: '--m-filter' },
+  { id: 'out', label: 'Shape & out', accent: '--m-out' },
+];
+const PARAM_SPECS = [
+  { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
+  { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
+  { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
+  { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
+  { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
+  { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
+  { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
+  { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
+  { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
+  { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
+  { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
+  { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
+  { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
+];
+const PARAM_BY_KEY = Object.fromEntries(PARAM_SPECS.map((p) => [p.key, p]));
+
+/* ==========================================================================
+   Modulation: MOD_COUNT modulators. Each is an LFO (standard or orbital
+   shape) or a one-shot envelope, with one destination, applied to any
+   number of targets: a step, a drum (every hit whose main voice is that
+   anchor) or the whole kit. An LFO is read at the moment of each hit; an
+   envelope runs through the hit (the voice glides along it).
+   ========================================================================== */
+const MOD_COUNT = 6;
+const MOD_RATES = [
+  { name: '4 bars', beats: 16 }, { name: '2 bars', beats: 8 }, { name: '1 bar', beats: 4 },
+  { name: '1/2', beats: 2 }, { name: '1/4', beats: 1 }, { name: '1/8', beats: 0.5 }, { name: '1/16', beats: 0.25 },
+];
+/* ctl: what the shape's own knob does, and the range it maps 0..1 onto */
+const MOD_SHAPES = [
+  { id: 'sine', name: 'Sine' }, { id: 'triangle', name: 'Triangle' }, { id: 'saw', name: 'Saw' },
+  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random' },
+  { id: 'kepler', name: 'Kepler', orbit: true, ctl: ['Eccentric', 0, 0.9] },
+  { id: 'precession', name: 'Precession', orbit: true, ctl: ['Precess', 0.02, 0.3] },
+  { id: 'halo', name: 'Halo', orbit: true, ctl: ['Detune', 0.01, 0.25] },
+  { id: 'retrograde', name: 'Retrograde', orbit: true, ctl: ['Ratio', 1.3, 3] },
+  { id: 'resonance', name: 'Resonance', orbit: true, ctl: ['Balance', 0, 1] },
+  { id: 'figure8', name: 'Figure-eight', orbit: true },
+  { id: 'env', name: 'Envelope', env: true },
+];
+const SHAPE_BY_ID = Object.fromEntries(MOD_SHAPES.map((s) => [s.id, s]));
+
+function kepler(M, e) { // solve E - e sin E = M
+  let E = e < 0.8 ? M : Math.PI;
+  for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  return E;
+}
+/* the Chenciner-Montgomery three-body figure-eight, integrated once */
+let FIG8 = null;
+function fig8At(ph) {
+  if (!FIG8) {
+    const Tp = 6.32591398, n = 2000, dt = Tp / n;
+    let p = [[0.97000436, -0.24308753], [-0.97000436, 0.24308753], [0, 0]];
+    const v3 = [-0.93240737, -0.86473146];
+    let v = [[-v3[0] / 2, -v3[1] / 2], [-v3[0] / 2, -v3[1] / 2], [v3[0], v3[1]]];
+    const acc = (q) => q.map((qi, i) => {
+      let ax = 0, ay = 0;
+      q.forEach((qj, j) => { if (i === j) return; const dx = qj[0] - qi[0], dy = qj[1] - qi[1], r3 = Math.pow(dx * dx + dy * dy, 1.5); ax += dx / r3; ay += dy / r3; });
+      return [ax, ay];
+    });
+    FIG8 = []; let a = acc(p);
+    for (let s = 0; s <= n; s++) {
+      FIG8.push([p[0][0], p[0][1]]);
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+      p = p.map((pi, i) => [pi[0] + v[i][0] * dt, pi[1] + v[i][1] * dt]);
+      a = acc(p);
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+    }
+  }
+  const q = FIG8[Math.floor((((ph % 1) + 1) % 1) * (FIG8.length - 1))];
+  return { x: q[0] / 1.1, y: q[1] / 1.1 };
+}
+const hash01 = (n) => { const x = Math.sin(n * 91.7 + 13.1) * 43758.5453; return x - Math.floor(x); };
+/* lfoAt: an LFO's position at p cycles (p may run past 1). x is the output,
+   roughly -1..1; y is only for drawing the body in orbit. */
+function lfoAt(shape, p, ctl) {
+  const sh = SHAPE_BY_ID[shape] || SHAPE_BY_ID.sine;
+  const c = sh.ctl ? sh.ctl[1] + clamp(ctl, 0, 1) * (sh.ctl[2] - sh.ctl[1]) : 0;
+  const a = 2 * Math.PI * p, f = ((p % 1) + 1) % 1;
+  switch (shape) {
+    case 'triangle': return { x: 1 - 4 * Math.abs(((f + 0.25) % 1) - 0.5), y: 0 };
+    case 'saw': return { x: 2 * f - 1, y: 0 };
+    case 'square': return { x: f < 0.5 ? 1 : -1, y: 0 };
+    case 'random': return { x: 2 * hash01(Math.floor(p * 4)) - 1, y: 0 };
+    case 'kepler': { const E = kepler(a, c), b = Math.sqrt(1 - c * c); return { x: (Math.cos(E) - c) / (1 + c), y: b * Math.sin(E) / (1 + c) }; }
+    case 'precession': {
+      const e = 0.5, E = kepler(a, e), b = Math.sqrt(1 - e * e), x0 = (Math.cos(E) - e) / 1.5, y0 = b * Math.sin(E) / 1.5, w = c * a;
+      return { x: x0 * Math.cos(w) - y0 * Math.sin(w), y: x0 * Math.sin(w) + y0 * Math.cos(w) };
+    }
+    case 'halo': return { x: Math.sin(a), y: 0.85 * Math.sin(a * (1 + c) + 0.6) };
+    case 'retrograde': return { x: (1.52 * Math.cos(a) - Math.cos(a * c)) / 2.6, y: (1.52 * Math.sin(a) - Math.sin(a * c)) / 2.6 };
+    case 'resonance': return { x: (1 - c) * Math.cos(a) + c * Math.cos(2 * a), y: (1 - c) * Math.sin(a) + c * Math.sin(2 * a) };
+    case 'figure8': return fig8At(p);
+    default: return { x: Math.sin(a), y: Math.cos(a) };
+  }
+}
+/* the envelope: attack 1 ms..1 s, decay 10 ms..2 s, both on a log scale */
+const envAttack = (m) => 0.001 * Math.pow(1000, clamp(m.atk, 0, 1));
+const envDecay = (m) => 0.01 * Math.pow(200, clamp(m.dec, 0, 1));
+function envAt(m, t) {
+  const a = envAttack(m), d = envDecay(m);
+  if (t <= 0) return 0;
+  if (t < a) return t / a;
+  return Math.pow(Math.max(0, 1 - (t - a) / d), 2);
+}
+/* how an envelope reads, for drawing: a slow attack swells like a flare, a
+   fast one strikes like an impact, and a fast one with a long tail blows
+   out like a supernova */
+function envLook(m) {
+  if (envAttack(m) > 0.06) return 'flare';
+  return envDecay(m) > 0.5 ? 'supernova' : 'impact';
+}
+function freshMod() {
+  return { shape: 'sine', rate: 2, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
+}
+/* the LFO's output at a point in the song, in beats from the start */
+const modLfo = (m, beats) => lfoAt(m.shape, beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats + m.phase, m.ctl).x;
+
+/* destinations: the hit's position on the map, pitch and decay across every
+   layer, or any one engine control */
+const MOD_DESTS = [
+  { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
+  { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
+  // engine controls carry their layer's name: there's a body decay and a noise decay
+  ...PARAM_SPECS.map((p) => {
+    const layer = MODULES.find((m) => m.id === p.mod).label;
+    const low = /^[A-Z]{2}/.test(p.label) ? p.label : p.label.toLowerCase(); // keep "FM"
+    const name = p.key === 'lvl' ? 'Output level' : p.key === 'q' ? 'Filter resonance' : p.mod === 'out' || p.mod === 'filter' ? p.label : `${layer} ${low}`;
+    return { id: p.key, name, group: layer };
+  }),
+];
+function modulatePos(pos, dest, amt) {
+  if (dest === 'x') return { x: clamp(pos.x + amt * 0.5, 0, 1), y: pos.y };
+  if (dest === 'y') return { x: pos.x, y: clamp(pos.y + amt * 0.5, 0, 1) };
+  return pos;
+}
+function modulateParams(P, dest, amt) {
+  if (!amt || dest === 'x' || dest === 'y') return P;
+  const Q = Object.assign({}, P);
+  if (dest === 'pitch') { const k = Math.pow(2, amt); Q.f *= k; Q.resF *= k; Q.mPitch *= k; return Q; }
+  if (dest === 'decay') { const k = Math.pow(4, amt); Q.tDec *= k; Q.nDec *= k; Q.mDec *= k; Q.resDec *= k; return Q; }
+  const sp = PARAM_BY_KEY[dest];
+  if (!sp) return P;
+  // half the knob's travel either way at full depth, in the knob's own scale
+  Q[dest] = sp.log && sp.min > 0
+    ? clamp(P[dest] * Math.pow(sp.max / sp.min, amt * 0.5), sp.min, sp.max)
+    : clamp(P[dest] + amt * (sp.max - sp.min) * 0.5, sp.min, sp.max);
+  return Q;
+}
+/* does a target cover this hit? step: that step; drum: hits whose nearest
+   anchor is that drum; kit: every hit */
+function modCovers(m, stepIndex, anchor) {
+  return m.targets.some((g) => g.kind === 'kit' || (g.kind === 'step' && g.i === stepIndex) || (g.kind === 'drum' && g.a === anchor));
+}
+/* toggle a target in or out of a modulator's list */
+function toggleTarget(m, g) {
+  const same = (h) => h.kind === g.kind && h.i === g.i && h.a === g.a;
+  const k = m.targets.findIndex(same);
+  if (k >= 0) m.targets.splice(k, 1); else m.targets.push(g);
+  return k < 0;
+}
+const nearestAnchor = (x, y) => { const w = weightsAt(x, y); return w.indexOf(Math.max(...w)); };
+
 const DEMO_BEAT = [
   [0, 0.12, 0.10], [2, 0.70, 0.86], [3, 0.31, 0.87], [4, 0.45, 0.42],
   [6, 0.70, 0.86], [7, 0.86, 0.72], [8, 0.12, 0.10], [10, 0.70, 0.86],
@@ -751,5 +938,7 @@ if (typeof module !== "undefined") module.exports = {
   N_STEPS, SIGMA, clamp, BASE, ANCHOR_DEFS, ANCHORS, weightsAt, LOG_KEYS, GROUPS, paramsAt,
   colorAt, decayMultiplier, nearest, voiceSignature, METAL_RATIOS, BURST_GAP, SHAPER_CURVE,
   foldCurve, modeRatios, modeQ, playVoice, mixedParams, autoAt, AUTO_POINTS, Engine,
+  PARAM_SPECS, PARAM_BY_KEY, MOD_COUNT, MOD_RATES, MOD_SHAPES, SHAPE_BY_ID, MOD_DESTS, lfoAt, envAt, envAttack, envDecay, envLook,
+  freshMod, modLfo, modulatePos, modulateParams, modCovers, toggleTarget, nearestAnchor, kepler,
   LANE_DEFAULTS, freshStep, RATCHET_VALUES, ratchetHits, RATCHET_CATCH, slotDuration, catchStep, swingOffset, Sequence, DEMO_BEAT,
 };

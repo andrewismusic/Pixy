@@ -7,24 +7,28 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: one column of instrument modules: pad, transport, steps, tools.
-   Look: a sci-fi instrument panel. Cool neutrals, thin edges, keys that
-   sit on a hard shadow and sink when pressed. Colour has jobs:
+/* Layout: one column of instrument modules. The pad is a star chart:
+   sequenced steps are stars joined in playing order, and modulators are
+   moons orbiting the steps they move. Night is a ship's console; day is a
+   printed star atlas. Keys sit on a hard shadow and sink when pressed.
+   Colour has jobs:
      yellow   on / selected / highlighted         (--hold)
      cyan     playing now (the playhead)          (--now)
      red      recording                           (--rec)
-   Sound colours (steps, pad) are kept out of yellow and cyan on purpose.
-   Module accents (--m-*) colour knob arcs by synth layer. */
+   Star colours follow stellar classes (red = low, blue-white = high) and
+   stay clear of those three. Module accents (--m-*) colour knob arcs. */
 :root {
-  --bg: #E4E8EE; --glow: rgba(120,140,190,.18); --panel: #F3F5F8; --well: #D9DEE6;
-  --ink: #0E1320; --muted: #556075; --edge: #9AA4B6; --shadow: #A3ACBC;
-  --cap-hi: #FFFFFF; --cap-lo: #E2E6EC; --track: rgba(14,19,32,.12);
-  --now: #0096BA; --hold: #F2C200; --on-ink: #14110A; --rec: #E0263F;
+  --bg: #E6EAF0; --panel: #F4F6F9; --well: #DCE1E9;
+  --ink: #101521; --muted: #556076; --edge: #A9B3C3; --shadow: #A9B1C0;
+  --cap-hi: #FFFFFF; --cap-lo: #E3E7EE; --track: rgba(16,21,33,.12);
+  --now: #0092B8; --hold: #F2C200; --on-ink: #15120A; --rec: #E0263F;
+  --sky: #F2F4F8; --sky-line: rgba(16,21,33,.30); --sky-star: rgba(16,21,33,.45);
   --m-body: #D9466F; --m-noise: #6F7A92; --m-metal: #4F6FE0; --m-res: #D7861A;
-  --m-filter: #7C5CE6; --m-out: #E0582E; --m-kit: #0E1320;
-  --font-ui: 'Oxanium', 'Eurostile', 'Bank Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --m-filter: #7C5CE6; --m-out: #E0582E; --m-kit: #101521;
+  --font-head: 'Oxanium', 'Eurostile', system-ui, sans-serif;
+  --font-ui: 'Chakra Petch', 'Eurostile', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -32,45 +36,45 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #090C14; --glow: rgba(70,100,180,.16); --panel: #121722; --well: #0C1019;
-    --ink: #E6EAF2; --muted: #8B94AA; --edge: #263044; --shadow: #020307;
-    --cap-hi: #252D3E; --cap-lo: #181E2B; --track: rgba(255,255,255,.08);
-    --now: #3BE0FF; --hold: #FFD21F; --on-ink: #14110A; --rec: #FF3B5C;
+    --bg: #05070C; --panel: #0C111B; --well: #0E1320;
+    --ink: #E4E9F3; --muted: #8590A8; --edge: #2B3650; --shadow: #000;
+    --cap-hi: #1E2638; --cap-lo: #141B29; --track: rgba(255,255,255,.08);
+    --now: #3BE0FF; --hold: #FFD21F; --rec: #FF3B5C;
+    --sky: #03050A; --sky-line: rgba(200,212,255,.22); --sky-star: rgba(220,228,255,.6);
     --m-body: #FF6B91; --m-noise: #A9B2C8; --m-metal: #7F9BFF; --m-res: #FFAA3D;
-    --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E6EAF2;
+    --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E4E9F3;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #090C14; --glow: rgba(70,100,180,.16); --panel: #121722; --well: #0C1019;
-  --ink: #E6EAF2; --muted: #8B94AA; --edge: #263044; --shadow: #020307;
-  --cap-hi: #252D3E; --cap-lo: #181E2B; --track: rgba(255,255,255,.08);
-  --now: #3BE0FF; --hold: #FFD21F; --on-ink: #14110A; --rec: #FF3B5C;
+  --bg: #05070C; --panel: #0C111B; --well: #0E1320;
+  --ink: #E4E9F3; --muted: #8590A8; --edge: #2B3650; --shadow: #000;
+  --cap-hi: #1E2638; --cap-lo: #141B29; --track: rgba(255,255,255,.08);
+  --now: #3BE0FF; --hold: #FFD21F; --rec: #FF3B5C;
+  --sky: #03050A; --sky-line: rgba(200,212,255,.22); --sky-star: rgba(220,228,255,.6);
   --m-body: #FF6B91; --m-noise: #A9B2C8; --m-metal: #7F9BFF; --m-res: #FFAA3D;
-  --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E6EAF2;
+  --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E4E9F3;
   color-scheme: dark;
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 *, *::before, *::after { box-sizing: inherit; }
 body {
-  margin: 0; min-height: 100%; color: var(--ink);
-  background: radial-gradient(140% 70% at 50% -10%, var(--glow), transparent 70%) var(--bg) fixed;
+  margin: 0; min-height: 100%; color: var(--ink); background: var(--bg);
   font: 500 15px/1.45 var(--font-ui);
   -webkit-text-size-adjust: 100%;
 }
 .app { max-width: 760px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
-/* ---------- key: the shared 3D button body. It sits on a hard shadow and
-   sinks onto it when pressed or switched on. ---------- */
+/* ---------- key: the shared 3D button body ---------- */
 .cap {
   position: relative; border: 1.5px solid var(--edge); border-radius: 10px;
   background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
   color: var(--ink); cursor: pointer; font-family: var(--font-ui);
-  box-shadow: 0 4px 0 var(--shadow), inset 0 1px 0 rgba(255,255,255,.14);
+  box-shadow: 0 4px 0 var(--shadow);
   transition: transform .07s, box-shadow .07s, background-color .12s;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.cap:active, .cap.pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), inset 0 1px 0 rgba(255,255,255,.14); }
+.cap:active, .cap.pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow); }
 .cap:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
 /* switched on: sunk, and lit in the indicator yellow */
 .cap.lit, .cap[aria-pressed="true"], .cap[aria-selected="true"] {
@@ -78,16 +82,19 @@ body {
   transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold);
 }
 
-header.top { margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-ui); letter-spacing: .16em; margin: 0 auto 0 0; }
-h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-transform: uppercase; text-wrap: balance; }
+header.top { display: grid; gap: 8px; margin-bottom: 14px; }
+.toprow { display: flex; align-items: center; gap: 8px; }
+h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-head); letter-spacing: .18em; margin: 0 auto 0 0; }
+h2 { font: 600 14px/1.2 var(--font-head); margin: 0; letter-spacing: .16em; text-transform: uppercase; text-wrap: balance; }
+h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text-transform: uppercase; }
 
-.pagenav { display: flex; gap: 7px; flex: none; }
+.pagenav { display: flex; gap: 6px; flex: none; }
 .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; }
+.subrow { display: flex; align-items: center; gap: 8px; }
+.subrow .dicecap { margin-left: auto; font: 600 10.5px/1.2 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); text-align: right; }
+#helpBtn { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 
-/* pages slide sideways as a strip: the old one leaves as the new one
-   arrives (driven from ui.js with the Web Animations API, so an
-   interrupted slide always settles back to a clean state) */
+/* pages slide sideways as a strip (Web Animations in ui.js) */
 .pages { position: relative; overflow: hidden; touch-action: pan-y; padding: 0 6px 8px; margin: 0 -6px; }
 .page { display: none; }
 .page.active { display: block; }
@@ -97,22 +104,20 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .padrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; max-width: 768px; margin: 0 auto; }
 .padwrap {
   position: relative; max-width: 100%; aspect-ratio: 1 / 1;
-  border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: #070912;
+  border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: var(--sky);
   box-shadow: 0 5px 0 var(--shadow);
 }
-#pad {
+.padwrap canvas {
   display: block; width: 100%; height: 100%;
   touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
-#pad:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
-/* ratchet bar: rests at 1/16 at the bottom and springs back when let go */
+.padwrap canvas:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
 .ratchet {
   position: relative; border-radius: 12px; background: var(--well); border: 1.5px solid var(--edge);
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12); touch-action: none; cursor: ns-resize; outline: none;
   user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
-/* each stop: its value with a short tick just under it */
 .ratchet .rstop { position: absolute; left: 0; right: 0; display: grid; justify-items: center; gap: 3px; transform: translateY(50%); pointer-events: none; }
 .ratchet .rstop span { font: 500 9px/1 var(--font-mono); color: var(--muted); }
 .ratchet .rstop i { width: 10px; height: 1.5px; border-radius: 1px; background: var(--edge); }
@@ -125,11 +130,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .ratchet.held .rthumb { transition: none; background: var(--hold); color: var(--on-ink); border-color: transparent; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold); }
 .ratchet:focus-visible .rthumb { outline: 2px solid var(--hold); outline-offset: 2px; }
 
-/* ---------- panels ---------- */
-.panel { padding-top: 6px; }
-.panel .sub { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; max-width: 65ch; }
-
-/* ---------- knob ---------- */
+/* ---------- knob: the arc ring and the cap's shadow stay put; only the
+   pointer turns ---------- */
 .knobgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px 4px; margin-top: 12px; }
 .knob {
   --rot: 0deg; display: grid; justify-items: center; align-content: start; gap: 3px; min-width: 0;
@@ -142,11 +144,11 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob-dial .val { fill: none; stroke: var(--accent, var(--ink)); stroke-width: 4; stroke-linecap: round; }
 .knob-cap {
   position: absolute; inset: 18%; border-radius: 50%; border: 1.5px solid var(--edge);
-  background: radial-gradient(circle at 50% 30%, var(--cap-hi), var(--cap-lo) 75%);
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
   box-shadow: 0 3px 0 var(--shadow);
-  transform: rotate(var(--rot));
 }
-.knob-cap::after {
+.knob-ptr { position: absolute; inset: 0; transform: rotate(var(--rot)); }
+.knob-ptr::after {
   content: ''; position: absolute; top: 10%; left: 50%; width: 2.5px; height: 30%;
   background: var(--ink); border-radius: 2px; transform: translateX(-50%);
 }
@@ -154,33 +156,32 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob-label { font: 600 10px/1.15 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; text-align: center; max-width: 100%; }
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
+/* a knob's modulation source: a tiny native picker under its label */
+.modsel {
+  appearance: none; -webkit-appearance: none; border: 1px solid var(--edge); border-radius: 5px; background: var(--well);
+  font: 600 9px/1 var(--font-mono); color: var(--muted); padding: 2px 4px; text-align: center; text-align-last: center; cursor: pointer; max-width: 46px;
+}
+.modsel.set { color: var(--on-ink); background: var(--hold); border-color: transparent; }
 
-/* ---------- dice: a short track in the top bar. The die is the key
-   itself, five pips on its face. Drag it right for a stronger roll of
-   whichever page is showing; it rolls home on release. */
+/* ---------- dice: a track with the die as a key-sized face; drag right
+   for a stronger roll of whichever page is showing ---------- */
 .dicefield { flex: none; }
 .dicetrack {
-  --dh: 42px; position: relative; width: 104px; height: var(--dh); border-radius: 10px; overflow: hidden; cursor: pointer;
-  background: var(--well); border: 1.5px solid var(--edge);
-  box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
+  --dh: 34px; position: relative; width: 96px; height: var(--dh); border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: var(--well); border: 1.5px solid var(--edge); box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
 .dicetrack[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .dicetrack .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--hold); opacity: .85; }
-.dicetrack .die {
-  position: absolute; top: 0; left: 0; width: calc(var(--dh) - 3px); height: calc(var(--dh) - 3px); border-radius: 8.5px; z-index: 2;
-  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--dh) * .2);
-  background: #F7F9FC;
-  cursor: grab;
+.die {
+  position: absolute; top: 0; left: 0; width: calc(var(--dh) - 3px); height: calc(var(--dh) - 3px); border-radius: 7.5px; z-index: 2;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--dh) * .2); background: #F7F9FC;
   transition: left .5s cubic-bezier(.3,.9,.3,1.1), transform .5s cubic-bezier(.3,.9,.3,1.1);
 }
-.dicetrack .die i { width: 5px; height: 5px; border-radius: 50%; background: #0E1320; place-self: center; }
-.dicetrack .die i:nth-child(1) { grid-area: 1 / 1; }
-.dicetrack .die i:nth-child(2) { grid-area: 1 / 3; }
-.dicetrack .die i:nth-child(3) { grid-area: 2 / 2; }
-.dicetrack .die i:nth-child(4) { grid-area: 3 / 1; }
-.dicetrack .die i:nth-child(5) { grid-area: 3 / 3; }
-.dicetrack.dragging .die { transition: none; cursor: grabbing; }
+.die i { width: 4.5px; height: 4.5px; border-radius: 50%; background: #0E1320; place-self: center; }
+.die i:nth-child(1) { grid-area: 1 / 1; } .die i:nth-child(2) { grid-area: 1 / 3; } .die i:nth-child(3) { grid-area: 2 / 2; }
+.die i:nth-child(4) { grid-area: 3 / 1; } .die i:nth-child(5) { grid-area: 3 / 3; }
+.dicetrack.dragging .die { transition: none; }
 .dicetrack:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
 
 /* ---------- transport row + steps ---------- */
@@ -188,7 +189,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .transport { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .transport .knobslot { flex: 1 1 0; min-width: 0; }
 .transport .knob { --kd: 48px; }
-.btn { font: 700 12.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
+.btn { font: 700 12px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
 .btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
 #play, #record, #smooth { width: 54px; height: 54px; border-radius: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 #record { color: var(--rec); }
@@ -212,19 +213,15 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent; transition: transform .07s, box-shadow .07s;
 }
-.step .n { position: absolute; top: 6px; left: 8px; font: 700 12px/1 var(--font-ui); letter-spacing: .04em; opacity: .5; }
+.step .n { position: absolute; top: 6px; left: 8px; font: 600 12px/1 var(--font-head); letter-spacing: .04em; opacity: .5; }
 .step .dot {
   display: none; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff;
   box-shadow: 0 0 0 2px rgba(5,7,12,.55);
   left: calc(14% + var(--dx, .5) * 72%); bottom: calc(12% + var(--dy, .5) * 56%); transform: translate(-50%, 50%);
 }
-.step.on {
-  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 55%), var(--c, #555);
-  color: var(--tc, #fff); border-color: rgba(0,0,0,.35);
-}
+.step.on { background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0) 55%), var(--c, #555); color: var(--tc, #fff); border-color: rgba(0,0,0,.35); }
 .step.on .n { opacity: .9; }
 .step.on .dot { display: block; }
-/* ratchet hits: one pip per hit along the top edge */
 .step .hits { position: absolute; top: 4px; right: 6px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
 .cell.now .step { transform: translateY(-2px); box-shadow: 0 6px 0 var(--shadow), 0 0 0 2px var(--now); }
 .step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--hold); }
@@ -232,6 +229,52 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
 .tools .gap { flex: 1 1 8px; }
+
+/* ---------- modulation page ---------- */
+.modsky { aspect-ratio: 16 / 11; }
+.mods { display: grid; gap: 6px; margin-top: 14px; }
+.mod {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center;
+  padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer;
+}
+.mod.sel { border-color: var(--hold); box-shadow: 0 0 0 1px var(--hold); }
+.mod canvas { width: 40px; height: 40px; display: block; border-radius: 8px; background: var(--sky); }
+.mod .nm { font: 600 11px/1.15 var(--font-head); letter-spacing: .16em; display: flex; align-items: center; gap: 6px; }
+.mod .nm i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
+.mod .sm { font: 500 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign { font: 700 9.5px/1.05 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 48px; height: 38px; padding: 0 2px; border-radius: 9px; touch-action: none; }
+.minidie { width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 0; background: #F7F9FC; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 7px; cursor: pointer; box-shadow: 0 3px 0 var(--shadow); transition: transform .07s, box-shadow .07s; }
+.minidie:active { transform: translateY(2px) rotate(20deg); box-shadow: 0 1px 0 var(--shadow); }
+.minidie i { width: 4px; height: 4px; border-radius: 50%; background: #0E1320; place-self: center; }
+.minidie i:nth-child(1) { grid-area: 1 / 1; } .minidie i:nth-child(2) { grid-area: 1 / 3; } .minidie i:nth-child(3) { grid-area: 2 / 2; }
+.minidie i:nth-child(4) { grid-area: 3 / 1; } .minidie i:nth-child(5) { grid-area: 3 / 3; }
+.minidie:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.modedit { margin-top: 16px; display: grid; gap: 12px; }
+.pickrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.pick { display: grid; gap: 5px; min-width: 0; }
+.pick > span { font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.pickbtn, .picksel {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 30px 0 10px; text-align: left;
+  font: 600 13px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
+}
+.pickwrap { position: relative; display: flex; }
+.pickwrap::after { content: '\25BE'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 13px; color: var(--ink); }
+.pickbtn svg { flex: none; }
+.shapemenu {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(300px, 86vw); max-height: 320px; overflow-y: auto;
+  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; padding: 6px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.5);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+}
+.shapemenu[hidden] { display: none; }
+.shapemenu button {
+  display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
+  font: 600 11.5px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-align: left;
+}
+.shapemenu button:hover, .shapemenu button:focus-visible { background: var(--well); outline: none; }
+.shapemenu button[aria-checked="true"] { background: var(--hold); color: var(--on-ink); }
+.shapemenu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 2px; }
+.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
 
 /* ---------- lanes ---------- */
 .lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; }
@@ -241,14 +284,14 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .btn.small { min-height: 36px; font-size: 11.5px; border-radius: 9px; }
 #laneCanvas {
   display: block; width: 100%; height: min(58vh, 460px); margin-top: 14px; border-radius: 10px;
-  touch-action: none; cursor: crosshair; background: #070912; border: 1.5px solid var(--edge);
+  touch-action: none; cursor: crosshair; background: var(--sky); border: 1.5px solid var(--edge);
 }
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- engine ---------- */
 .enginepick { display: flex; gap: 8px; margin: 12px 0 2px; }
 .enginepick select {
-  flex: 1 1 auto; min-width: 0; font: 700 15px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .12em;
+  flex: 1 1 auto; min-width: 0; font: 600 15px/1 var(--font-head); text-transform: uppercase; letter-spacing: .14em;
   padding: 0 12px; min-height: 44px; appearance: none; -webkit-appearance: none;
 }
 .selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
@@ -256,30 +299,39 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
 .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
 .module { padding-top: 10px; border-top: 1px solid var(--edge); }
-.module h3 { margin: 0; font: 700 11.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.module h3 { display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
 .module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
 .module .knob { --kd: 42px; }
 .module .knob-label { font-size: 9px; }
 .module .knob-value { font-size: 10px; }
 
-.how { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
+/* ---------- help sheet: what's on the page you're looking at ---------- */
+.help {
+  position: fixed; z-index: 50; inset: auto 0 0 0; max-height: 72vh; overflow-y: auto;
+  background: var(--panel); border-top: 1.5px solid var(--edge); border-radius: 18px 18px 0 0; box-shadow: 0 -20px 50px -20px rgba(0,0,0,.5);
+  padding-block: 18px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
+}
+.help .inner { max-width: 720px; margin: 0 auto; display: grid; gap: 10px; }
+.help .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.how { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
 .how b { color: var(--ink); font-weight: 700; }
 kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var(--edge); border-radius: 5px; background: var(--panel); color: var(--ink); box-shadow: 0 2px 0 var(--shadow); }
 
 @media (max-width: 640px) {
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
-  .navbtn { width: 36px; height: 36px; }
+  .navbtn { width: 38px; height: 38px; }
   .pagenav { gap: 4px; }
-  header.top { gap: 6px; }
-  .dicetrack { --dh: 36px; width: 84px; }
   .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
   .transport .knob { --kd: 42px; }
   #play, #record, #smooth { width: 48px; height: 48px; }
+  .mod { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 6px; }
+  .assign { width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .step, .cap, .dicetrack .die { transition: none; }
+  .step, .cap, .die, .minidie, .rthumb { transition: none; }
   #record[aria-pressed="true"] svg { animation: none; }
 }
 </style>
@@ -287,34 +339,42 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
 <body>
 <main class="app">
   <header class="top">
-    <h1>PIXY</h1>
-    <nav class="pagenav" aria-label="Pages">
-      <button class="navbtn cap" type="button" data-page="pad" aria-pressed="true" aria-label="Pad &amp; sequencer" title="Pad &amp; sequencer">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="6" cy="6" r="2.2" fill="currentColor"/><circle cx="12" cy="6" r="2.2" fill="currentColor"/><circle cx="18" cy="6" r="2.2" fill="currentColor"/><circle cx="6" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="18" cy="12" r="2.2" fill="currentColor"/><circle cx="6" cy="18" r="2.2" fill="currentColor"/><circle cx="12" cy="18" r="2.2" fill="currentColor"/><circle cx="18" cy="18" r="2.2" fill="currentColor"/></svg>
+    <div class="toprow">
+      <h1>PIXY</h1>
+      <nav class="pagenav" aria-label="Pages">
+        <button class="navbtn cap" type="button" data-page="pad" aria-pressed="true" aria-label="Star chart: pad and sequencer" title="Star chart">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 17l5-9 5 6 4-8" opacity=".5"/><circle cx="5" cy="17" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="2.2" fill="currentColor" stroke="none"/><circle cx="19" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="mod" aria-pressed="false" aria-label="Modulation" title="Modulation">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="8.5" opacity=".55"/><circle cx="18" cy="6" r="2.3" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="lanes" aria-pressed="false" aria-label="Step lanes" title="Step lanes">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="kit" aria-pressed="false" aria-label="Whole kit" title="Whole kit">
+          <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><circle cx="12" cy="16" r="1.3" fill="currentColor" stroke="none"/><path d="M6.2 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="8.8" cy="7.4" rx="2.6" ry="1.2"/><path d="M12.6 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="15.2" cy="7.4" rx="2.6" ry="1.2"/><path d="M1.2 4.6l4.4-1.4M3.4 4v17M22.8 4.6l-4.4-1.4M20.6 4v17"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><ellipse cx="12" cy="7" rx="8" ry="3.4"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3"/></svg>
+        </button>
+      </nav>
+    </div>
+    <div class="subrow">
+      <button id="helpBtn" class="cap" type="button" aria-label="Help for this page" aria-expanded="false" aria-controls="help" title="Help for this page">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>
       </button>
-      <button class="navbtn cap" type="button" data-page="lanes" aria-pressed="false" aria-label="Automation lanes" title="Automation lanes">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="kit" aria-pressed="false" aria-label="Kit editor" title="Kit editor">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><circle cx="12" cy="16" r="1.3" fill="currentColor" stroke="none"/><path d="M6.2 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="8.8" cy="7.4" rx="2.6" ry="1.2"/><path d="M12.6 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="15.2" cy="7.4" rx="2.6" ry="1.2"/><path d="M1.2 4.6l4.4-1.4M3.4 4v17M22.8 4.6l-4.4-1.4M20.6 4v17"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><ellipse cx="12" cy="7" rx="8" ry="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="info" aria-pressed="false" aria-label="Info" title="Info">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11" y="10.5" width="2" height="6.5" rx="1" fill="currentColor"/><circle cx="12" cy="7.2" r="1.4" fill="currentColor"/></svg>
-      </button>
-    </nav>
-    <div class="dicefield" id="diceField"></div>
+      <span class="dicecap" id="diceCap" aria-hidden="true">Randomize sequence</span>
+      <div class="dicefield" id="diceField"></div>
+    </div>
   </header>
 
   <div class="pages" id="pages">
     <section class="page active" data-page="pad">
       <div class="padrow">
         <div class="padwrap">
-          <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+          <canvas id="pad" tabindex="0" role="application" aria-label="Star chart pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
         </div>
-        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher to cut each step into more hits. Springs back to 1/16 when you let go.">
+        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher while recording to cut each step into more hits. Springs back to 1/16 when you let go.">
           <div class="rthumb" id="rthumb">16</div>
         </div>
       </div>
@@ -325,7 +385,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg class="ic-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
             <svg class="ic-stop" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
           </button>
-          <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes your live position into whichever step is passing">
+          <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes into whichever step is passing">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
           <button id="smooth" class="cap icon" type="button"></button>
@@ -356,65 +416,64 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
       </section>
     </section>
 
-    <section class="page" data-page="lanes">
-      <div class="panel" aria-labelledby="lanesH">
-        <div class="lanehead">
-          <h2 id="lanesH">Step lanes</h2>
-          <button id="laneReset" class="btn cap small" type="button">Reset lane</button>
+    <section class="page" data-page="mod" aria-label="Modulation">
+      <div class="padwrap modsky">
+        <canvas id="modSky" tabindex="0" role="application" aria-label="Star chart for assigning modulation. Hold Step or Drum on a modulator and tap stars, or hold a star and tap Step or Drum."></canvas>
+      </div>
+      <div class="mods" id="mods"></div>
+      <div class="modedit" id="modEdit">
+        <div class="pickrow">
+          <div class="pick"><span id="shapeLbl">Shape</span>
+            <div class="pickwrap">
+              <button id="shapeBtn" class="pickbtn cap" type="button" aria-haspopup="menu" aria-expanded="false" aria-labelledby="shapeLbl shapeBtn"></button>
+              <div class="shapemenu" id="shapeMenu" role="menu" hidden></div>
+            </div>
+          </div>
+          <div class="pick"><span id="destLbl">Destination</span>
+            <div class="pickwrap"><select id="destSel" class="picksel cap" aria-labelledby="destLbl"></select></div>
+          </div>
         </div>
-        <div class="lanetabs" role="tablist" aria-label="Lane to edit">
-          <button class="tab cap" type="button" data-lane="prob" role="tab" aria-selected="true">Chance</button>
-          <button class="tab cap" type="button" data-lane="devx" role="tab" aria-selected="false">X drift</button>
-          <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
-          <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
-        </div>
-        <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
-        <p class="lanereadout" id="laneReadout">&nbsp;</p>
+        <div class="knobgrid" id="modKnobs" style="--accent: var(--mc)"></div>
       </div>
     </section>
 
-    <section class="page" data-page="kit">
-      <section class="panel" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
-        <h2 id="tweakH">Whole kit</h2>
-        <div class="knobgrid" id="kitKnobs"></div>
-      </section>
+    <section class="page" data-page="lanes">
+      <div class="lanehead">
+        <h2 id="lanesH">Step lanes</h2>
+        <button id="laneReset" class="btn cap small" type="button">Reset lane</button>
+      </div>
+      <div class="lanetabs" role="tablist" aria-label="Lane to edit">
+        <button class="tab cap" type="button" data-lane="prob" role="tab" aria-selected="true">Chance</button>
+        <button class="tab cap" type="button" data-lane="devx" role="tab" aria-selected="false">X drift</button>
+        <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
+        <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
+      </div>
+      <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
+      <p class="lanereadout" id="laneReadout">&nbsp;</p>
     </section>
 
-    <section class="page" data-page="engine">
-      <section class="panel" aria-labelledby="engineH">
-        <h2 id="engineH">Drum engine</h2>
-        <div class="enginepick">
-          <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
-          <button id="engineReset" class="btn cap small" type="button">Reset</button>
-        </div>
-        <div id="engineParams" class="modules"></div>
-      </section>
+    <section class="page" data-page="kit" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
+      <h2 id="tweakH">Whole kit</h2>
+      <div class="knobgrid" id="kitKnobs"></div>
     </section>
 
-    <section class="page" data-page="info">
-      <section class="panel">
-        <h2>How it works</h2>
-        <ul class="how">
-          <li><b>Tap a step</b> to switch it on or off. A new step takes the sound your cursor was last on; switching one off clears it completely, so tapping it back on starts fresh.</li>
-          <li><b>Hold the pad, then tap a step</b> to give that step the sound under your finger.</li>
-          <li><b>Hold one or more steps, then touch the pad</b> and those steps take the point you touched last.</li>
-          <li>Only one pointer? <b>Select</b> (the dotted square) latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
-          <li><b>Hold a step, then tap another</b> to copy the first step's sound onto the second.</li>
-          <li><b>Knobs</b>: drag up or right to turn up, down or left to turn down. Hold <kbd>Shift</kbd> for fine moves, double-tap to reset.</li>
-          <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
-          <li>The <b>ratchet bar</b> beside the pad rests at 1/16 and springs back when you let go. Hold it higher to cut each step into 2, 3, 4 or 6 hits. While recording, whatever it reads is written into each step that passes; a move in the first half of a step counts for that step, a later one for the next.</li>
-          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. Hold the ratchet bar up at the same time to record ratchets, or use the bar on its own to re-cut steps that are already there.</li>
-          <li><b>Stepped / smooth</b> (the key beside record): stepped gives each hit one position. Smooth lets a ringing hit follow your finger, and recording keeps the whole gesture through each step and its ratchets. It only affects new touches, so one sequence can mix both.</li>
-          <li><b>Choke</b> (the cut-off wave) makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
-          <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
-          <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>
-          <li>The <b>die</b> in the top bar randomizes whichever page you're on: the sequence, the current lane, the whole kit or the drum you're editing. Drag it further right for a stronger roll.</li>
-          <li>Swipe left or right, or use the icons beside the title, to switch between the pad, lanes, whole kit, drum engine and this page.</li>
-        </ul>
-      </section>
+    <section class="page" data-page="engine" aria-labelledby="engineH">
+      <h2 id="engineH">Drum engine</h2>
+      <div class="enginepick">
+        <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
+        <button id="engineReset" class="btn cap small" type="button">Reset</button>
+      </div>
+      <div id="engineParams" class="modules"></div>
     </section>
   </div>
 </main>
+
+<div class="help" id="help" role="dialog" aria-modal="false" aria-labelledby="helpH" hidden>
+  <div class="inner">
+    <div class="head"><h2 id="helpH">Star chart</h2><button id="helpClose" class="btn cap small" type="button">Close</button></div>
+    <ul class="how" id="helpList"></ul>
+  </div>
+</div>
 
 <script>
 
@@ -1156,6 +1215,193 @@ class Sequence {
   }
 }
 
+/* ==========================================================================
+   Engine parameters: the drum-engine knobs, grouped by layer. Also the
+   ranges modulation works within.
+   ========================================================================== */
+const MODULES = [
+  { id: 'body', label: 'Body', accent: '--m-body' },
+  { id: 'noise', label: 'Noise', accent: '--m-noise' },
+  { id: 'metal', label: 'Metal', accent: '--m-metal' },
+  { id: 'res', label: 'Resonator', accent: '--m-res' },
+  { id: 'filter', label: 'Filter', accent: '--m-filter' },
+  { id: 'out', label: 'Shape & out', accent: '--m-out' },
+];
+const PARAM_SPECS = [
+  { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
+  { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
+  { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
+  { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
+  { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
+  { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
+  { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
+  { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
+  { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
+  { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
+  { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
+  { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
+  { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
+  { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
+  { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
+];
+const PARAM_BY_KEY = Object.fromEntries(PARAM_SPECS.map((p) => [p.key, p]));
+
+/* ==========================================================================
+   Modulation: MOD_COUNT modulators. Each is an LFO (standard or orbital
+   shape) or a one-shot envelope, with one destination, applied to any
+   number of targets: a step, a drum (every hit whose main voice is that
+   anchor) or the whole kit. An LFO is read at the moment of each hit; an
+   envelope runs through the hit (the voice glides along it).
+   ========================================================================== */
+const MOD_COUNT = 6;
+const MOD_RATES = [
+  { name: '4 bars', beats: 16 }, { name: '2 bars', beats: 8 }, { name: '1 bar', beats: 4 },
+  { name: '1/2', beats: 2 }, { name: '1/4', beats: 1 }, { name: '1/8', beats: 0.5 }, { name: '1/16', beats: 0.25 },
+];
+/* ctl: what the shape's own knob does, and the range it maps 0..1 onto */
+const MOD_SHAPES = [
+  { id: 'sine', name: 'Sine' }, { id: 'triangle', name: 'Triangle' }, { id: 'saw', name: 'Saw' },
+  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random' },
+  { id: 'kepler', name: 'Kepler', orbit: true, ctl: ['Eccentric', 0, 0.9] },
+  { id: 'precession', name: 'Precession', orbit: true, ctl: ['Precess', 0.02, 0.3] },
+  { id: 'halo', name: 'Halo', orbit: true, ctl: ['Detune', 0.01, 0.25] },
+  { id: 'retrograde', name: 'Retrograde', orbit: true, ctl: ['Ratio', 1.3, 3] },
+  { id: 'resonance', name: 'Resonance', orbit: true, ctl: ['Balance', 0, 1] },
+  { id: 'figure8', name: 'Figure-eight', orbit: true },
+  { id: 'env', name: 'Envelope', env: true },
+];
+const SHAPE_BY_ID = Object.fromEntries(MOD_SHAPES.map((s) => [s.id, s]));
+
+function kepler(M, e) { // solve E - e sin E = M
+  let E = e < 0.8 ? M : Math.PI;
+  for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  return E;
+}
+/* the Chenciner-Montgomery three-body figure-eight, integrated once */
+let FIG8 = null;
+function fig8At(ph) {
+  if (!FIG8) {
+    const Tp = 6.32591398, n = 2000, dt = Tp / n;
+    let p = [[0.97000436, -0.24308753], [-0.97000436, 0.24308753], [0, 0]];
+    const v3 = [-0.93240737, -0.86473146];
+    let v = [[-v3[0] / 2, -v3[1] / 2], [-v3[0] / 2, -v3[1] / 2], [v3[0], v3[1]]];
+    const acc = (q) => q.map((qi, i) => {
+      let ax = 0, ay = 0;
+      q.forEach((qj, j) => { if (i === j) return; const dx = qj[0] - qi[0], dy = qj[1] - qi[1], r3 = Math.pow(dx * dx + dy * dy, 1.5); ax += dx / r3; ay += dy / r3; });
+      return [ax, ay];
+    });
+    FIG8 = []; let a = acc(p);
+    for (let s = 0; s <= n; s++) {
+      FIG8.push([p[0][0], p[0][1]]);
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+      p = p.map((pi, i) => [pi[0] + v[i][0] * dt, pi[1] + v[i][1] * dt]);
+      a = acc(p);
+      v = v.map((vi, i) => [vi[0] + a[i][0] * dt / 2, vi[1] + a[i][1] * dt / 2]);
+    }
+  }
+  const q = FIG8[Math.floor((((ph % 1) + 1) % 1) * (FIG8.length - 1))];
+  return { x: q[0] / 1.1, y: q[1] / 1.1 };
+}
+const hash01 = (n) => { const x = Math.sin(n * 91.7 + 13.1) * 43758.5453; return x - Math.floor(x); };
+/* lfoAt: an LFO's position at p cycles (p may run past 1). x is the output,
+   roughly -1..1; y is only for drawing the body in orbit. */
+function lfoAt(shape, p, ctl) {
+  const sh = SHAPE_BY_ID[shape] || SHAPE_BY_ID.sine;
+  const c = sh.ctl ? sh.ctl[1] + clamp(ctl, 0, 1) * (sh.ctl[2] - sh.ctl[1]) : 0;
+  const a = 2 * Math.PI * p, f = ((p % 1) + 1) % 1;
+  switch (shape) {
+    case 'triangle': return { x: 1 - 4 * Math.abs(((f + 0.25) % 1) - 0.5), y: 0 };
+    case 'saw': return { x: 2 * f - 1, y: 0 };
+    case 'square': return { x: f < 0.5 ? 1 : -1, y: 0 };
+    case 'random': return { x: 2 * hash01(Math.floor(p * 4)) - 1, y: 0 };
+    case 'kepler': { const E = kepler(a, c), b = Math.sqrt(1 - c * c); return { x: (Math.cos(E) - c) / (1 + c), y: b * Math.sin(E) / (1 + c) }; }
+    case 'precession': {
+      const e = 0.5, E = kepler(a, e), b = Math.sqrt(1 - e * e), x0 = (Math.cos(E) - e) / 1.5, y0 = b * Math.sin(E) / 1.5, w = c * a;
+      return { x: x0 * Math.cos(w) - y0 * Math.sin(w), y: x0 * Math.sin(w) + y0 * Math.cos(w) };
+    }
+    case 'halo': return { x: Math.sin(a), y: 0.85 * Math.sin(a * (1 + c) + 0.6) };
+    case 'retrograde': return { x: (1.52 * Math.cos(a) - Math.cos(a * c)) / 2.6, y: (1.52 * Math.sin(a) - Math.sin(a * c)) / 2.6 };
+    case 'resonance': return { x: (1 - c) * Math.cos(a) + c * Math.cos(2 * a), y: (1 - c) * Math.sin(a) + c * Math.sin(2 * a) };
+    case 'figure8': return fig8At(p);
+    default: return { x: Math.sin(a), y: Math.cos(a) };
+  }
+}
+/* the envelope: attack 1 ms..1 s, decay 10 ms..2 s, both on a log scale */
+const envAttack = (m) => 0.001 * Math.pow(1000, clamp(m.atk, 0, 1));
+const envDecay = (m) => 0.01 * Math.pow(200, clamp(m.dec, 0, 1));
+function envAt(m, t) {
+  const a = envAttack(m), d = envDecay(m);
+  if (t <= 0) return 0;
+  if (t < a) return t / a;
+  return Math.pow(Math.max(0, 1 - (t - a) / d), 2);
+}
+/* how an envelope reads, for drawing: a slow attack swells like a flare, a
+   fast one strikes like an impact, and a fast one with a long tail blows
+   out like a supernova */
+function envLook(m) {
+  if (envAttack(m) > 0.06) return 'flare';
+  return envDecay(m) > 0.5 ? 'supernova' : 'impact';
+}
+function freshMod() {
+  return { shape: 'sine', rate: 2, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
+}
+/* the LFO's output at a point in the song, in beats from the start */
+const modLfo = (m, beats) => lfoAt(m.shape, beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats + m.phase, m.ctl).x;
+
+/* destinations: the hit's position on the map, pitch and decay across every
+   layer, or any one engine control */
+const MOD_DESTS = [
+  { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
+  { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
+  // engine controls carry their layer's name: there's a body decay and a noise decay
+  ...PARAM_SPECS.map((p) => {
+    const layer = MODULES.find((m) => m.id === p.mod).label;
+    const low = /^[A-Z]{2}/.test(p.label) ? p.label : p.label.toLowerCase(); // keep "FM"
+    const name = p.key === 'lvl' ? 'Output level' : p.key === 'q' ? 'Filter resonance' : p.mod === 'out' || p.mod === 'filter' ? p.label : `${layer} ${low}`;
+    return { id: p.key, name, group: layer };
+  }),
+];
+function modulatePos(pos, dest, amt) {
+  if (dest === 'x') return { x: clamp(pos.x + amt * 0.5, 0, 1), y: pos.y };
+  if (dest === 'y') return { x: pos.x, y: clamp(pos.y + amt * 0.5, 0, 1) };
+  return pos;
+}
+function modulateParams(P, dest, amt) {
+  if (!amt || dest === 'x' || dest === 'y') return P;
+  const Q = Object.assign({}, P);
+  if (dest === 'pitch') { const k = Math.pow(2, amt); Q.f *= k; Q.resF *= k; Q.mPitch *= k; return Q; }
+  if (dest === 'decay') { const k = Math.pow(4, amt); Q.tDec *= k; Q.nDec *= k; Q.mDec *= k; Q.resDec *= k; return Q; }
+  const sp = PARAM_BY_KEY[dest];
+  if (!sp) return P;
+  // half the knob's travel either way at full depth, in the knob's own scale
+  Q[dest] = sp.log && sp.min > 0
+    ? clamp(P[dest] * Math.pow(sp.max / sp.min, amt * 0.5), sp.min, sp.max)
+    : clamp(P[dest] + amt * (sp.max - sp.min) * 0.5, sp.min, sp.max);
+  return Q;
+}
+/* does a target cover this hit? step: that step; drum: hits whose nearest
+   anchor is that drum; kit: every hit */
+function modCovers(m, stepIndex, anchor) {
+  return m.targets.some((g) => g.kind === 'kit' || (g.kind === 'step' && g.i === stepIndex) || (g.kind === 'drum' && g.a === anchor));
+}
+/* toggle a target in or out of a modulator's list */
+function toggleTarget(m, g) {
+  const same = (h) => h.kind === g.kind && h.i === g.i && h.a === g.a;
+  const k = m.targets.findIndex(same);
+  if (k >= 0) m.targets.splice(k, 1); else m.targets.push(g);
+  return k < 0;
+}
+const nearestAnchor = (x, y) => { const w = weightsAt(x, y); return w.indexOf(Math.max(...w)); };
+
 const DEMO_BEAT = [
   [0, 0.12, 0.10], [2, 0.70, 0.86], [3, 0.31, 0.87], [4, 0.45, 0.42],
   [6, 0.70, 0.86], [7, 0.86, 0.72], [8, 0.12, 0.10], [10, 0.70, 0.86],
@@ -1179,6 +1425,32 @@ const DEMO_BEAT = [
   const mixc = (a, b, t) => [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t];
   const rgbs = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+  /* ---------- star colours: a sound's colour follows its stellar class.
+     voiceSignature's t runs 0 (deep, low) .. 1 (bright, high); deep sounds
+     glow like cool red M stars, bright ones burn blue-white like B stars.
+     Step tiles use a stronger version so neighbours read apart. ---------- */
+  const hexRGB = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const ramp = (stops) => { const cs = stops.map(hexRGB); return (t) => {
+    t = clamp(t, 0, 1) * (cs.length - 1);
+    const i = Math.min(cs.length - 2, Math.floor(t)), f = t - i;
+    return mixc(cs[i], cs[i + 1], f);
+  }; };
+  const STAR_NIGHT = ramp(['#FF6A3D', '#FF9A4A', '#FFD9A8', '#F4F1FF', '#BFCBFF', '#8EA4FF']);
+  const STAR_DAY = ramp(['#E0461F', '#E8731C', '#D9A23A', '#9D93C8', '#5E78E6', '#3C55D9']); // inked for paper
+  const TILE = ramp(['#FF4A2E', '#FF8424', '#FFBE3D', '#C6A8FF', '#8D9CFF', '#5B6EFF']);
+  let theme = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
+    theme = { sky: hexRGB(v('--sky') || '#03050A'), line: v('--sky-line'), star: v('--sky-star'), now: v('--now'), hold: v('--hold'), ink: v('--ink'), muted: v('--muted') };
+    theme.dark = lum(theme.sky) < 0.5;
+    theme.glint = theme.dark ? [255, 255, 255] : [16, 21, 33];
+  }
+  const starRGB = (t) => (theme.dark ? STAR_NIGHT : STAR_DAY)(t);
+  /* the six modulators' own colours: none of them yellow, cyan or red */
+  const MOD_COL = ['#FF6B91', '#FFAA3D', '#A98BFF', '#7F9BFF', '#5FD39A', '#C4BFDD'];
+  const MOD_COL_DAY = ['#D9466F', '#C77A12', '#7C5CE6', '#4F6FE0', '#2E9E68', '#6F7A92'];
+  const modCol = (k) => (theme.dark ? MOD_COL : MOD_COL_DAY)[k];
+
   /* knob geometry (see createKnob) */
   const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
   function arcPath(a0, a1) {
@@ -1198,6 +1470,7 @@ const DEMO_BEAT = [
   let lastAud = { t: 0, x: 0, y: 0 };
   let lastT = 0;
 
+  readTheme();
   const seq = new Sequence(
     () => { dirty = stepsDirty = readoutDirty = laneDirty = true; },
     (x, y, kind) => audition(x, y, kind)
@@ -1234,19 +1507,72 @@ const DEMO_BEAT = [
   let smooth = false;
   let liveVoices = []; // glide handles of live pad hits still ringing
   function playLive(x, y, t) {
-    const P = paramsAt(x, y);
-    if (engine) {
-      const h = engine.trigger(P, t, undefined, smooth ? { glide: true } : undefined);
-      if (h.glide) liveVoices.push(h);
-    }
-    return P;
+    if (!engine) return paramsAt(x, y);
+    const when = t == null ? actx.currentTime : t;
+    const h = strike(-1, x, y, when, undefined, smooth);
+    if (h.v.glide && smooth) liveVoices.push(h.v);
+    return h.P;
   }
   function glideLive(x, y) {
     if (!smooth || !actx || !liveVoices.length) return;
-    const now = actx.currentTime, P = paramsAt(x, y);
+    const now = actx.currentTime, P = soundAt(-1, x, y, now, null);
     liveVoices = liveVoices.filter((h) => h.end > now);
     for (const h of liveVoices) h.glide(P, now);
   }
+
+  /* ---------- modulation at the moment of a hit ----------
+     soundAt: the parameters for a hit at (x, y) on step i (-1 = a live
+     touch), struck at time t, envT seconds into the hit (null = the strike
+     itself, envelopes at zero). LFOs are read once at the strike; an
+     envelope moves pitch, filters, levels and position through the hit
+     (the voice glides), and anything fixed at the strike (decays, drive,
+     fold...) takes the envelope's peak. */
+  const mods = Array.from({ length: MOD_COUNT }, freshMod);
+  // a starting set: two at work on the demo beat, the rest ready to assign
+  const anchorNamed = (n) => ANCHORS.findIndex((a) => a.name === n);
+  Object.assign(mods[0], { shape: 'kepler', rate: 2, depth: 0.35, ctl: 0.6, dest: 'decay', targets: [{ kind: 'drum', a: anchorNamed('snare') }] });
+  Object.assign(mods[1], { shape: 'env', atk: 0.05, dec: 0.35, depth: 0.45, dest: 'mPitch', targets: [{ kind: 'drum', a: anchorNamed('closed hat') }] });
+  Object.assign(mods[2], { shape: 'halo', rate: 1, depth: 0.3, ctl: 0.4, dest: 'x' });
+  Object.assign(mods[3], { shape: 'saw', rate: 3, depth: -0.4, dest: 'lp' });
+  Object.assign(mods[4], { shape: 'random', rate: 5, depth: 0.3, dest: 'fold' });
+  Object.assign(mods[5], { shape: 'figure8', rate: 1, depth: 0.25, dest: 'y' });
+  const knobMods = [], knobRefreshers = []; // knob source pickers (kit and engine pages)
+  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'hp', 'lp', 'q', 'lvl']);
+  let playT0 = 0;
+  const beatsAt = (t) => (playing ? t - playT0 : t) / (60 / tempo);
+  function activeMods(i, x, y) {
+    const a = nearestAnchor(x, y), out = [];
+    for (const m of mods) if (m.targets.length && modCovers(m, i, a)) out.push(m);
+    return out;
+  }
+  const isEnv = (m) => m.shape === 'env';
+  function soundAt(i, x, y, t, envT, act) {
+    act = act || activeMods(i, x, y);
+    if (!act.length) return paramsAt(x, y);
+    const beats = beatsAt(t);
+    const amt = (m) => isEnv(m)
+      ? m.depth * (GLIDE_DESTS.has(m.dest) ? (envT == null ? 0 : envAt(m, envT)) : 1)
+      : m.depth * modLfo(m, beats);
+    let pos = { x, y };
+    for (const m of act) pos = modulatePos(pos, m.dest, amt(m));
+    let P = paramsAt(pos.x, pos.y);
+    for (const m of act) P = modulateParams(P, m.dest, amt(m));
+    return P;
+  }
+  /* strike: one hit, with any envelope's glide scheduled through it */
+  const ENV_POINTS = 10;
+  function strike(i, x, y, t, decMult, glide) {
+    const act = activeMods(i, x, y), envs = act.filter((m) => isEnv(m) && GLIDE_DESTS.has(m.dest));
+    const P = soundAt(i, x, y, t, envs.length ? 0 : null, act);
+    const v = engine.trigger(P, t, decMult, glide || envs.length ? { glide: true } : undefined);
+    if (envs.length && v.glide) {
+      const span = Math.min(2, Math.max(...envs.map((m) => envAttack(m) + envDecay(m))));
+      for (let k = 1; k <= ENV_POINTS; k++) { const tau = span * k / ENV_POINTS; v.glide(soundAt(i, x, y, t, tau, act), t + tau); }
+    }
+    if (envs.length) for (const m of envs) envFires.push({ k: mods.indexOf(m), i, x, y, t });
+    return { P, v };
+  }
+  let envFires = []; // recent envelope firings, for drawing them on the pad
 
   /* the pad's recent path, for smooth recording: one id per gesture so a
      step only ever samples the gesture that wrote it */
@@ -1436,9 +1762,10 @@ const DEMO_BEAT = [
   }
 
   function playStored(i, x, y, t, decMult) {
-    const P = paramsAt(x, y);
-    if (engine) storedVoices.push({ i, v: engine.trigger(P, t, decMult) });
-    return P;
+    if (!engine) return paramsAt(x, y);
+    const h = strike(i, x, y, t, decMult, false);
+    storedVoices.push({ i, v: h.v });
+    return h.P;
   }
 
   /* a smooth-recorded step: each hit (the primary and every ratchet) is a
@@ -1450,12 +1777,12 @@ const DEMO_BEAT = [
     const offs = [0, ...s.ratchets.map((rr) => rr.offset)];
     let P0 = null;
     offs.forEach((o, k) => {
-      const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = paramsAt(q.x, q.y);
+      const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = soundAt(i, q.x, q.y, ht, 0);
       const h = engine ? engine.trigger(P, ht, decMult, { glide: true }) : null;
       if (h) storedVoices.push({ i, v: h });
       if (h && h.glide) for (let j = 1; j < AUTO_POINTS; j++) {
         const oo = j / (AUTO_POINTS - 1);
-        if (oo > o && oo <= o2) { const qq = at(oo); h.glide(paramsAt(qq.x, qq.y), t + oo * span); }
+        if (oo > o && oo <= o2) { const qq = at(oo); h.glide(soundAt(i, qq.x, qq.y, ht, (oo - o) * span), t + oo * span); }
       }
       if (k) queue.push({ i, t: ht, fired: true, x: q.x, y: q.y, P, ratchet: true });
       else P0 = P;
@@ -1471,6 +1798,7 @@ const DEMO_BEAT = [
       stopPadHold();
       stepIdx = 0; queue = []; locks = []; finals = []; liveNext = 0; pendingPress = pendingBar = null;
       nextBase = actx.currentTime + 0.06;
+      playT0 = nextBase;
       playing = true;
       tick();
       timer = setInterval(tick, 25);
@@ -1504,6 +1832,7 @@ const DEMO_BEAT = [
   const FINGER = 0.045;  // particles start this far out (pad units), clear of the fingertip
   function spawnBurst(x, y, P, now) {
     const sig = voiceSignature(P);
+    sig.rgb = starRGB(sig.t);
     const n = Math.round(8 + sig.level * 26);
     const nLiquid = Math.round(n * sig.tW);
     const nSmoke = Math.round(n * sig.nW);
@@ -1554,7 +1883,7 @@ const DEMO_BEAT = [
       kind: 'smoke', x, y, vx: Math.cos(ang) * spd, vy: Math.abs(Math.sin(ang)) * spd * 0.55 + 0.02,
       r: (0.006 + 0.01 * sig.level) * (1.2 - sig.t * 0.4) * (0.7 + Math.random() * 0.6),
       born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.5, 280, 1500),
-      rgb: mixc(sig.rgb, [180, 182, 196], 0.35), drive: sig.drive,
+      rgb: mixc(sig.rgb, theme.dark ? [180, 182, 196] : [90, 96, 112], 0.35), drive: sig.drive,
     };
   }
   function updateSmoke(p, dt) {
@@ -1579,7 +1908,7 @@ const DEMO_BEAT = [
       kind: 'spark', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
       r: (0.0024 + 0.0042 * sig.level) * (1.15 - sig.t * 0.35),
       born: now, life: reduceMotion ? 100 : clamp(sig.dec * 1000 * 0.75 + 50, 80, 420),
-      rgb: mixc(sig.rgb, [255, 255, 255], 0.5), drive: sig.drive,
+      rgb: mixc(sig.rgb, theme.glint, 0.4), drive: sig.drive,
     };
   }
   function updateSpark(p, dt) {
@@ -1595,7 +1924,7 @@ const DEMO_BEAT = [
     pg.strokeStyle = rgbs(p.rgb, a * 0.85);
     pg.lineWidth = Math.max(1 * u, p.r * scale * 1.4);
     pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs([255, 255, 255], a * 0.95);
+    pg.fillStyle = rgbs(theme.glint, a * 0.95);
     pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
   }
 
@@ -1606,7 +1935,7 @@ const DEMO_BEAT = [
   }
   function drawRing(pg, p, age, px, py, u) {
     const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
-    pg.strokeStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.5), (1 - age) * 0.7);
+    pg.strokeStyle = rgbs(mixc(p.rgb, theme.glint, 0.4), (1 - age) * 0.7);
     pg.lineWidth = (2.5 - 1.5 * age) * u;
     pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.03 + p.r * e) * scale, 0, 6.283); pg.stroke();
   }
@@ -1624,36 +1953,27 @@ const DEMO_BEAT = [
     }
   }
 
-  /* ---------- abstract backdrop: a dark field with a soft sound-coloured
-     wash. No labels, no icons, no named regions, no grid. */
-  let field = document.createElement('canvas');
-  function buildField(W, H) {
-    const FW = 96, FH = 96;
-    const off = document.createElement('canvas'); off.width = FW; off.height = FH;
-    const og = off.getContext('2d');
-    const img = og.createImageData(FW, FH);
-    const base = [8, 9, 18];
-    for (let j = 0; j < FH; j++) {
-      const y = 1 - (j + 0.5) / FH;
-      for (let i = 0; i < FW; i++) {
-        const x = (i + 0.5) / FW;
-        const sig = voiceSignature(paramsAt(x, y));
-        const t = 0.1 + 0.07 * sig.level;
-        const p = (j * FW + i) * 4;
-        img.data[p] = base[0] * (1 - t) + sig.rgb[0] * t;
-        img.data[p + 1] = base[1] * (1 - t) + sig.rgb[1] * t;
-        img.data[p + 2] = base[2] * (1 - t) + sig.rgb[2] * t;
-        img.data[p + 3] = 255;
-      }
+  /* ---------- the sky: a plain field with a faint nebula of the sound map
+     and a scatter of background stars. No labels and no grid. ---------- */
+  const BG_STARS = (() => { let q = 7; const r = () => (q = (q * 16807) % 2147483647) / 2147483647; return Array.from({ length: 150 }, () => [r(), r(), r() ** 3]); })();
+  function buildSky(W, H) {
+    const N = 64, off = document.createElement('canvas'); off.width = N; off.height = N;
+    const og = off.getContext('2d'), img = og.createImageData(N, N), base = theme.sky, k = theme.dark ? 0.12 : 0.13;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const c = starRGB(voiceSignature(paramsAt((i + 0.5) / N, 1 - (j + 0.5) / N)).t), q = (j * N + i) * 4;
+      img.data[q] = base[0] + (c[0] - base[0]) * k; img.data[q + 1] = base[1] + (c[1] - base[1]) * k; img.data[q + 2] = base[2] + (c[2] - base[2]) * k; img.data[q + 3] = 255;
     }
     og.putImageData(img, 0, 0);
-
     const f = document.createElement('canvas'); f.width = W; f.height = H;
-    const fg = f.getContext('2d');
+    const fg = f.getContext('2d'), u = Math.min(W, H) / 400;
     fg.imageSmoothingEnabled = true; fg.imageSmoothingQuality = 'high';
     fg.drawImage(off, 0, 0, W, H);
+    fg.fillStyle = theme.star;
+    for (const [x, y, b] of BG_STARS) { fg.globalAlpha = 0.15 + b * 0.7; fg.beginPath(); fg.arc(x * W, y * H, (0.4 + b * 1.1) * u, 0, 6.283); fg.fill(); }
+    fg.globalAlpha = 1;
     return f;
   }
+  let field = document.createElement('canvas');
 
   /* ---------- pad drawing ---------- */
   function resizePad() {
@@ -1661,26 +1981,12 @@ const DEMO_BEAT = [
     dpr = Math.min(2.5, window.devicePixelRatio || 1);
     pad.width = Math.max(2, Math.round(r.width * dpr));
     pad.height = Math.max(2, Math.round(r.height * dpr));
-    field = buildField(pad.width, pad.height);
+    field = buildSky(pad.width, pad.height);
     dirty = true;
   }
 
-  function drawPad(now) {
-    const W = pad.width, H = pad.height, u = dpr;
-    const font = cssVar('--font-ui') || 'system-ui, sans-serif';
-    const px = (x) => x * W, py = (y) => (1 - y) * H;
-    pg.clearRect(0, 0, W, H);
-    pg.drawImage(field, 0, 0, W, H);
-
-    for (const p of particles) {
-      // timer-spawned particles can be born a few ms after this frame's timestamp
-      const age = Math.max(0, (now - p.born) / p.life);
-      if (age >= 1) continue;
-      DRAW[p.kind](pg, p, age, px, py, u);
-    }
-
-    // step markers: filled with that step's own sound colour, fanned out
-    // when several steps share one spot, so the pad also works as memory.
+  /* steps that share one spot on the map make one star */
+  function starGroups() {
     const groups = new Map();
     seq.steps.forEach((s, i) => {
       if (!s.on) return;
@@ -1688,56 +1994,116 @@ const DEMO_BEAT = [
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(i);
     });
-    pg.textAlign = 'center'; pg.textBaseline = 'middle';
-    for (const list of groups.values()) {
-      const s0 = seq.steps[list[0]];
-      const bx = px(s0.x), by = py(s0.y);
-      const spots = list.map((_, k) => {
-        if (k === 0) return [bx, by];
-        const ring = k <= 6 ? 1 : 2;
-        const n = ring === 1 ? Math.min(list.length - 1, 6) : list.length - 7;
-        const idx = ring === 1 ? k - 1 : k - 7;
-        const ang = -Math.PI / 2 + idx * 2 * Math.PI / Math.max(n, 1);
-        const rr = (ring === 1 ? 20 : 36) * u;
-        return [bx + Math.cos(ang) * rr, by + Math.sin(ang) * rr];
-      });
-      if (list.length > 1) {
-        pg.strokeStyle = 'rgba(255,255,255,.4)'; pg.lineWidth = 1.5 * u;
-        pg.beginPath();
-        spots.forEach((p, k) => { if (k) { pg.moveTo(bx, by); pg.lineTo(p[0], p[1]); } });
-        pg.stroke();
-      }
-      list.forEach((i, k) => {
-        const [cx, cy] = spots[k];
-        const s = seq.steps[i];
-        const sig = voiceSignature(paramsAt(s.x, s.y));
-        const isHeld = seq.held.has(i) || seq.latched.has(i);
-        const isNow = i === cur;
-        const rad = (isNow ? 10.5 : 8.5) * u;
-        if (isNow) {
-          pg.strokeStyle = cssVar('--now') || '#0E9F8E'; pg.lineWidth = 3.5 * u;
-          pg.beginPath(); pg.arc(cx, cy, rad + 3 * u, 0, 6.283); pg.stroke();
-        }
-        if (isHeld) {
-          pg.strokeStyle = cssVar('--hold') || '#F0B400'; pg.lineWidth = 3 * u;
-          pg.beginPath(); pg.arc(cx, cy, rad + 4 * u, 0, 6.283); pg.stroke();
-        }
-        pg.fillStyle = 'rgba(5,7,12,.85)';
-        pg.beginPath(); pg.arc(cx, cy, rad + 1.8 * u, 0, 6.283); pg.fill();
-        pg.fillStyle = `rgb(${sig.rgb[0] | 0},${sig.rgb[1] | 0},${sig.rgb[2] | 0})`;
-        pg.beginPath(); pg.arc(cx, cy, rad, 0, 6.283); pg.fill();
-        pg.fillStyle = lum(sig.rgb) > 0.52 ? '#11132a' : '#f4f3fb';
-        pg.font = `700 ${9 * u}px ${font}`;
-        pg.fillText(String(i + 1), cx, cy + 0.5 * u);
-      });
+    return [...groups.values()];
+  }
+  let curT = 0; // when the current step started sounding (audio clock)
+  /* the constellation, the playhead travelling along it, the stars and the
+     moons of every modulator orbiting the steps it moves */
+  function drawStarChart(g, W, H, u, now, opts) {
+    const P = (s) => [s.x * W, (1 - s.y) * H];
+    const order = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+    if (order.length > 1) {
+      g.lineWidth = 1 * u; g.strokeStyle = theme.line;
+      g.beginPath(); order.forEach((i, k) => { const [x, y] = P(seq.steps[i]); if (k) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); g.stroke();
     }
+    const stepDur = 60 / tempo / 4, frac = playing && actx ? clamp((actx.currentTime - curT) / stepDur, 0, 1) : 0;
+    if (playing && cur >= 0 && order.length > 1 && opts.playhead) {
+      let a = -1; for (let k = 0; k < order.length; k++) if (order[k] <= cur) a = k; if (a < 0) a = order.length - 1;
+      const b = (a + 1) % order.length, sa = order[a], sb = order[b], span = ((sb - sa + 16) % 16) || 16;
+      const prog = clamp((((cur - sa + 16) % 16) + frac) / span, 0, 1);
+      const [x0, y0] = P(seq.steps[sa]), [x1, y1] = P(seq.steps[sb]), hx = x0 + (x1 - x0) * prog, hy = y0 + (y1 - y0) * prog;
+      const grad = g.createLinearGradient(x0, y0, hx, hy); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, theme.now);
+      g.strokeStyle = grad; g.lineWidth = 2 * u; g.beginPath(); g.moveTo(x0, y0); g.lineTo(hx, hy); g.stroke();
+      g.fillStyle = theme.now; g.beginPath(); g.arc(hx, hy, 2.4 * u, 0, 6.283); g.fill();
+    }
+    const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
+    for (const list of groups) {
+      const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
+      const lit = list.includes(cur) && playing, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
+      glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
+      g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
+      g.strokeStyle = rgbs(c, lit ? 0.85 : 0.45); g.lineWidth = 1 * u;
+      const L = R * (lit ? 3.4 - age : 2.2);
+      g.beginPath(); g.moveTo(x - L, y); g.lineTo(x + L, y); g.moveTo(x, y - L); g.lineTo(x, y + L); g.stroke();
+      g.fillStyle = rgbs(c, 1); g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.fill();
+      if (theme.dark) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(x, y, R * 0.26, 0, 6.283); g.fill(); }
+      else { g.strokeStyle = 'rgba(16,21,33,.55)'; g.lineWidth = 0.8 * u; g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.stroke(); }
+      if (lit) { g.strokeStyle = theme.now; g.lineWidth = 1.6 * u; g.beginPath(); g.arc(x, y, R * 1.7, 0, 6.283); g.stroke(); }
+      if (list.some((i) => seq.held.has(i) || seq.latched.has(i))) { g.strokeStyle = theme.hold; g.lineWidth = 2.4 * u; g.beginPath(); g.arc(x, y, R * 2.2, 0, 6.283); g.stroke(); }
+      if (opts.mark && opts.mark(list)) { g.strokeStyle = theme.hold; g.lineWidth = 2 * u; g.setLineDash(opts.mark(list) === 'drum' ? [3 * u, 3 * u] : []); g.beginPath(); g.arc(x, y, R * 2.6, 0, 6.283); g.stroke(); g.setLineDash([]); }
+      g.fillStyle = theme.muted; g.font = `500 ${8.5 * u}px ${font}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.fillText(list.map((i) => i + 1).join(' '), x + R * 1.5 + 2 * u, y - R * 1.4);
+    }
+    drawMoons(g, W, H, u, now, groups);
+  }
+  /* moons: one per modulator around every star it moves. An LFO's moon
+     follows its real path (an ellipse for Kepler, a figure-eight for the
+     three-body orbit); an envelope shows when its step fires, as a flare,
+     an impact or a supernova depending on its attack and decay. */
+  function drawMoons(g, W, H, u, now, groups) {
+    const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo);
+    mods.forEach((m, k) => {
+      if (!m.targets.length) return;
+      const col = modCol(k), env = isEnv(m), sh = SHAPE_BY_ID[m.shape];
+      for (const list of groups) {
+        const s = seq.steps[list[0]];
+        if (!list.some((i) => modCovers(m, i, nearestAnchor(s.x, s.y)))) continue;
+        const cx = s.x * W, cy = (1 - s.y) * H, R = (15 + k * 4.5) * u;
+        if (env) {
+          const fire = envFires.filter((f) => f.k === k && list.includes(f.i)).pop();
+          const look = envLook(m), span = envAttack(m) + envDecay(m);
+          const age = fire && actx ? (actx.currentTime - fire.t) / Math.max(0.15, span) : 2;
+          g.strokeStyle = col; g.lineWidth = 1 * u; g.globalAlpha = 0.35;
+          g.beginPath(); g.arc(cx, cy, R * 0.55, 0, 6.283); g.stroke(); g.globalAlpha = 1;
+          if (age >= 0 && age < 1) {
+            const e = envAt(m, age * span);
+            if (look === 'flare') {
+              const gl = g.createRadialGradient(cx, cy, 0, cx, cy, R * (0.5 + 0.8 * e));
+              gl.addColorStop(0, col); gl.addColorStop(1, 'rgba(0,0,0,0)');
+              g.globalAlpha = 0.25 + 0.5 * e; g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 1.4, 0, 6.283); g.fill();
+            } else {
+              const shells = look === 'supernova' ? 3 : 1;
+              for (let q = 0; q < shells; q++) {
+                g.globalAlpha = Math.max(0, (1 - age) * (0.9 - q * 0.25));
+                g.lineWidth = (2.2 - q * 0.5) * u;
+                g.beginPath(); g.arc(cx, cy, R * (0.4 + (1.2 - q * 0.25) * Math.pow(age, look === 'impact' ? 0.4 : 0.6)), 0, 6.283); g.stroke();
+              }
+            }
+            g.globalAlpha = 1;
+          }
+          continue;
+        }
+        const p = beats / MOD_RATES[m.rate].beats + m.phase, q = lfoAt(m.shape, p, m.ctl);
+        let mx, my;
+        if (sh && sh.orbit) { mx = cx + q.x * R; my = cy - q.y * R; }
+        else { const a = 2 * Math.PI * p; mx = cx + Math.cos(a) * R; my = cy + Math.sin(a) * R; }
+        g.strokeStyle = theme.line; g.lineWidth = 1 * u; g.setLineDash([2 * u, 3 * u]);
+        g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.stroke(); g.setLineDash([]);
+        g.fillStyle = col; g.beginPath(); g.arc(mx, my, 2.8 * u, 0, 6.283); g.fill();
+        g.strokeStyle = rgbs(theme.sky, 1); g.lineWidth = 1 * u; g.stroke();
+      }
+    });
+  }
 
-    // cursor: a plain white dot, deliberately unthemed so it always reads
-    // as "you". Touching grows it and adds a thin ring.
+  function drawPad(now) {
+    const W = pad.width, H = pad.height, u = dpr;
+    const px = (x) => x * W, py = (y) => (1 - y) * H;
+    pg.clearRect(0, 0, W, H);
+    pg.drawImage(field, 0, 0, W, H);
+    for (const p of particles) {
+      // timer-spawned particles can be born a few ms after this frame's timestamp
+      const age = Math.max(0, (now - p.born) / p.life);
+      if (age >= 1) continue;
+      DRAW[p.kind](pg, p, age, px, py, u);
+    }
+    drawStarChart(pg, W, H, u, now, { playhead: true });
+    // cursor: a plain dot, deliberately unthemed so it always reads as
+    // "you". Touching grows it and adds a thin ring.
     const c = seq.cursor, cx = px(c.x), cy = py(c.y);
     const held = seq.padHeld();
     if (held) {
-      pg.strokeStyle = 'rgba(255,255,255,.55)'; pg.lineWidth = 1.5 * u;
+      pg.strokeStyle = rgbs(theme.glint, 0.55); pg.lineWidth = 1.5 * u;
       pg.beginPath(); pg.arc(cx, cy, 15 * u, 0, 6.283); pg.stroke();
     }
     pg.fillStyle = 'rgba(5,7,12,.85)';
@@ -1830,10 +2196,9 @@ const DEMO_BEAT = [
       el.setAttribute('aria-pressed', s.on ? 'true' : 'false');
       if (s.on) {
         const w = weightsAt(s.x, s.y);
-        const sig = voiceSignature(paramsAt(s.x, s.y, w));
-        const c = mixc(sig.rgb, [20, 23, 46], 0.08);
+        const c = TILE(voiceSignature(paramsAt(s.x, s.y, w)).t);
         el.style.setProperty('--c', `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
-        el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
+        el.style.setProperty('--tc', lum(c) > 0.5 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
         el.style.setProperty('--dy', s.y.toFixed(3));
         const hits = 1 + (Array.isArray(s.ratchets) ? s.ratchets.length : 0);
@@ -1858,40 +2223,6 @@ const DEMO_BEAT = [
      of the map, not just a single fixed sound. Edits apply immediately and
      last for the session; Reset this drum restores its shipped tuning.
      ========================================================================== */
-  const MODULES = [
-    { id: 'body', label: 'Body', accent: '--m-body' },
-    { id: 'noise', label: 'Noise', accent: '--m-noise' },
-    { id: 'metal', label: 'Metal', accent: '--m-metal' },
-    { id: 'res', label: 'Resonator', accent: '--m-res' },
-    { id: 'filter', label: 'Filter', accent: '--m-filter' },
-    { id: 'out', label: 'Shape & out', accent: '--m-out' },
-  ];
-  const PARAM_SPECS = [
-    { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
-    { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
-    { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
-    { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
-    { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
-    { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
-    { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
-    { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
-    { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
-    { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
-    { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
-    { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
-    { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
-  ];
   function fmtParam(unit, v) {
     if (unit === 'hz') return fmtHz(v);
     if (unit === 's') return fmtT(v);
@@ -1912,7 +2243,7 @@ const DEMO_BEAT = [
   let fieldRefreshTimer = null, engineAuditionTimer = null;
   function scheduleFieldRefresh() {
     clearTimeout(fieldRefreshTimer);
-    fieldRefreshTimer = setTimeout(() => { field = buildField(pad.width, pad.height); dirty = true; }, 90);
+    fieldRefreshTimer = setTimeout(() => { field = buildSky(pad.width, pad.height); modField = null; dirty = true; }, 90);
   }
   function auditionAnchorSoon(a) {
     clearTimeout(engineAuditionTimer);
@@ -1962,12 +2293,13 @@ const DEMO_BEAT = [
       onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[+engineSelect.value]); },
       onPointerUp: stopSliderPreview,
       onChange: () => history.commit(),
+      mod: knobMod(spec.key, () => ({ kind: 'drum', a: +engineSelect.value })),
     });
     return { spec, slider };
   });
   function loadAnchorIntoEditor() {
     const a = ANCHORS[+engineSelect.value];
-    paramRows.forEach(({ spec, slider }) => slider.set(a.p[spec.key]));
+    paramRows.forEach(({ spec, slider }) => { slider.set(a.p[spec.key]); slider.refreshMod(); });
   }
   engineSelect.addEventListener('change', loadAnchorIntoEditor);
   $('#engineReset').addEventListener('click', () => {
@@ -2012,27 +2344,27 @@ const DEMO_BEAT = [
     for (let i = 0; i < N_STEPS; i++) {
       const s = seq.steps[i];
       const on = s.on;
-      const sig = voiceSignature(paramsAt(s.x, s.y));
+      const tc = TILE(voiceSignature(paramsAt(s.x, s.y)).t);
       const base = px2(i, colW);
       if (i === cur) {
-        lg.fillStyle = 'rgba(43,232,255,.14)';
-        lg.fillRect(base, 0, colW, H);
+        lg.fillStyle = theme.now; lg.globalAlpha = 0.16;
+        lg.fillRect(base, 0, colW, H); lg.globalAlpha = 1;
       }
       rows.forEach((row, ri) => {
         const top = ri * rowH, h = rowH - gap;
         const v = clamp(s[row.key], 0, 1);
-        lg.fillStyle = on ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)';
+        lg.fillStyle = rgbs(theme.glint, on ? 0.08 : 0.04);
         lg.fillRect(base + gap / 2, top + gap / 2, colW - gap, h - gap / 2);
         const barH = Math.max(2 * u, v * (h - gap / 2));
-        const rgb = on ? sig.rgb : [90, 92, 112];
+        const rgb = on ? tc : [120, 126, 144];
         const barTop = top + (h - gap / 2) - barH + gap / 2;
-        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.5);
+        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.45);
         lg.fillRect(base + gap / 2, barTop, colW - gap, barH);
-        lg.fillStyle = on ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.25)';
+        lg.fillStyle = rgbs(theme.glint, on ? 0.6 : 0.2);
         lg.fillRect(base + gap / 2, barTop, colW - gap, Math.min(barH, 3 * u));
         // a neutral mark at the middle of the decay row shows "no change"
         if (row.key === 'decay') {
-          lg.fillStyle = 'rgba(255,255,255,.4)';
+          lg.fillStyle = rgbs(theme.glint, 0.4);
           lg.fillRect(base + gap / 2, top + (h - gap / 2) * 0.5, colW - gap, Math.max(1, u));
         }
       });
@@ -2040,7 +2372,7 @@ const DEMO_BEAT = [
     // a divider between stacked bands, so the eye (and the thumb) can tell
     // them apart before a drag ever starts
     if (rows.length > 1) {
-      lg.strokeStyle = 'rgba(255,255,255,.14)'; lg.lineWidth = Math.max(1, u);
+      lg.strokeStyle = rgbs(theme.glint, 0.14); lg.lineWidth = Math.max(1, u);
       lg.beginPath();
       for (let ri = 1; ri < rows.length; ri++) { lg.moveTo(0, ri * rowH); lg.lineTo(W, ri * rowH); }
       lg.stroke();
@@ -2121,9 +2453,10 @@ const DEMO_BEAT = [
      knobs move evenly in ratio (pitches, times), not in Hz or seconds.
      Same API the old hslider had: { value, set(v) }. ---------- */
   function createKnob(container, opts) {
+    container.style.display = 'grid'; container.style.justifyItems = 'center'; container.style.gap = '4px';
     container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
       '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
-      '<div class="knob-cap"></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
+      '<div class="knob-cap"><i class="knob-ptr"></i></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
     const el = container.querySelector('.knob');
     const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
     el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
@@ -2200,7 +2533,20 @@ const DEMO_BEAT = [
       if (opts.onChange) opts.onChange(value);
     });
     render();
-    return { get value() { return value; }, set(v) { value = snap(v); render(); } };
+    // a modulation source picker under the knob (kit and engine pages)
+    let srcSel = null;
+    if (opts.mod) {
+      srcSel = document.createElement('select');
+      srcSel.className = 'modsel';
+      srcSel.setAttribute('aria-label', `Modulation source for ${opts.ariaLabel || opts.label}`);
+      srcSel.innerHTML = '<option value="-1">\u00b7</option>' + mods.map((_, k) => `<option value="${k}">M${k + 1}</option>`).join('');
+      srcSel.addEventListener('change', () => { opts.mod.pick(+srcSel.value); });
+      container.appendChild(srcSel);
+    }
+    const refreshMod = () => { if (!srcSel) return; const k = opts.mod.current(); srcSel.value = String(k); srcSel.classList.toggle('set', k >= 0); };
+    if (srcSel) knobRefreshers.push(refreshMod);
+    refreshMod();
+    return { get value() { return value; }, set(v) { value = snap(v); render(); }, refreshMod };
   }
 
   /* ---------- dice slider: a die at the left of a track; drag it right (or
@@ -2335,17 +2681,17 @@ const DEMO_BEAT = [
   /* kit-wide trims and macro mixes: shift every drum on the map at once,
      independent of any single drum's own tuning. */
   const kitEl = $('#kitKnobs');
-  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit }, o)); };
+  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit, mod: o.dest ? knobMod(o.dest, () => ({ kind: 'kit' })) : null }, o)); };
   const pct = (v) => v + '%';
-  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
-  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
-  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
-  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
-  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
-  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
-  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
-  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
-  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
+  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, dest: 'pitch', label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
+  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, dest: 'decay', label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
+  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, dest: 'atk', label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
+  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, dest: 'drive', label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
+  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, dest: 'fold', label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
+  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'tone', label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
+  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'noise', label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
+  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'metal', label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
+  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'res', label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
   /* press: act on touch-down. iOS sends no click for a tap made while
      another finger is down (holding the pad or the ratchet bar), and an
@@ -2387,6 +2733,261 @@ const DEMO_BEAT = [
   });
   let pendingMono = false; // applied to `engine` once it's created (ensureAudio runs lazily)
 
+  /* ==========================================================================
+     Modulation page. Six modulators, each a row: a live thumbnail, what it
+     does, Step and Drum assign keys and its own die (rolls its settings).
+     Assigning: hold Step or Drum and tap stars on the sky above, or hold a
+     star and tap Step or Drum; several either way in one hold. A quick tap
+     on Step or Drum latches it (lit) until tapped again, for one pointer.
+     ========================================================================== */
+  const modSky = $('#modSky'), msg = modSky.getContext('2d');
+  let modField = null, modSel = 0;
+  const modsEl = $('#mods');
+  const fmtRate = (m) => MOD_RATES[m.rate].name;
+  const destName = (id) => { const d = MOD_DESTS.find((x) => x.id === id); return d ? d.name : id; };
+  function modSummary(m) {
+    const sh = SHAPE_BY_ID[m.shape].name, n = m.targets.length;
+    const where = n ? m.targets.map((g) => g.kind === 'kit' ? 'kit' : g.kind === 'step' ? `step ${g.i + 1}` : ANCHORS[g.a].name).join(', ') : 'not assigned';
+    return `${sh} → ${destName(m.dest)} · ${where}`;
+  }
+  const PIPS = '<i></i><i></i><i></i><i></i><i></i>';
+  modsEl.innerHTML = mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
+      <canvas aria-hidden="true"></canvas>
+      <div style="min-width:0"><div class="nm"><i></i>M${k + 1}</div><div class="sm"></div></div>
+      <button class="assign cap" type="button" data-kind="step" aria-label="Step assign M${k + 1}: hold and tap stars">Step<br>assign</button>
+      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum assign M${k + 1}: hold and tap stars">Drum<br>assign</button>
+      <button class="minidie" type="button" aria-label="Randomize M${k + 1}'s settings" title="Randomize this modulator's settings">${PIPS}</button>
+    </div>`).join('');
+  const modRows = [...modsEl.querySelectorAll('.mod')];
+  function renderMods() {
+    modRows.forEach((row, k) => {
+      row.classList.toggle('sel', k === modSel);
+      row.style.setProperty('--mc', modCol(k));
+      row.querySelector('.sm').textContent = modSummary(mods[k]);
+    });
+    $('#modEdit').style.setProperty('--mc', modCol(modSel));
+  }
+
+  /* assigning */
+  let assignHold = null;        // {k, kind, used, pointerId} while an assign key is held
+  let assignLatch = null;       // {k, kind} after a quick tap, until tapped again
+  const heldStars = new Map();  // pointerId -> step indices of a star held on the sky
+  function targetFor(kind, list) {
+    const s = seq.steps[list[0]];
+    return kind === 'drum' ? [{ kind: 'drum', a: nearestAnchor(s.x, s.y) }] : list.map((i) => ({ kind: 'step', i }));
+  }
+  function assign(k, kind, list) {
+    for (const g of targetFor(kind, list)) toggleTarget(mods[k], g);
+    modSel = k; renderMods(); refreshKnobMods(); dirty = true;
+  }
+  function paintAssignKeys() {
+    modRows.forEach((row, k) => row.querySelectorAll('.assign').forEach((b) => {
+      const on = (assignHold && assignHold.k === k && assignHold.kind === b.dataset.kind) || (assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind);
+      b.setAttribute('aria-pressed', String(!!on));
+    }));
+  }
+  modRows.forEach((row, k) => {
+    row.addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) { modSel = k; renderMods(); loadModEditor(); } });
+    row.querySelectorAll('.assign').forEach((b) => {
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { b.setPointerCapture(e.pointerId); } catch (_) {}
+        assignHold = { k, kind: b.dataset.kind, used: false, pointerId: e.pointerId };
+        // the inverse flow: stars already held get assigned on the spot
+        for (const list of heldStars.values()) { assign(k, b.dataset.kind, list); assignHold.used = true; }
+        paintAssignKeys();
+      });
+      const up = (e) => {
+        if (!assignHold || assignHold.pointerId !== e.pointerId) return;
+        const h = assignHold; assignHold = null;
+        if (!h.used) assignLatch = assignLatch && assignLatch.k === h.k && assignLatch.kind === h.kind ? null : { k: h.k, kind: h.kind };
+        paintAssignKeys(); history.commit();
+      };
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+      b.addEventListener('click', (e) => { if (e.detail === 0) { assignLatch = assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind ? null : { k, kind: b.dataset.kind }; paintAssignKeys(); } });
+    });
+    row.querySelector('.minidie').addEventListener('click', () => { randomizeModSettings(k, 0.8); modSel = k; renderMods(); loadModEditor(); history.commit(); });
+  });
+  function starAt(e) {
+    const r = modSky.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = 1 - (e.clientY - r.top) / r.height;
+    let best = null, bd = Infinity;
+    for (const list of starGroups()) {
+      const s = seq.steps[list[0]], d = Math.hypot((s.x - x) * r.width, (s.y - y) * r.height);
+      if (d < bd) { bd = d; best = list; }
+    }
+    return bd < 28 ? best : null;
+  }
+  modSky.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const list = starAt(e);
+    if (!list) return;
+    try { modSky.setPointerCapture(e.pointerId); } catch (_) {}
+    const mode = assignHold || assignLatch;
+    if (mode) { assign(mode.k, mode.kind, list); if (assignHold) assignHold.used = true; history.commit(); }
+    else heldStars.set(e.pointerId, list);
+    dirty = true;
+  });
+  const skyUp = (e) => { heldStars.delete(e.pointerId); dirty = true; };
+  modSky.addEventListener('pointerup', skyUp); modSky.addEventListener('pointercancel', skyUp);
+  modSky.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  function drawModSky(now) {
+    const r = modSky.getBoundingClientRect(), d = Math.min(2.5, window.devicePixelRatio || 1);
+    const W = Math.max(2, Math.round(r.width * d)), H = Math.max(2, Math.round(r.height * d));
+    if (modSky.width !== W || modSky.height !== H || !modField) { modSky.width = W; modSky.height = H; modField = buildSky(W, H); }
+    msg.drawImage(modField, 0, 0);
+    const m = mods[modSel];
+    const held = new Set([...heldStars.values()].flat());
+    drawStarChart(msg, W, H, d, now, {
+      playhead: true,
+      mark: (list) => {
+        if (list.some((i) => held.has(i))) return 'step';
+        const s = seq.steps[list[0]], a = nearestAnchor(s.x, s.y);
+        if (m.targets.some((g) => g.kind === 'step' && list.includes(g.i))) return 'step';
+        if (m.targets.some((g) => g.kind === 'drum' && g.a === a)) return 'drum';
+        return null;
+      },
+    });
+  }
+
+  /* thumbnails: an LFO's path or wave with its body, or the envelope's shape */
+  function drawModThumbs(now) {
+    modRows.forEach((row, k) => {
+      const cv = row.querySelector('canvas'), d = Math.min(2, window.devicePixelRatio || 1), S = Math.round(40 * d);
+      if (cv.width !== S) { cv.width = S; cv.height = S; }
+      const g = cv.getContext('2d'), m = mods[k], col = modCol(k), sh = SHAPE_BY_ID[m.shape], c = S / 2;
+      g.fillStyle = rgbs(theme.sky, 1); g.fillRect(0, 0, S, S);
+      g.lineWidth = 1.4 * d; g.strokeStyle = theme.line;
+      if (isEnv(m)) {
+        const span = envAttack(m) + envDecay(m);
+        g.strokeStyle = col; g.beginPath();
+        for (let q = 0; q <= 40; q++) { const X = 4 * d + (S - 8 * d) * q / 40, Y = S - 6 * d - envAt(m, span * q / 40) * (S - 12 * d); if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+        return;
+      }
+      const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo), p = beats / MOD_RATES[m.rate].beats + m.phase;
+      if (sh.orbit) {
+        const R = S * 0.36; g.beginPath();
+        for (let q = 0; q <= 120; q++) { const o = lfoAt(m.shape, p - 1 + q / 120, m.ctl); const X = c + o.x * R, Y = c - o.y * R; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+        const o = lfoAt(m.shape, p, m.ctl); g.fillStyle = col; g.beginPath(); g.arc(c + o.x * R, c - o.y * R, 3 * d, 0, 6.283); g.fill();
+      } else {
+        g.strokeStyle = col; g.beginPath();
+        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = c - lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x * S * 0.32; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+      }
+    });
+  }
+
+  /* shape icons, drawn from the shapes themselves */
+  function shapeIcon(id, size = 22) {
+    const sh = SHAPE_BY_ID[id], pts = [];
+    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
+    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 6 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
+    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, 0.5).x * 7]);
+    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
+  }
+  const shapeBtn = $('#shapeBtn'), shapeMenu = $('#shapeMenu');
+  const SHAPE_GROUPS = [['Waves', (s) => !s.orbit && !s.env], ['Orbits', (s) => s.orbit], ['One-shot', (s) => s.env]];
+  shapeMenu.innerHTML = SHAPE_GROUPS.map(([name, f]) => `<div class="grouplabel">${name}</div>` +
+    MOD_SHAPES.filter(f).map((sh) => `<button type="button" role="menuitemradio" data-id="${sh.id}">${shapeIcon(sh.id)}${sh.name}</button>`).join('')).join('');
+  function closeShapeMenu() { shapeMenu.hidden = true; shapeBtn.setAttribute('aria-expanded', 'false'); }
+  shapeBtn.addEventListener('click', () => {
+    const open = shapeMenu.hidden;
+    shapeMenu.hidden = !open; shapeBtn.setAttribute('aria-expanded', String(open));
+    if (open) (shapeMenu.querySelector('[aria-checked="true"]') || shapeMenu.querySelector('button')).focus();
+  });
+  shapeMenu.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    mods[modSel].shape = b.dataset.id; closeShapeMenu(); loadModEditor(); renderMods(); history.commit(); shapeBtn.focus();
+  });
+  shapeMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeShapeMenu(); shapeBtn.focus(); } });
+  document.addEventListener('pointerdown', (e) => { if (!shapeMenu.hidden && !e.target.closest('.pickwrap')) closeShapeMenu(); });
+
+  const destSel = $('#destSel');
+  destSel.innerHTML = [...new Set(MOD_DESTS.map((d) => d.group))].map((grp) => `<optgroup label="${grp}">` +
+    MOD_DESTS.filter((d) => d.group === grp).map((d) => `<option value="${d.id}">${d.name}</option>`).join('') + '</optgroup>').join('');
+  destSel.addEventListener('change', () => { mods[modSel].dest = destSel.value; renderMods(); refreshKnobMods(); history.commit(); });
+
+  /* the editor's four knobs: rate, depth, the shape's own control and
+     phase for LFOs; attack, decay and depth for the envelope */
+  const modKnobsEl = $('#modKnobs');
+  function loadModEditor() {
+    const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
+    shapeBtn.innerHTML = shapeIcon(m.shape) + sh.name;
+    shapeMenu.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.id === m.shape)));
+    destSel.value = m.dest;
+    modKnobsEl.innerHTML = '';
+    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { renderMods(); history.commit(); } }, o)); };
+    if (sh.env) {
+      knob({ min: 0, max: 1, step: 0.01, value: m.atk, label: 'Attack', fmt: () => fmtT(envAttack(m)), onInput: (v) => { m.atk = v; } });
+      knob({ min: 0, max: 1, step: 0.01, value: m.dec, label: 'Decay', fmt: () => fmtT(envDecay(m)), onInput: (v) => { m.dec = v; } });
+    } else {
+      knob({ min: 0, max: MOD_RATES.length - 1, step: 1, value: m.rate, label: 'Rate', fmt: (v) => MOD_RATES[v].name, onInput: (v) => { m.rate = v; } });
+    }
+    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; } });
+    if (!sh.env && sh.ctl) knob({ min: 0, max: 1, step: 0.01, value: m.ctl, label: sh.ctl[0], fmt: (v) => (sh.ctl[1] + v * (sh.ctl[2] - sh.ctl[1])).toFixed(2), onInput: (v) => { m.ctl = v; } });
+    if (!sh.env) knob({ min: 0, max: 359, step: 1, value: Math.round(m.phase * 360), label: 'Phase', fmt: (v) => v + '°', onInput: (v) => { m.phase = v / 360; } });
+  }
+
+  /* each modulator's die rolls its settings, not its assignments */
+  function randomizeModSettings(k, strength) {
+    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)];
+    if (Math.random() < strength) m.shape = pick(MOD_SHAPES).id;
+    m.rate = clamp(Math.round(m.rate + (Math.random() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
+    m.depth = clamp((Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.6 * strength), -1, 1);
+    m.ctl = clamp(m.ctl + (Math.random() * 2 - 1) * strength, 0, 1);
+    m.phase = Math.random() < strength ? Math.random() : m.phase;
+    m.atk = clamp(m.atk + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+    m.dec = clamp(m.dec + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+  }
+  /* the page's die makes assignments: each modulator picks a destination
+     that suits it (envelopes on things that glide through a hit) and lands
+     on the drums the pattern actually uses most, or on a few steps */
+  function randomizeAssignments(strength) {
+    const on = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+    if (!on.length) return;
+    const counts = new Map();
+    for (const i of on) { const s = seq.steps[i], a = nearestAnchor(s.x, s.y); counts.set(a, (counts.get(a) || 0) + 1); }
+    const drums = [...counts.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch'];
+    const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
+    mods.forEach((m) => {
+      if (Math.random() > 0.3 + 0.7 * strength) return;
+      m.targets = [];
+      m.dest = pick(isEnv(m) ? ENV_DESTS : LFO_DESTS);
+      const r = Math.random();
+      if (r < 0.55) m.targets.push({ kind: 'drum', a: drums[Math.floor(Math.pow(Math.random(), 1.6) * drums.length)] });
+      else if (r < 0.92 || strength < 0.6) {
+        const n = 1 + Math.floor(Math.random() * Math.min(3, on.length));
+        for (let q = 0; q < n; q++) { const g = { kind: 'step', i: pick(on) }; if (!modCovers(m, g.i, -2)) m.targets.push(g); }
+      } else m.targets.push({ kind: 'kit' });
+      m.depth = (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.5 * strength);
+    });
+    renderMods(); loadModEditor(); refreshKnobMods(); dirty = true;
+    history.commit();
+  }
+
+  /* the knob pickers on the kit and engine pages: a modulator moves that
+     knob's control for the kit, or for the drum being edited */
+  function knobMod(dest, target) {
+    const sameT = (g, t) => g.kind === t.kind && g.a === t.a;
+    const o = {
+      current() { const t = target(); return mods.findIndex((m) => m.dest === dest && m.targets.some((g) => sameT(g, t))); },
+      pick(k) {
+        const t = target();
+        mods.forEach((m) => { if (m.dest === dest) m.targets = m.targets.filter((g) => !sameT(g, t)); });
+        if (k >= 0) { const m = mods[k]; if (m.dest !== dest) { m.dest = dest; } m.targets.push(t); }
+        renderMods(); refreshKnobMods(); dirty = true; history.commit();
+      },
+    };
+    knobMods.push(o);
+    return o;
+  }
+  function refreshKnobMods() { knobRefreshers.forEach((f) => f()); }
+
   /* ---------- undo / redo ---------- */
   const history = {
     stack: [], index: -1,
@@ -2395,6 +2996,7 @@ const DEMO_BEAT = [
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
         trims: { ...trims }, tempo, swing, mono: pendingMono,
+        mods: JSON.parse(JSON.stringify(mods)),
       };
     },
     restore(s) {
@@ -2402,6 +3004,8 @@ const DEMO_BEAT = [
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing;
+      if (s.mods) s.mods.forEach((m, k) => { mods[k] = JSON.parse(JSON.stringify(m)); });
+      renderMods(); loadModEditor(); refreshKnobMods();
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
       swingSlider.set(swing);
@@ -2472,6 +3076,7 @@ const DEMO_BEAT = [
   }
   const DICE = {
     pad: ['Randomize sequence', randomizeSequence],
+    mod: ['Randomize modulation assignments', randomizeAssignments],
     lanes: ['Randomize this lane', randomizeLane],
     kit: ['Randomize whole kit', randomizeKit],
     engine: ['Randomize this drum', randomizeDrum],
@@ -2482,7 +3087,57 @@ const DEMO_BEAT = [
     dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
     dice.title = d ? d[0] : '';
     dice.setAttribute('aria-disabled', String(!d));
+    $('#diceCap').textContent = d ? d[0] : '';
   }
+
+  const HELP = {
+    pad: ['Star chart', [
+      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in playing order.',
+      '<b>Tap a step</b> to switch it on or off. Switching one off clears it completely.',
+      '<b>Hold the pad, then tap a step</b> to give that step the sound under your finger. <b>Hold steps, then touch the pad</b> and they follow your finger.',
+      '<b>Hold a step, then tap another</b> to copy its sound.',
+      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at.',
+      'The <b>ratchet bar</b> beside the sky sets how many hits a recorded step gets (2, 3, 4 or 6). Hold it up while recording with the sky; it springs back to 1/16 when you let go and does nothing on its own.',
+      '<b>Stepped / smooth</b> (beside record): smooth lets a ringing hit follow your finger and records the whole gesture. It only affects new touches.',
+      '<b>Choke</b> (the cut-off wave) lets only one hit ring at a time. <b>Select</b> (dotted square) latches steps for one-finger editing.',
+      'Small <b>moons</b> orbit the stars a modulator moves. Set them up on the modulation page.',
+    ]],
+    mod: ['Modulation', [
+      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>.',
+      '<b>Hold Step assign</b> and tap stars to send a modulator to those steps. <b>Hold Drum assign</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it.',
+      'Or <b>hold a star</b> and tap Step or Drum assign on any modulator. A quick tap on an assign key latches it until you tap it again.',
+      '<b>Destination</b> is what it moves: position on the map, pitch, decay, or any engine control. The kit and engine pages also have a small picker under each knob.',
+      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: a slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
+      'The <b>die on each modulator</b> rolls its settings. The <b>die in the top bar</b> makes new assignments, aimed at the drums your pattern uses most.',
+    ]],
+    lanes: ['Step lanes', [
+      '<b>Chance</b>: how often each step plays. <b>X / Y drift</b>: how often, and how far, a step strays from its spot. <b>Decay</b>: each step\'s own decay length, and how often and how far it varies.',
+      'Drag a bar up or down to set it; drag sideways to paint across steps.',
+    ]],
+    kit: ['Whole kit', [
+      'These shift every drum on the map at once. Double-tap a knob to reset it.',
+      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit.',
+    ]],
+    engine: ['Drum engine', [
+      'Each drum is a point the whole map blends toward, so shaping it reshapes nearby sounds too.',
+      'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
+      'The small picker under each knob sends a modulator to that control for this drum.',
+    ]],
+  };
+  const help = $('#help'), helpBtn = $('#helpBtn');
+  function fillHelp() {
+    const [title, items] = HELP[currentPage];
+    $('#helpH').textContent = title;
+    $('#helpList').innerHTML = items.map((t) => `<li>${t}</li>`).join('') +
+      '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
+  }
+  function setHelp(open) {
+    help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
+    if (open) { fillHelp(); $('#helpClose').focus(); }
+  }
+  helpBtn.addEventListener('click', () => setHelp(help.hidden));
+  $('#helpClose').addEventListener('click', () => { setHelp(false); helpBtn.focus(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !help.hidden) { setHelp(false); helpBtn.focus(); } });
 
   history.commit(); // baseline
   $('#undo').addEventListener('click', () => history.undo());
@@ -2520,6 +3175,7 @@ const DEMO_BEAT = [
       const ct = actx.currentTime;
       while (queue.length && queue[0].t <= ct) {
         const q = queue.shift();
+        if (q.i !== cur || !q.ratchet) curT = q.t;
         cur = q.i;
         if (q.fired) spawnBurst(q.x, q.y, q.P, now);
         headDirty = dirty = laneDirty = true;
@@ -2530,18 +3186,23 @@ const DEMO_BEAT = [
       while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
     }
     stepParticles(dt, now);
-    if (particles.length) dirty = true;
+    if (particles.length || playing || mods.some((m) => m.targets.length)) dirty = true;
+    if (actx) envFires = envFires.filter((f) => actx.currentTime - f.t < 2.5);
 
     if (headDirty) { updateHead(); headDirty = false; }
     if (stepsDirty) { renderSteps(); stepsDirty = false; }
     readoutDirty = false; // nothing displays a voice readout anymore
     if (laneDirty) { drawLanes(); laneDirty = false; }
-    if (dirty) { drawPad(now); dirty = false; }
+    if (dirty) {
+      if (currentPage === 'pad' || slide) drawPad(now);
+      if (currentPage === 'mod' || slide) { drawModSky(now); drawModThumbs(now); }
+      dirty = false;
+    }
     requestAnimationFrame(frame);
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'lanes', 'kit', 'engine', 'info'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
   function settleSlide() {
@@ -2566,6 +3227,8 @@ const DEMO_BEAT = [
     // force a resize+redraw now that the page is actually visible.
     if (page === 'pad') { resizePad(); dirty = true; }
     if (page === 'lanes') { resizeLaneCanvas(); laneDirty = true; }
+    if (page === 'mod') { modField = null; renderMods(); loadModEditor(); dirty = true; }
+    if (!help.hidden) fillHelp();
     if (reduceMotion || !to.animate) { from.classList.remove('active'); return; }
     // the old page leaves as the new one arrives, side by side like a strip;
     // no fill mode, so once the animations end (or are cancelled) both pages
@@ -2586,7 +3249,7 @@ const DEMO_BEAT = [
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, .ratchet, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .shapemenu, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }
@@ -2607,9 +3270,12 @@ const DEMO_BEAT = [
 
   new ResizeObserver(resizePad).observe(pad);
   new ResizeObserver(resizeLaneCanvas).observe(laneCanvas);
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { dirty = true; });
+  const onTheme = () => { readTheme(); field = buildSky(pad.width, pad.height); modField = null; dirty = stepsDirty = laneDirty = true; renderMods(); };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme);
+  new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
   resizePad(); resizeLaneCanvas();
+  renderMods(); loadModEditor(); updateDice();
   requestAnimationFrame(frame);
   initPages();
 })();

@@ -11,6 +11,32 @@
   const mixc = (a, b, t) => [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t];
   const rgbs = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+  /* ---------- star colours: a sound's colour follows its stellar class.
+     voiceSignature's t runs 0 (deep, low) .. 1 (bright, high); deep sounds
+     glow like cool red M stars, bright ones burn blue-white like B stars.
+     Step tiles use a stronger version so neighbours read apart. ---------- */
+  const hexRGB = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const ramp = (stops) => { const cs = stops.map(hexRGB); return (t) => {
+    t = clamp(t, 0, 1) * (cs.length - 1);
+    const i = Math.min(cs.length - 2, Math.floor(t)), f = t - i;
+    return mixc(cs[i], cs[i + 1], f);
+  }; };
+  const STAR_NIGHT = ramp(['#FF6A3D', '#FF9A4A', '#FFD9A8', '#F4F1FF', '#BFCBFF', '#8EA4FF']);
+  const STAR_DAY = ramp(['#E0461F', '#E8731C', '#D9A23A', '#9D93C8', '#5E78E6', '#3C55D9']); // inked for paper
+  const TILE = ramp(['#FF4A2E', '#FF8424', '#FFBE3D', '#C6A8FF', '#8D9CFF', '#5B6EFF']);
+  let theme = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
+    theme = { sky: hexRGB(v('--sky') || '#03050A'), line: v('--sky-line'), star: v('--sky-star'), now: v('--now'), hold: v('--hold'), ink: v('--ink'), muted: v('--muted') };
+    theme.dark = lum(theme.sky) < 0.5;
+    theme.glint = theme.dark ? [255, 255, 255] : [16, 21, 33];
+  }
+  const starRGB = (t) => (theme.dark ? STAR_NIGHT : STAR_DAY)(t);
+  /* the six modulators' own colours: none of them yellow, cyan or red */
+  const MOD_COL = ['#FF6B91', '#FFAA3D', '#A98BFF', '#7F9BFF', '#5FD39A', '#C4BFDD'];
+  const MOD_COL_DAY = ['#D9466F', '#C77A12', '#7C5CE6', '#4F6FE0', '#2E9E68', '#6F7A92'];
+  const modCol = (k) => (theme.dark ? MOD_COL : MOD_COL_DAY)[k];
+
   /* knob geometry (see createKnob) */
   const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
   function arcPath(a0, a1) {
@@ -30,6 +56,7 @@
   let lastAud = { t: 0, x: 0, y: 0 };
   let lastT = 0;
 
+  readTheme();
   const seq = new Sequence(
     () => { dirty = stepsDirty = readoutDirty = laneDirty = true; },
     (x, y, kind) => audition(x, y, kind)
@@ -66,19 +93,72 @@
   let smooth = false;
   let liveVoices = []; // glide handles of live pad hits still ringing
   function playLive(x, y, t) {
-    const P = paramsAt(x, y);
-    if (engine) {
-      const h = engine.trigger(P, t, undefined, smooth ? { glide: true } : undefined);
-      if (h.glide) liveVoices.push(h);
-    }
-    return P;
+    if (!engine) return paramsAt(x, y);
+    const when = t == null ? actx.currentTime : t;
+    const h = strike(-1, x, y, when, undefined, smooth);
+    if (h.v.glide && smooth) liveVoices.push(h.v);
+    return h.P;
   }
   function glideLive(x, y) {
     if (!smooth || !actx || !liveVoices.length) return;
-    const now = actx.currentTime, P = paramsAt(x, y);
+    const now = actx.currentTime, P = soundAt(-1, x, y, now, null);
     liveVoices = liveVoices.filter((h) => h.end > now);
     for (const h of liveVoices) h.glide(P, now);
   }
+
+  /* ---------- modulation at the moment of a hit ----------
+     soundAt: the parameters for a hit at (x, y) on step i (-1 = a live
+     touch), struck at time t, envT seconds into the hit (null = the strike
+     itself, envelopes at zero). LFOs are read once at the strike; an
+     envelope moves pitch, filters, levels and position through the hit
+     (the voice glides), and anything fixed at the strike (decays, drive,
+     fold...) takes the envelope's peak. */
+  const mods = Array.from({ length: MOD_COUNT }, freshMod);
+  // a starting set: two at work on the demo beat, the rest ready to assign
+  const anchorNamed = (n) => ANCHORS.findIndex((a) => a.name === n);
+  Object.assign(mods[0], { shape: 'kepler', rate: 2, depth: 0.35, ctl: 0.6, dest: 'decay', targets: [{ kind: 'drum', a: anchorNamed('snare') }] });
+  Object.assign(mods[1], { shape: 'env', atk: 0.05, dec: 0.35, depth: 0.45, dest: 'mPitch', targets: [{ kind: 'drum', a: anchorNamed('closed hat') }] });
+  Object.assign(mods[2], { shape: 'halo', rate: 1, depth: 0.3, ctl: 0.4, dest: 'x' });
+  Object.assign(mods[3], { shape: 'saw', rate: 3, depth: -0.4, dest: 'lp' });
+  Object.assign(mods[4], { shape: 'random', rate: 5, depth: 0.3, dest: 'fold' });
+  Object.assign(mods[5], { shape: 'figure8', rate: 1, depth: 0.25, dest: 'y' });
+  const knobMods = [], knobRefreshers = []; // knob source pickers (kit and engine pages)
+  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'hp', 'lp', 'q', 'lvl']);
+  let playT0 = 0;
+  const beatsAt = (t) => (playing ? t - playT0 : t) / (60 / tempo);
+  function activeMods(i, x, y) {
+    const a = nearestAnchor(x, y), out = [];
+    for (const m of mods) if (m.targets.length && modCovers(m, i, a)) out.push(m);
+    return out;
+  }
+  const isEnv = (m) => m.shape === 'env';
+  function soundAt(i, x, y, t, envT, act) {
+    act = act || activeMods(i, x, y);
+    if (!act.length) return paramsAt(x, y);
+    const beats = beatsAt(t);
+    const amt = (m) => isEnv(m)
+      ? m.depth * (GLIDE_DESTS.has(m.dest) ? (envT == null ? 0 : envAt(m, envT)) : 1)
+      : m.depth * modLfo(m, beats);
+    let pos = { x, y };
+    for (const m of act) pos = modulatePos(pos, m.dest, amt(m));
+    let P = paramsAt(pos.x, pos.y);
+    for (const m of act) P = modulateParams(P, m.dest, amt(m));
+    return P;
+  }
+  /* strike: one hit, with any envelope's glide scheduled through it */
+  const ENV_POINTS = 10;
+  function strike(i, x, y, t, decMult, glide) {
+    const act = activeMods(i, x, y), envs = act.filter((m) => isEnv(m) && GLIDE_DESTS.has(m.dest));
+    const P = soundAt(i, x, y, t, envs.length ? 0 : null, act);
+    const v = engine.trigger(P, t, decMult, glide || envs.length ? { glide: true } : undefined);
+    if (envs.length && v.glide) {
+      const span = Math.min(2, Math.max(...envs.map((m) => envAttack(m) + envDecay(m))));
+      for (let k = 1; k <= ENV_POINTS; k++) { const tau = span * k / ENV_POINTS; v.glide(soundAt(i, x, y, t, tau, act), t + tau); }
+    }
+    if (envs.length) for (const m of envs) envFires.push({ k: mods.indexOf(m), i, x, y, t });
+    return { P, v };
+  }
+  let envFires = []; // recent envelope firings, for drawing them on the pad
 
   /* the pad's recent path, for smooth recording: one id per gesture so a
      step only ever samples the gesture that wrote it */
@@ -268,9 +348,10 @@
   }
 
   function playStored(i, x, y, t, decMult) {
-    const P = paramsAt(x, y);
-    if (engine) storedVoices.push({ i, v: engine.trigger(P, t, decMult) });
-    return P;
+    if (!engine) return paramsAt(x, y);
+    const h = strike(i, x, y, t, decMult, false);
+    storedVoices.push({ i, v: h.v });
+    return h.P;
   }
 
   /* a smooth-recorded step: each hit (the primary and every ratchet) is a
@@ -282,12 +363,12 @@
     const offs = [0, ...s.ratchets.map((rr) => rr.offset)];
     let P0 = null;
     offs.forEach((o, k) => {
-      const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = paramsAt(q.x, q.y);
+      const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = t + o * span, q = at(o), P = soundAt(i, q.x, q.y, ht, 0);
       const h = engine ? engine.trigger(P, ht, decMult, { glide: true }) : null;
       if (h) storedVoices.push({ i, v: h });
       if (h && h.glide) for (let j = 1; j < AUTO_POINTS; j++) {
         const oo = j / (AUTO_POINTS - 1);
-        if (oo > o && oo <= o2) { const qq = at(oo); h.glide(paramsAt(qq.x, qq.y), t + oo * span); }
+        if (oo > o && oo <= o2) { const qq = at(oo); h.glide(soundAt(i, qq.x, qq.y, ht, (oo - o) * span), t + oo * span); }
       }
       if (k) queue.push({ i, t: ht, fired: true, x: q.x, y: q.y, P, ratchet: true });
       else P0 = P;
@@ -303,6 +384,7 @@
       stopPadHold();
       stepIdx = 0; queue = []; locks = []; finals = []; liveNext = 0; pendingPress = pendingBar = null;
       nextBase = actx.currentTime + 0.06;
+      playT0 = nextBase;
       playing = true;
       tick();
       timer = setInterval(tick, 25);
@@ -336,6 +418,7 @@
   const FINGER = 0.045;  // particles start this far out (pad units), clear of the fingertip
   function spawnBurst(x, y, P, now) {
     const sig = voiceSignature(P);
+    sig.rgb = starRGB(sig.t);
     const n = Math.round(8 + sig.level * 26);
     const nLiquid = Math.round(n * sig.tW);
     const nSmoke = Math.round(n * sig.nW);
@@ -386,7 +469,7 @@
       kind: 'smoke', x, y, vx: Math.cos(ang) * spd, vy: Math.abs(Math.sin(ang)) * spd * 0.55 + 0.02,
       r: (0.006 + 0.01 * sig.level) * (1.2 - sig.t * 0.4) * (0.7 + Math.random() * 0.6),
       born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.5, 280, 1500),
-      rgb: mixc(sig.rgb, [180, 182, 196], 0.35), drive: sig.drive,
+      rgb: mixc(sig.rgb, theme.dark ? [180, 182, 196] : [90, 96, 112], 0.35), drive: sig.drive,
     };
   }
   function updateSmoke(p, dt) {
@@ -411,7 +494,7 @@
       kind: 'spark', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
       r: (0.0024 + 0.0042 * sig.level) * (1.15 - sig.t * 0.35),
       born: now, life: reduceMotion ? 100 : clamp(sig.dec * 1000 * 0.75 + 50, 80, 420),
-      rgb: mixc(sig.rgb, [255, 255, 255], 0.5), drive: sig.drive,
+      rgb: mixc(sig.rgb, theme.glint, 0.4), drive: sig.drive,
     };
   }
   function updateSpark(p, dt) {
@@ -427,7 +510,7 @@
     pg.strokeStyle = rgbs(p.rgb, a * 0.85);
     pg.lineWidth = Math.max(1 * u, p.r * scale * 1.4);
     pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs([255, 255, 255], a * 0.95);
+    pg.fillStyle = rgbs(theme.glint, a * 0.95);
     pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
   }
 
@@ -438,7 +521,7 @@
   }
   function drawRing(pg, p, age, px, py, u) {
     const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
-    pg.strokeStyle = rgbs(mixc(p.rgb, [255, 255, 255], 0.5), (1 - age) * 0.7);
+    pg.strokeStyle = rgbs(mixc(p.rgb, theme.glint, 0.4), (1 - age) * 0.7);
     pg.lineWidth = (2.5 - 1.5 * age) * u;
     pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.03 + p.r * e) * scale, 0, 6.283); pg.stroke();
   }
@@ -456,36 +539,27 @@
     }
   }
 
-  /* ---------- abstract backdrop: a dark field with a soft sound-coloured
-     wash. No labels, no icons, no named regions, no grid. */
-  let field = document.createElement('canvas');
-  function buildField(W, H) {
-    const FW = 96, FH = 96;
-    const off = document.createElement('canvas'); off.width = FW; off.height = FH;
-    const og = off.getContext('2d');
-    const img = og.createImageData(FW, FH);
-    const base = [8, 9, 18];
-    for (let j = 0; j < FH; j++) {
-      const y = 1 - (j + 0.5) / FH;
-      for (let i = 0; i < FW; i++) {
-        const x = (i + 0.5) / FW;
-        const sig = voiceSignature(paramsAt(x, y));
-        const t = 0.1 + 0.07 * sig.level;
-        const p = (j * FW + i) * 4;
-        img.data[p] = base[0] * (1 - t) + sig.rgb[0] * t;
-        img.data[p + 1] = base[1] * (1 - t) + sig.rgb[1] * t;
-        img.data[p + 2] = base[2] * (1 - t) + sig.rgb[2] * t;
-        img.data[p + 3] = 255;
-      }
+  /* ---------- the sky: a plain field with a faint nebula of the sound map
+     and a scatter of background stars. No labels and no grid. ---------- */
+  const BG_STARS = (() => { let q = 7; const r = () => (q = (q * 16807) % 2147483647) / 2147483647; return Array.from({ length: 150 }, () => [r(), r(), r() ** 3]); })();
+  function buildSky(W, H) {
+    const N = 64, off = document.createElement('canvas'); off.width = N; off.height = N;
+    const og = off.getContext('2d'), img = og.createImageData(N, N), base = theme.sky, k = theme.dark ? 0.12 : 0.13;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const c = starRGB(voiceSignature(paramsAt((i + 0.5) / N, 1 - (j + 0.5) / N)).t), q = (j * N + i) * 4;
+      img.data[q] = base[0] + (c[0] - base[0]) * k; img.data[q + 1] = base[1] + (c[1] - base[1]) * k; img.data[q + 2] = base[2] + (c[2] - base[2]) * k; img.data[q + 3] = 255;
     }
     og.putImageData(img, 0, 0);
-
     const f = document.createElement('canvas'); f.width = W; f.height = H;
-    const fg = f.getContext('2d');
+    const fg = f.getContext('2d'), u = Math.min(W, H) / 400;
     fg.imageSmoothingEnabled = true; fg.imageSmoothingQuality = 'high';
     fg.drawImage(off, 0, 0, W, H);
+    fg.fillStyle = theme.star;
+    for (const [x, y, b] of BG_STARS) { fg.globalAlpha = 0.15 + b * 0.7; fg.beginPath(); fg.arc(x * W, y * H, (0.4 + b * 1.1) * u, 0, 6.283); fg.fill(); }
+    fg.globalAlpha = 1;
     return f;
   }
+  let field = document.createElement('canvas');
 
   /* ---------- pad drawing ---------- */
   function resizePad() {
@@ -493,26 +567,12 @@
     dpr = Math.min(2.5, window.devicePixelRatio || 1);
     pad.width = Math.max(2, Math.round(r.width * dpr));
     pad.height = Math.max(2, Math.round(r.height * dpr));
-    field = buildField(pad.width, pad.height);
+    field = buildSky(pad.width, pad.height);
     dirty = true;
   }
 
-  function drawPad(now) {
-    const W = pad.width, H = pad.height, u = dpr;
-    const font = cssVar('--font-ui') || 'system-ui, sans-serif';
-    const px = (x) => x * W, py = (y) => (1 - y) * H;
-    pg.clearRect(0, 0, W, H);
-    pg.drawImage(field, 0, 0, W, H);
-
-    for (const p of particles) {
-      // timer-spawned particles can be born a few ms after this frame's timestamp
-      const age = Math.max(0, (now - p.born) / p.life);
-      if (age >= 1) continue;
-      DRAW[p.kind](pg, p, age, px, py, u);
-    }
-
-    // step markers: filled with that step's own sound colour, fanned out
-    // when several steps share one spot, so the pad also works as memory.
+  /* steps that share one spot on the map make one star */
+  function starGroups() {
     const groups = new Map();
     seq.steps.forEach((s, i) => {
       if (!s.on) return;
@@ -520,56 +580,116 @@
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(i);
     });
-    pg.textAlign = 'center'; pg.textBaseline = 'middle';
-    for (const list of groups.values()) {
-      const s0 = seq.steps[list[0]];
-      const bx = px(s0.x), by = py(s0.y);
-      const spots = list.map((_, k) => {
-        if (k === 0) return [bx, by];
-        const ring = k <= 6 ? 1 : 2;
-        const n = ring === 1 ? Math.min(list.length - 1, 6) : list.length - 7;
-        const idx = ring === 1 ? k - 1 : k - 7;
-        const ang = -Math.PI / 2 + idx * 2 * Math.PI / Math.max(n, 1);
-        const rr = (ring === 1 ? 20 : 36) * u;
-        return [bx + Math.cos(ang) * rr, by + Math.sin(ang) * rr];
-      });
-      if (list.length > 1) {
-        pg.strokeStyle = 'rgba(255,255,255,.4)'; pg.lineWidth = 1.5 * u;
-        pg.beginPath();
-        spots.forEach((p, k) => { if (k) { pg.moveTo(bx, by); pg.lineTo(p[0], p[1]); } });
-        pg.stroke();
-      }
-      list.forEach((i, k) => {
-        const [cx, cy] = spots[k];
-        const s = seq.steps[i];
-        const sig = voiceSignature(paramsAt(s.x, s.y));
-        const isHeld = seq.held.has(i) || seq.latched.has(i);
-        const isNow = i === cur;
-        const rad = (isNow ? 10.5 : 8.5) * u;
-        if (isNow) {
-          pg.strokeStyle = cssVar('--now') || '#0E9F8E'; pg.lineWidth = 3.5 * u;
-          pg.beginPath(); pg.arc(cx, cy, rad + 3 * u, 0, 6.283); pg.stroke();
-        }
-        if (isHeld) {
-          pg.strokeStyle = cssVar('--hold') || '#F0B400'; pg.lineWidth = 3 * u;
-          pg.beginPath(); pg.arc(cx, cy, rad + 4 * u, 0, 6.283); pg.stroke();
-        }
-        pg.fillStyle = 'rgba(5,7,12,.85)';
-        pg.beginPath(); pg.arc(cx, cy, rad + 1.8 * u, 0, 6.283); pg.fill();
-        pg.fillStyle = `rgb(${sig.rgb[0] | 0},${sig.rgb[1] | 0},${sig.rgb[2] | 0})`;
-        pg.beginPath(); pg.arc(cx, cy, rad, 0, 6.283); pg.fill();
-        pg.fillStyle = lum(sig.rgb) > 0.52 ? '#11132a' : '#f4f3fb';
-        pg.font = `700 ${9 * u}px ${font}`;
-        pg.fillText(String(i + 1), cx, cy + 0.5 * u);
-      });
+    return [...groups.values()];
+  }
+  let curT = 0; // when the current step started sounding (audio clock)
+  /* the constellation, the playhead travelling along it, the stars and the
+     moons of every modulator orbiting the steps it moves */
+  function drawStarChart(g, W, H, u, now, opts) {
+    const P = (s) => [s.x * W, (1 - s.y) * H];
+    const order = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+    if (order.length > 1) {
+      g.lineWidth = 1 * u; g.strokeStyle = theme.line;
+      g.beginPath(); order.forEach((i, k) => { const [x, y] = P(seq.steps[i]); if (k) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); g.stroke();
     }
+    const stepDur = 60 / tempo / 4, frac = playing && actx ? clamp((actx.currentTime - curT) / stepDur, 0, 1) : 0;
+    if (playing && cur >= 0 && order.length > 1 && opts.playhead) {
+      let a = -1; for (let k = 0; k < order.length; k++) if (order[k] <= cur) a = k; if (a < 0) a = order.length - 1;
+      const b = (a + 1) % order.length, sa = order[a], sb = order[b], span = ((sb - sa + 16) % 16) || 16;
+      const prog = clamp((((cur - sa + 16) % 16) + frac) / span, 0, 1);
+      const [x0, y0] = P(seq.steps[sa]), [x1, y1] = P(seq.steps[sb]), hx = x0 + (x1 - x0) * prog, hy = y0 + (y1 - y0) * prog;
+      const grad = g.createLinearGradient(x0, y0, hx, hy); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, theme.now);
+      g.strokeStyle = grad; g.lineWidth = 2 * u; g.beginPath(); g.moveTo(x0, y0); g.lineTo(hx, hy); g.stroke();
+      g.fillStyle = theme.now; g.beginPath(); g.arc(hx, hy, 2.4 * u, 0, 6.283); g.fill();
+    }
+    const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
+    for (const list of groups) {
+      const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
+      const lit = list.includes(cur) && playing, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
+      glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
+      g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
+      g.strokeStyle = rgbs(c, lit ? 0.85 : 0.45); g.lineWidth = 1 * u;
+      const L = R * (lit ? 3.4 - age : 2.2);
+      g.beginPath(); g.moveTo(x - L, y); g.lineTo(x + L, y); g.moveTo(x, y - L); g.lineTo(x, y + L); g.stroke();
+      g.fillStyle = rgbs(c, 1); g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.fill();
+      if (theme.dark) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(x, y, R * 0.26, 0, 6.283); g.fill(); }
+      else { g.strokeStyle = 'rgba(16,21,33,.55)'; g.lineWidth = 0.8 * u; g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.stroke(); }
+      if (lit) { g.strokeStyle = theme.now; g.lineWidth = 1.6 * u; g.beginPath(); g.arc(x, y, R * 1.7, 0, 6.283); g.stroke(); }
+      if (list.some((i) => seq.held.has(i) || seq.latched.has(i))) { g.strokeStyle = theme.hold; g.lineWidth = 2.4 * u; g.beginPath(); g.arc(x, y, R * 2.2, 0, 6.283); g.stroke(); }
+      if (opts.mark && opts.mark(list)) { g.strokeStyle = theme.hold; g.lineWidth = 2 * u; g.setLineDash(opts.mark(list) === 'drum' ? [3 * u, 3 * u] : []); g.beginPath(); g.arc(x, y, R * 2.6, 0, 6.283); g.stroke(); g.setLineDash([]); }
+      g.fillStyle = theme.muted; g.font = `500 ${8.5 * u}px ${font}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.fillText(list.map((i) => i + 1).join(' '), x + R * 1.5 + 2 * u, y - R * 1.4);
+    }
+    drawMoons(g, W, H, u, now, groups);
+  }
+  /* moons: one per modulator around every star it moves. An LFO's moon
+     follows its real path (an ellipse for Kepler, a figure-eight for the
+     three-body orbit); an envelope shows when its step fires, as a flare,
+     an impact or a supernova depending on its attack and decay. */
+  function drawMoons(g, W, H, u, now, groups) {
+    const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo);
+    mods.forEach((m, k) => {
+      if (!m.targets.length) return;
+      const col = modCol(k), env = isEnv(m), sh = SHAPE_BY_ID[m.shape];
+      for (const list of groups) {
+        const s = seq.steps[list[0]];
+        if (!list.some((i) => modCovers(m, i, nearestAnchor(s.x, s.y)))) continue;
+        const cx = s.x * W, cy = (1 - s.y) * H, R = (15 + k * 4.5) * u;
+        if (env) {
+          const fire = envFires.filter((f) => f.k === k && list.includes(f.i)).pop();
+          const look = envLook(m), span = envAttack(m) + envDecay(m);
+          const age = fire && actx ? (actx.currentTime - fire.t) / Math.max(0.15, span) : 2;
+          g.strokeStyle = col; g.lineWidth = 1 * u; g.globalAlpha = 0.35;
+          g.beginPath(); g.arc(cx, cy, R * 0.55, 0, 6.283); g.stroke(); g.globalAlpha = 1;
+          if (age >= 0 && age < 1) {
+            const e = envAt(m, age * span);
+            if (look === 'flare') {
+              const gl = g.createRadialGradient(cx, cy, 0, cx, cy, R * (0.5 + 0.8 * e));
+              gl.addColorStop(0, col); gl.addColorStop(1, 'rgba(0,0,0,0)');
+              g.globalAlpha = 0.25 + 0.5 * e; g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 1.4, 0, 6.283); g.fill();
+            } else {
+              const shells = look === 'supernova' ? 3 : 1;
+              for (let q = 0; q < shells; q++) {
+                g.globalAlpha = Math.max(0, (1 - age) * (0.9 - q * 0.25));
+                g.lineWidth = (2.2 - q * 0.5) * u;
+                g.beginPath(); g.arc(cx, cy, R * (0.4 + (1.2 - q * 0.25) * Math.pow(age, look === 'impact' ? 0.4 : 0.6)), 0, 6.283); g.stroke();
+              }
+            }
+            g.globalAlpha = 1;
+          }
+          continue;
+        }
+        const p = beats / MOD_RATES[m.rate].beats + m.phase, q = lfoAt(m.shape, p, m.ctl);
+        let mx, my;
+        if (sh && sh.orbit) { mx = cx + q.x * R; my = cy - q.y * R; }
+        else { const a = 2 * Math.PI * p; mx = cx + Math.cos(a) * R; my = cy + Math.sin(a) * R; }
+        g.strokeStyle = theme.line; g.lineWidth = 1 * u; g.setLineDash([2 * u, 3 * u]);
+        g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.stroke(); g.setLineDash([]);
+        g.fillStyle = col; g.beginPath(); g.arc(mx, my, 2.8 * u, 0, 6.283); g.fill();
+        g.strokeStyle = rgbs(theme.sky, 1); g.lineWidth = 1 * u; g.stroke();
+      }
+    });
+  }
 
-    // cursor: a plain white dot, deliberately unthemed so it always reads
-    // as "you". Touching grows it and adds a thin ring.
+  function drawPad(now) {
+    const W = pad.width, H = pad.height, u = dpr;
+    const px = (x) => x * W, py = (y) => (1 - y) * H;
+    pg.clearRect(0, 0, W, H);
+    pg.drawImage(field, 0, 0, W, H);
+    for (const p of particles) {
+      // timer-spawned particles can be born a few ms after this frame's timestamp
+      const age = Math.max(0, (now - p.born) / p.life);
+      if (age >= 1) continue;
+      DRAW[p.kind](pg, p, age, px, py, u);
+    }
+    drawStarChart(pg, W, H, u, now, { playhead: true });
+    // cursor: a plain dot, deliberately unthemed so it always reads as
+    // "you". Touching grows it and adds a thin ring.
     const c = seq.cursor, cx = px(c.x), cy = py(c.y);
     const held = seq.padHeld();
     if (held) {
-      pg.strokeStyle = 'rgba(255,255,255,.55)'; pg.lineWidth = 1.5 * u;
+      pg.strokeStyle = rgbs(theme.glint, 0.55); pg.lineWidth = 1.5 * u;
       pg.beginPath(); pg.arc(cx, cy, 15 * u, 0, 6.283); pg.stroke();
     }
     pg.fillStyle = 'rgba(5,7,12,.85)';
@@ -662,10 +782,9 @@
       el.setAttribute('aria-pressed', s.on ? 'true' : 'false');
       if (s.on) {
         const w = weightsAt(s.x, s.y);
-        const sig = voiceSignature(paramsAt(s.x, s.y, w));
-        const c = mixc(sig.rgb, [20, 23, 46], 0.08);
+        const c = TILE(voiceSignature(paramsAt(s.x, s.y, w)).t);
         el.style.setProperty('--c', `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`);
-        el.style.setProperty('--tc', lum(c) > 0.42 ? '#11132a' : '#ffffff');
+        el.style.setProperty('--tc', lum(c) > 0.5 ? '#11132a' : '#ffffff');
         el.style.setProperty('--dx', s.x.toFixed(3));
         el.style.setProperty('--dy', s.y.toFixed(3));
         const hits = 1 + (Array.isArray(s.ratchets) ? s.ratchets.length : 0);
@@ -690,40 +809,6 @@
      of the map, not just a single fixed sound. Edits apply immediately and
      last for the session; Reset this drum restores its shipped tuning.
      ========================================================================== */
-  const MODULES = [
-    { id: 'body', label: 'Body', accent: '--m-body' },
-    { id: 'noise', label: 'Noise', accent: '--m-noise' },
-    { id: 'metal', label: 'Metal', accent: '--m-metal' },
-    { id: 'res', label: 'Resonator', accent: '--m-res' },
-    { id: 'filter', label: 'Filter', accent: '--m-filter' },
-    { id: 'out', label: 'Shape & out', accent: '--m-out' },
-  ];
-  const PARAM_SPECS = [
-    { key: 'tone', mod: 'body', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'f', mod: 'body', label: 'Pitch', min: 20, max: 2000, step: 1, unit: 'hz', log: true },
-    { key: 'tDec', mod: 'body', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'pEnv', mod: 'body', label: 'Sweep', min: 0, max: 5, step: 0.05, unit: 'oct' },
-    { key: 'pDec', mod: 'body', label: 'Sweep time', min: 0.005, max: 0.3, step: 0.001, unit: 's', log: true },
-    { key: 'fm', mod: 'body', label: 'FM', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'fmRatio', mod: 'body', label: 'FM ratio', min: 0.5, max: 8, step: 0.01, unit: 'x', log: true },
-    { key: 'noise', mod: 'noise', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'nDec', mod: 'noise', label: 'Decay', min: 0.01, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'burst', mod: 'noise', label: 'Clap', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'metal', mod: 'metal', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'mDec', mod: 'metal', label: 'Decay', min: 0.02, max: 1.2, step: 0.005, unit: 's', log: true },
-    { key: 'mPitch', mod: 'metal', label: 'Pitch', min: 0.3, max: 2.5, step: 0.01, unit: 'x', log: true },
-    { key: 'res', mod: 'res', label: 'Level', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'resF', mod: 'res', label: 'Pitch', min: 40, max: 4000, step: 1, unit: 'hz', log: true },
-    { key: 'resDec', mod: 'res', label: 'Ring', min: 0.03, max: 3, step: 0.005, unit: 's', log: true },
-    { key: 'resShape', mod: 'res', label: 'Body', min: 0, max: 1, step: 0.01, unit: 'shape' },
-    { key: 'hp', mod: 'filter', label: 'High-pass', min: 20, max: 10000, step: 10, unit: 'hz', log: true },
-    { key: 'lp', mod: 'filter', label: 'Low-pass', min: 200, max: 18000, step: 10, unit: 'hz', log: true },
-    { key: 'q', mod: 'filter', label: 'Reso', min: 0, max: 10, step: 0.1, unit: 'q' },
-    { key: 'fold', mod: 'out', label: 'Fold', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'drive', mod: 'out', label: 'Drive', min: 0, max: 1, step: 0.01, unit: 'frac' },
-    { key: 'atk', mod: 'out', label: 'Attack', min: 0, max: 0.02, step: 0.0005, unit: 's' },
-    { key: 'lvl', mod: 'out', label: 'Level', min: 0.2, max: 2, step: 0.01, unit: 'x' },
-  ];
   function fmtParam(unit, v) {
     if (unit === 'hz') return fmtHz(v);
     if (unit === 's') return fmtT(v);
@@ -744,7 +829,7 @@
   let fieldRefreshTimer = null, engineAuditionTimer = null;
   function scheduleFieldRefresh() {
     clearTimeout(fieldRefreshTimer);
-    fieldRefreshTimer = setTimeout(() => { field = buildField(pad.width, pad.height); dirty = true; }, 90);
+    fieldRefreshTimer = setTimeout(() => { field = buildSky(pad.width, pad.height); modField = null; dirty = true; }, 90);
   }
   function auditionAnchorSoon(a) {
     clearTimeout(engineAuditionTimer);
@@ -794,12 +879,13 @@
       onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[+engineSelect.value]); },
       onPointerUp: stopSliderPreview,
       onChange: () => history.commit(),
+      mod: knobMod(spec.key, () => ({ kind: 'drum', a: +engineSelect.value })),
     });
     return { spec, slider };
   });
   function loadAnchorIntoEditor() {
     const a = ANCHORS[+engineSelect.value];
-    paramRows.forEach(({ spec, slider }) => slider.set(a.p[spec.key]));
+    paramRows.forEach(({ spec, slider }) => { slider.set(a.p[spec.key]); slider.refreshMod(); });
   }
   engineSelect.addEventListener('change', loadAnchorIntoEditor);
   $('#engineReset').addEventListener('click', () => {
@@ -844,27 +930,27 @@
     for (let i = 0; i < N_STEPS; i++) {
       const s = seq.steps[i];
       const on = s.on;
-      const sig = voiceSignature(paramsAt(s.x, s.y));
+      const tc = TILE(voiceSignature(paramsAt(s.x, s.y)).t);
       const base = px2(i, colW);
       if (i === cur) {
-        lg.fillStyle = 'rgba(43,232,255,.14)';
-        lg.fillRect(base, 0, colW, H);
+        lg.fillStyle = theme.now; lg.globalAlpha = 0.16;
+        lg.fillRect(base, 0, colW, H); lg.globalAlpha = 1;
       }
       rows.forEach((row, ri) => {
         const top = ri * rowH, h = rowH - gap;
         const v = clamp(s[row.key], 0, 1);
-        lg.fillStyle = on ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)';
+        lg.fillStyle = rgbs(theme.glint, on ? 0.08 : 0.04);
         lg.fillRect(base + gap / 2, top + gap / 2, colW - gap, h - gap / 2);
         const barH = Math.max(2 * u, v * (h - gap / 2));
-        const rgb = on ? sig.rgb : [90, 92, 112];
+        const rgb = on ? tc : [120, 126, 144];
         const barTop = top + (h - gap / 2) - barH + gap / 2;
-        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.5);
+        lg.fillStyle = rgbs(rgb, on ? 0.95 : 0.45);
         lg.fillRect(base + gap / 2, barTop, colW - gap, barH);
-        lg.fillStyle = on ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.25)';
+        lg.fillStyle = rgbs(theme.glint, on ? 0.6 : 0.2);
         lg.fillRect(base + gap / 2, barTop, colW - gap, Math.min(barH, 3 * u));
         // a neutral mark at the middle of the decay row shows "no change"
         if (row.key === 'decay') {
-          lg.fillStyle = 'rgba(255,255,255,.4)';
+          lg.fillStyle = rgbs(theme.glint, 0.4);
           lg.fillRect(base + gap / 2, top + (h - gap / 2) * 0.5, colW - gap, Math.max(1, u));
         }
       });
@@ -872,7 +958,7 @@
     // a divider between stacked bands, so the eye (and the thumb) can tell
     // them apart before a drag ever starts
     if (rows.length > 1) {
-      lg.strokeStyle = 'rgba(255,255,255,.14)'; lg.lineWidth = Math.max(1, u);
+      lg.strokeStyle = rgbs(theme.glint, 0.14); lg.lineWidth = Math.max(1, u);
       lg.beginPath();
       for (let ri = 1; ri < rows.length; ri++) { lg.moveTo(0, ri * rowH); lg.lineTo(W, ri * rowH); }
       lg.stroke();
@@ -953,9 +1039,10 @@
      knobs move evenly in ratio (pitches, times), not in Hz or seconds.
      Same API the old hslider had: { value, set(v) }. ---------- */
   function createKnob(container, opts) {
+    container.style.display = 'grid'; container.style.justifyItems = 'center'; container.style.gap = '4px';
     container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
       '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
-      '<div class="knob-cap"></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
+      '<div class="knob-cap"><i class="knob-ptr"></i></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
     const el = container.querySelector('.knob');
     const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
     el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
@@ -1032,7 +1119,20 @@
       if (opts.onChange) opts.onChange(value);
     });
     render();
-    return { get value() { return value; }, set(v) { value = snap(v); render(); } };
+    // a modulation source picker under the knob (kit and engine pages)
+    let srcSel = null;
+    if (opts.mod) {
+      srcSel = document.createElement('select');
+      srcSel.className = 'modsel';
+      srcSel.setAttribute('aria-label', `Modulation source for ${opts.ariaLabel || opts.label}`);
+      srcSel.innerHTML = '<option value="-1">\u00b7</option>' + mods.map((_, k) => `<option value="${k}">M${k + 1}</option>`).join('');
+      srcSel.addEventListener('change', () => { opts.mod.pick(+srcSel.value); });
+      container.appendChild(srcSel);
+    }
+    const refreshMod = () => { if (!srcSel) return; const k = opts.mod.current(); srcSel.value = String(k); srcSel.classList.toggle('set', k >= 0); };
+    if (srcSel) knobRefreshers.push(refreshMod);
+    refreshMod();
+    return { get value() { return value; }, set(v) { value = snap(v); render(); }, refreshMod };
   }
 
   /* ---------- dice slider: a die at the left of a track; drag it right (or
@@ -1167,17 +1267,17 @@
   /* kit-wide trims and macro mixes: shift every drum on the map at once,
      independent of any single drum's own tuning. */
   const kitEl = $('#kitKnobs');
-  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit }, o)); };
+  const kitKnob = (o) => { const d = document.createElement('div'); kitEl.appendChild(d); return createKnob(d, Object.assign({ onChange: commit, mod: o.dest ? knobMod(o.dest, () => ({ kind: 'kit' })) : null }, o)); };
   const pct = (v) => v + '%';
-  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
-  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
-  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
-  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
-  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
-  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
-  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
-  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
-  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
+  const tuneSlider = kitKnob({ min: -12, max: 12, step: 1, value: 0, bipolar: true, dest: 'pitch', label: 'Tune', fmt: (v) => (v > 0 ? '+' : '') + v + ' st', onInput: (v) => { trims.tune = v; } });
+  const decaySlider = kitKnob({ min: -100, max: 100, step: 1, value: 0, bipolar: true, dest: 'decay', label: 'Decay', fmt: (v) => '\u00d7' + kitDecayFromSlider(v).toFixed(2), onInput: (v) => { trims.decay = kitDecayFromSlider(v); } });
+  const macroPunchSlider = kitKnob({ min: 0, max: 300, step: 1, value: 100, dest: 'atk', label: 'Punch', ariaLabel: 'Punch (attack)', fmt: pct, onInput: (v) => { trims.punch = v / 100; } });
+  const driveSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, dest: 'drive', label: 'Drive', fmt: pct, onInput: (v) => { trims.drive = v / 100; } });
+  const foldSlider = kitKnob({ min: 0, max: 100, step: 1, value: 0, dest: 'fold', label: 'Fold', fmt: pct, onInput: (v) => { trims.fold = v / 100; } });
+  const macroToneSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'tone', label: 'Body', ariaLabel: 'Body mix', fmt: pct, onInput: (v) => { trims.toneMix = v / 100; } });
+  const macroNoiseSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'noise', label: 'Noise', ariaLabel: 'Noise mix', fmt: pct, onInput: (v) => { trims.noiseMix = v / 100; } });
+  const macroMetalSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'metal', label: 'Metal', ariaLabel: 'Metal mix', fmt: pct, onInput: (v) => { trims.metalMix = v / 100; } });
+  const macroResSlider = kitKnob({ min: 0, max: 200, step: 1, value: 100, dest: 'res', label: 'Resonator', ariaLabel: 'Resonator mix', fmt: pct, onInput: (v) => { trims.resMix = v / 100; } });
 
   /* press: act on touch-down. iOS sends no click for a tap made while
      another finger is down (holding the pad or the ratchet bar), and an
@@ -1219,6 +1319,261 @@
   });
   let pendingMono = false; // applied to `engine` once it's created (ensureAudio runs lazily)
 
+  /* ==========================================================================
+     Modulation page. Six modulators, each a row: a live thumbnail, what it
+     does, Step and Drum assign keys and its own die (rolls its settings).
+     Assigning: hold Step or Drum and tap stars on the sky above, or hold a
+     star and tap Step or Drum; several either way in one hold. A quick tap
+     on Step or Drum latches it (lit) until tapped again, for one pointer.
+     ========================================================================== */
+  const modSky = $('#modSky'), msg = modSky.getContext('2d');
+  let modField = null, modSel = 0;
+  const modsEl = $('#mods');
+  const fmtRate = (m) => MOD_RATES[m.rate].name;
+  const destName = (id) => { const d = MOD_DESTS.find((x) => x.id === id); return d ? d.name : id; };
+  function modSummary(m) {
+    const sh = SHAPE_BY_ID[m.shape].name, n = m.targets.length;
+    const where = n ? m.targets.map((g) => g.kind === 'kit' ? 'kit' : g.kind === 'step' ? `step ${g.i + 1}` : ANCHORS[g.a].name).join(', ') : 'not assigned';
+    return `${sh} → ${destName(m.dest)} · ${where}`;
+  }
+  const PIPS = '<i></i><i></i><i></i><i></i><i></i>';
+  modsEl.innerHTML = mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
+      <canvas aria-hidden="true"></canvas>
+      <div style="min-width:0"><div class="nm"><i></i>M${k + 1}</div><div class="sm"></div></div>
+      <button class="assign cap" type="button" data-kind="step" aria-label="Step assign M${k + 1}: hold and tap stars">Step<br>assign</button>
+      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum assign M${k + 1}: hold and tap stars">Drum<br>assign</button>
+      <button class="minidie" type="button" aria-label="Randomize M${k + 1}'s settings" title="Randomize this modulator's settings">${PIPS}</button>
+    </div>`).join('');
+  const modRows = [...modsEl.querySelectorAll('.mod')];
+  function renderMods() {
+    modRows.forEach((row, k) => {
+      row.classList.toggle('sel', k === modSel);
+      row.style.setProperty('--mc', modCol(k));
+      row.querySelector('.sm').textContent = modSummary(mods[k]);
+    });
+    $('#modEdit').style.setProperty('--mc', modCol(modSel));
+  }
+
+  /* assigning */
+  let assignHold = null;        // {k, kind, used, pointerId} while an assign key is held
+  let assignLatch = null;       // {k, kind} after a quick tap, until tapped again
+  const heldStars = new Map();  // pointerId -> step indices of a star held on the sky
+  function targetFor(kind, list) {
+    const s = seq.steps[list[0]];
+    return kind === 'drum' ? [{ kind: 'drum', a: nearestAnchor(s.x, s.y) }] : list.map((i) => ({ kind: 'step', i }));
+  }
+  function assign(k, kind, list) {
+    for (const g of targetFor(kind, list)) toggleTarget(mods[k], g);
+    modSel = k; renderMods(); refreshKnobMods(); dirty = true;
+  }
+  function paintAssignKeys() {
+    modRows.forEach((row, k) => row.querySelectorAll('.assign').forEach((b) => {
+      const on = (assignHold && assignHold.k === k && assignHold.kind === b.dataset.kind) || (assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind);
+      b.setAttribute('aria-pressed', String(!!on));
+    }));
+  }
+  modRows.forEach((row, k) => {
+    row.addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) { modSel = k; renderMods(); loadModEditor(); } });
+    row.querySelectorAll('.assign').forEach((b) => {
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { b.setPointerCapture(e.pointerId); } catch (_) {}
+        assignHold = { k, kind: b.dataset.kind, used: false, pointerId: e.pointerId };
+        // the inverse flow: stars already held get assigned on the spot
+        for (const list of heldStars.values()) { assign(k, b.dataset.kind, list); assignHold.used = true; }
+        paintAssignKeys();
+      });
+      const up = (e) => {
+        if (!assignHold || assignHold.pointerId !== e.pointerId) return;
+        const h = assignHold; assignHold = null;
+        if (!h.used) assignLatch = assignLatch && assignLatch.k === h.k && assignLatch.kind === h.kind ? null : { k: h.k, kind: h.kind };
+        paintAssignKeys(); history.commit();
+      };
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+      b.addEventListener('click', (e) => { if (e.detail === 0) { assignLatch = assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind ? null : { k, kind: b.dataset.kind }; paintAssignKeys(); } });
+    });
+    row.querySelector('.minidie').addEventListener('click', () => { randomizeModSettings(k, 0.8); modSel = k; renderMods(); loadModEditor(); history.commit(); });
+  });
+  function starAt(e) {
+    const r = modSky.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = 1 - (e.clientY - r.top) / r.height;
+    let best = null, bd = Infinity;
+    for (const list of starGroups()) {
+      const s = seq.steps[list[0]], d = Math.hypot((s.x - x) * r.width, (s.y - y) * r.height);
+      if (d < bd) { bd = d; best = list; }
+    }
+    return bd < 28 ? best : null;
+  }
+  modSky.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const list = starAt(e);
+    if (!list) return;
+    try { modSky.setPointerCapture(e.pointerId); } catch (_) {}
+    const mode = assignHold || assignLatch;
+    if (mode) { assign(mode.k, mode.kind, list); if (assignHold) assignHold.used = true; history.commit(); }
+    else heldStars.set(e.pointerId, list);
+    dirty = true;
+  });
+  const skyUp = (e) => { heldStars.delete(e.pointerId); dirty = true; };
+  modSky.addEventListener('pointerup', skyUp); modSky.addEventListener('pointercancel', skyUp);
+  modSky.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  function drawModSky(now) {
+    const r = modSky.getBoundingClientRect(), d = Math.min(2.5, window.devicePixelRatio || 1);
+    const W = Math.max(2, Math.round(r.width * d)), H = Math.max(2, Math.round(r.height * d));
+    if (modSky.width !== W || modSky.height !== H || !modField) { modSky.width = W; modSky.height = H; modField = buildSky(W, H); }
+    msg.drawImage(modField, 0, 0);
+    const m = mods[modSel];
+    const held = new Set([...heldStars.values()].flat());
+    drawStarChart(msg, W, H, d, now, {
+      playhead: true,
+      mark: (list) => {
+        if (list.some((i) => held.has(i))) return 'step';
+        const s = seq.steps[list[0]], a = nearestAnchor(s.x, s.y);
+        if (m.targets.some((g) => g.kind === 'step' && list.includes(g.i))) return 'step';
+        if (m.targets.some((g) => g.kind === 'drum' && g.a === a)) return 'drum';
+        return null;
+      },
+    });
+  }
+
+  /* thumbnails: an LFO's path or wave with its body, or the envelope's shape */
+  function drawModThumbs(now) {
+    modRows.forEach((row, k) => {
+      const cv = row.querySelector('canvas'), d = Math.min(2, window.devicePixelRatio || 1), S = Math.round(40 * d);
+      if (cv.width !== S) { cv.width = S; cv.height = S; }
+      const g = cv.getContext('2d'), m = mods[k], col = modCol(k), sh = SHAPE_BY_ID[m.shape], c = S / 2;
+      g.fillStyle = rgbs(theme.sky, 1); g.fillRect(0, 0, S, S);
+      g.lineWidth = 1.4 * d; g.strokeStyle = theme.line;
+      if (isEnv(m)) {
+        const span = envAttack(m) + envDecay(m);
+        g.strokeStyle = col; g.beginPath();
+        for (let q = 0; q <= 40; q++) { const X = 4 * d + (S - 8 * d) * q / 40, Y = S - 6 * d - envAt(m, span * q / 40) * (S - 12 * d); if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+        return;
+      }
+      const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo), p = beats / MOD_RATES[m.rate].beats + m.phase;
+      if (sh.orbit) {
+        const R = S * 0.36; g.beginPath();
+        for (let q = 0; q <= 120; q++) { const o = lfoAt(m.shape, p - 1 + q / 120, m.ctl); const X = c + o.x * R, Y = c - o.y * R; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+        const o = lfoAt(m.shape, p, m.ctl); g.fillStyle = col; g.beginPath(); g.arc(c + o.x * R, c - o.y * R, 3 * d, 0, 6.283); g.fill();
+      } else {
+        g.strokeStyle = col; g.beginPath();
+        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = c - lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x * S * 0.32; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        g.stroke();
+      }
+    });
+  }
+
+  /* shape icons, drawn from the shapes themselves */
+  function shapeIcon(id, size = 22) {
+    const sh = SHAPE_BY_ID[id], pts = [];
+    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
+    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 6 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
+    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, 0.5).x * 7]);
+    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
+  }
+  const shapeBtn = $('#shapeBtn'), shapeMenu = $('#shapeMenu');
+  const SHAPE_GROUPS = [['Waves', (s) => !s.orbit && !s.env], ['Orbits', (s) => s.orbit], ['One-shot', (s) => s.env]];
+  shapeMenu.innerHTML = SHAPE_GROUPS.map(([name, f]) => `<div class="grouplabel">${name}</div>` +
+    MOD_SHAPES.filter(f).map((sh) => `<button type="button" role="menuitemradio" data-id="${sh.id}">${shapeIcon(sh.id)}${sh.name}</button>`).join('')).join('');
+  function closeShapeMenu() { shapeMenu.hidden = true; shapeBtn.setAttribute('aria-expanded', 'false'); }
+  shapeBtn.addEventListener('click', () => {
+    const open = shapeMenu.hidden;
+    shapeMenu.hidden = !open; shapeBtn.setAttribute('aria-expanded', String(open));
+    if (open) (shapeMenu.querySelector('[aria-checked="true"]') || shapeMenu.querySelector('button')).focus();
+  });
+  shapeMenu.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    mods[modSel].shape = b.dataset.id; closeShapeMenu(); loadModEditor(); renderMods(); history.commit(); shapeBtn.focus();
+  });
+  shapeMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeShapeMenu(); shapeBtn.focus(); } });
+  document.addEventListener('pointerdown', (e) => { if (!shapeMenu.hidden && !e.target.closest('.pickwrap')) closeShapeMenu(); });
+
+  const destSel = $('#destSel');
+  destSel.innerHTML = [...new Set(MOD_DESTS.map((d) => d.group))].map((grp) => `<optgroup label="${grp}">` +
+    MOD_DESTS.filter((d) => d.group === grp).map((d) => `<option value="${d.id}">${d.name}</option>`).join('') + '</optgroup>').join('');
+  destSel.addEventListener('change', () => { mods[modSel].dest = destSel.value; renderMods(); refreshKnobMods(); history.commit(); });
+
+  /* the editor's four knobs: rate, depth, the shape's own control and
+     phase for LFOs; attack, decay and depth for the envelope */
+  const modKnobsEl = $('#modKnobs');
+  function loadModEditor() {
+    const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
+    shapeBtn.innerHTML = shapeIcon(m.shape) + sh.name;
+    shapeMenu.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.id === m.shape)));
+    destSel.value = m.dest;
+    modKnobsEl.innerHTML = '';
+    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { renderMods(); history.commit(); } }, o)); };
+    if (sh.env) {
+      knob({ min: 0, max: 1, step: 0.01, value: m.atk, label: 'Attack', fmt: () => fmtT(envAttack(m)), onInput: (v) => { m.atk = v; } });
+      knob({ min: 0, max: 1, step: 0.01, value: m.dec, label: 'Decay', fmt: () => fmtT(envDecay(m)), onInput: (v) => { m.dec = v; } });
+    } else {
+      knob({ min: 0, max: MOD_RATES.length - 1, step: 1, value: m.rate, label: 'Rate', fmt: (v) => MOD_RATES[v].name, onInput: (v) => { m.rate = v; } });
+    }
+    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; } });
+    if (!sh.env && sh.ctl) knob({ min: 0, max: 1, step: 0.01, value: m.ctl, label: sh.ctl[0], fmt: (v) => (sh.ctl[1] + v * (sh.ctl[2] - sh.ctl[1])).toFixed(2), onInput: (v) => { m.ctl = v; } });
+    if (!sh.env) knob({ min: 0, max: 359, step: 1, value: Math.round(m.phase * 360), label: 'Phase', fmt: (v) => v + '°', onInput: (v) => { m.phase = v / 360; } });
+  }
+
+  /* each modulator's die rolls its settings, not its assignments */
+  function randomizeModSettings(k, strength) {
+    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)];
+    if (Math.random() < strength) m.shape = pick(MOD_SHAPES).id;
+    m.rate = clamp(Math.round(m.rate + (Math.random() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
+    m.depth = clamp((Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.6 * strength), -1, 1);
+    m.ctl = clamp(m.ctl + (Math.random() * 2 - 1) * strength, 0, 1);
+    m.phase = Math.random() < strength ? Math.random() : m.phase;
+    m.atk = clamp(m.atk + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+    m.dec = clamp(m.dec + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+  }
+  /* the page's die makes assignments: each modulator picks a destination
+     that suits it (envelopes on things that glide through a hit) and lands
+     on the drums the pattern actually uses most, or on a few steps */
+  function randomizeAssignments(strength) {
+    const on = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+    if (!on.length) return;
+    const counts = new Map();
+    for (const i of on) { const s = seq.steps[i], a = nearestAnchor(s.x, s.y); counts.set(a, (counts.get(a) || 0) + 1); }
+    const drums = [...counts.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch'];
+    const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
+    mods.forEach((m) => {
+      if (Math.random() > 0.3 + 0.7 * strength) return;
+      m.targets = [];
+      m.dest = pick(isEnv(m) ? ENV_DESTS : LFO_DESTS);
+      const r = Math.random();
+      if (r < 0.55) m.targets.push({ kind: 'drum', a: drums[Math.floor(Math.pow(Math.random(), 1.6) * drums.length)] });
+      else if (r < 0.92 || strength < 0.6) {
+        const n = 1 + Math.floor(Math.random() * Math.min(3, on.length));
+        for (let q = 0; q < n; q++) { const g = { kind: 'step', i: pick(on) }; if (!modCovers(m, g.i, -2)) m.targets.push(g); }
+      } else m.targets.push({ kind: 'kit' });
+      m.depth = (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.5 * strength);
+    });
+    renderMods(); loadModEditor(); refreshKnobMods(); dirty = true;
+    history.commit();
+  }
+
+  /* the knob pickers on the kit and engine pages: a modulator moves that
+     knob's control for the kit, or for the drum being edited */
+  function knobMod(dest, target) {
+    const sameT = (g, t) => g.kind === t.kind && g.a === t.a;
+    const o = {
+      current() { const t = target(); return mods.findIndex((m) => m.dest === dest && m.targets.some((g) => sameT(g, t))); },
+      pick(k) {
+        const t = target();
+        mods.forEach((m) => { if (m.dest === dest) m.targets = m.targets.filter((g) => !sameT(g, t)); });
+        if (k >= 0) { const m = mods[k]; if (m.dest !== dest) { m.dest = dest; } m.targets.push(t); }
+        renderMods(); refreshKnobMods(); dirty = true; history.commit();
+      },
+    };
+    knobMods.push(o);
+    return o;
+  }
+  function refreshKnobMods() { knobRefreshers.forEach((f) => f()); }
+
   /* ---------- undo / redo ---------- */
   const history = {
     stack: [], index: -1,
@@ -1227,6 +1582,7 @@
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
         trims: { ...trims }, tempo, swing, mono: pendingMono,
+        mods: JSON.parse(JSON.stringify(mods)),
       };
     },
     restore(s) {
@@ -1234,6 +1590,8 @@
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing;
+      if (s.mods) s.mods.forEach((m, k) => { mods[k] = JSON.parse(JSON.stringify(m)); });
+      renderMods(); loadModEditor(); refreshKnobMods();
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
       tempoSlider.set(tempo);
       swingSlider.set(swing);
@@ -1304,6 +1662,7 @@
   }
   const DICE = {
     pad: ['Randomize sequence', randomizeSequence],
+    mod: ['Randomize modulation assignments', randomizeAssignments],
     lanes: ['Randomize this lane', randomizeLane],
     kit: ['Randomize whole kit', randomizeKit],
     engine: ['Randomize this drum', randomizeDrum],
@@ -1314,7 +1673,57 @@
     dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
     dice.title = d ? d[0] : '';
     dice.setAttribute('aria-disabled', String(!d));
+    $('#diceCap').textContent = d ? d[0] : '';
   }
+
+  const HELP = {
+    pad: ['Star chart', [
+      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in playing order.',
+      '<b>Tap a step</b> to switch it on or off. Switching one off clears it completely.',
+      '<b>Hold the pad, then tap a step</b> to give that step the sound under your finger. <b>Hold steps, then touch the pad</b> and they follow your finger.',
+      '<b>Hold a step, then tap another</b> to copy its sound.',
+      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at.',
+      'The <b>ratchet bar</b> beside the sky sets how many hits a recorded step gets (2, 3, 4 or 6). Hold it up while recording with the sky; it springs back to 1/16 when you let go and does nothing on its own.',
+      '<b>Stepped / smooth</b> (beside record): smooth lets a ringing hit follow your finger and records the whole gesture. It only affects new touches.',
+      '<b>Choke</b> (the cut-off wave) lets only one hit ring at a time. <b>Select</b> (dotted square) latches steps for one-finger editing.',
+      'Small <b>moons</b> orbit the stars a modulator moves. Set them up on the modulation page.',
+    ]],
+    mod: ['Modulation', [
+      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>.',
+      '<b>Hold Step assign</b> and tap stars to send a modulator to those steps. <b>Hold Drum assign</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it.',
+      'Or <b>hold a star</b> and tap Step or Drum assign on any modulator. A quick tap on an assign key latches it until you tap it again.',
+      '<b>Destination</b> is what it moves: position on the map, pitch, decay, or any engine control. The kit and engine pages also have a small picker under each knob.',
+      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: a slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
+      'The <b>die on each modulator</b> rolls its settings. The <b>die in the top bar</b> makes new assignments, aimed at the drums your pattern uses most.',
+    ]],
+    lanes: ['Step lanes', [
+      '<b>Chance</b>: how often each step plays. <b>X / Y drift</b>: how often, and how far, a step strays from its spot. <b>Decay</b>: each step\'s own decay length, and how often and how far it varies.',
+      'Drag a bar up or down to set it; drag sideways to paint across steps.',
+    ]],
+    kit: ['Whole kit', [
+      'These shift every drum on the map at once. Double-tap a knob to reset it.',
+      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit.',
+    ]],
+    engine: ['Drum engine', [
+      'Each drum is a point the whole map blends toward, so shaping it reshapes nearby sounds too.',
+      'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
+      'The small picker under each knob sends a modulator to that control for this drum.',
+    ]],
+  };
+  const help = $('#help'), helpBtn = $('#helpBtn');
+  function fillHelp() {
+    const [title, items] = HELP[currentPage];
+    $('#helpH').textContent = title;
+    $('#helpList').innerHTML = items.map((t) => `<li>${t}</li>`).join('') +
+      '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
+  }
+  function setHelp(open) {
+    help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
+    if (open) { fillHelp(); $('#helpClose').focus(); }
+  }
+  helpBtn.addEventListener('click', () => setHelp(help.hidden));
+  $('#helpClose').addEventListener('click', () => { setHelp(false); helpBtn.focus(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !help.hidden) { setHelp(false); helpBtn.focus(); } });
 
   history.commit(); // baseline
   $('#undo').addEventListener('click', () => history.undo());
@@ -1352,6 +1761,7 @@
       const ct = actx.currentTime;
       while (queue.length && queue[0].t <= ct) {
         const q = queue.shift();
+        if (q.i !== cur || !q.ratchet) curT = q.t;
         cur = q.i;
         if (q.fired) spawnBurst(q.x, q.y, q.P, now);
         headDirty = dirty = laneDirty = true;
@@ -1362,18 +1772,23 @@
       while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
     }
     stepParticles(dt, now);
-    if (particles.length) dirty = true;
+    if (particles.length || playing || mods.some((m) => m.targets.length)) dirty = true;
+    if (actx) envFires = envFires.filter((f) => actx.currentTime - f.t < 2.5);
 
     if (headDirty) { updateHead(); headDirty = false; }
     if (stepsDirty) { renderSteps(); stepsDirty = false; }
     readoutDirty = false; // nothing displays a voice readout anymore
     if (laneDirty) { drawLanes(); laneDirty = false; }
-    if (dirty) { drawPad(now); dirty = false; }
+    if (dirty) {
+      if (currentPage === 'pad' || slide) drawPad(now);
+      if (currentPage === 'mod' || slide) { drawModSky(now); drawModThumbs(now); }
+      dirty = false;
+    }
     requestAnimationFrame(frame);
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'lanes', 'kit', 'engine', 'info'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
   function settleSlide() {
@@ -1398,6 +1813,8 @@
     // force a resize+redraw now that the page is actually visible.
     if (page === 'pad') { resizePad(); dirty = true; }
     if (page === 'lanes') { resizeLaneCanvas(); laneDirty = true; }
+    if (page === 'mod') { modField = null; renderMods(); loadModEditor(); dirty = true; }
+    if (!help.hidden) fillHelp();
     if (reduceMotion || !to.animate) { from.classList.remove('active'); return; }
     // the old page leaves as the new one arrives, side by side like a strip;
     // no fill mode, so once the animations end (or are cancelled) both pages
@@ -1418,7 +1835,7 @@
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, .step, .knob, .dicetrack, .ratchet, #laneCanvas, button, select, input, .tab';
+    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .shapemenu, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }
@@ -1439,9 +1856,12 @@
 
   new ResizeObserver(resizePad).observe(pad);
   new ResizeObserver(resizeLaneCanvas).observe(laneCanvas);
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { dirty = true; });
+  const onTheme = () => { readTheme(); field = buildSky(pad.width, pad.height); modField = null; dirty = stepsDirty = laneDirty = true; renderMods(); };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme);
+  new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
   resizePad(); resizeLaneCanvas();
+  renderMods(); loadModEditor(); updateDice();
   requestAnimationFrame(frame);
   initPages();
 })();

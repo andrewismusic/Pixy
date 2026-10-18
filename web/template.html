@@ -7,24 +7,28 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: one column of instrument modules: pad, transport, steps, tools.
-   Look: a sci-fi instrument panel. Cool neutrals, thin edges, keys that
-   sit on a hard shadow and sink when pressed. Colour has jobs:
+/* Layout: one column of instrument modules. The pad is a star chart:
+   sequenced steps are stars joined in playing order, and modulators are
+   moons orbiting the steps they move. Night is a ship's console; day is a
+   printed star atlas. Keys sit on a hard shadow and sink when pressed.
+   Colour has jobs:
      yellow   on / selected / highlighted         (--hold)
      cyan     playing now (the playhead)          (--now)
      red      recording                           (--rec)
-   Sound colours (steps, pad) are kept out of yellow and cyan on purpose.
-   Module accents (--m-*) colour knob arcs by synth layer. */
+   Star colours follow stellar classes (red = low, blue-white = high) and
+   stay clear of those three. Module accents (--m-*) colour knob arcs. */
 :root {
-  --bg: #E4E8EE; --glow: rgba(120,140,190,.18); --panel: #F3F5F8; --well: #D9DEE6;
-  --ink: #0E1320; --muted: #556075; --edge: #9AA4B6; --shadow: #A3ACBC;
-  --cap-hi: #FFFFFF; --cap-lo: #E2E6EC; --track: rgba(14,19,32,.12);
-  --now: #0096BA; --hold: #F2C200; --on-ink: #14110A; --rec: #E0263F;
+  --bg: #E6EAF0; --panel: #F4F6F9; --well: #DCE1E9;
+  --ink: #101521; --muted: #556076; --edge: #A9B3C3; --shadow: #A9B1C0;
+  --cap-hi: #FFFFFF; --cap-lo: #E3E7EE; --track: rgba(16,21,33,.12);
+  --now: #0092B8; --hold: #F2C200; --on-ink: #15120A; --rec: #E0263F;
+  --sky: #F2F4F8; --sky-line: rgba(16,21,33,.30); --sky-star: rgba(16,21,33,.45);
   --m-body: #D9466F; --m-noise: #6F7A92; --m-metal: #4F6FE0; --m-res: #D7861A;
-  --m-filter: #7C5CE6; --m-out: #E0582E; --m-kit: #0E1320;
-  --font-ui: 'Oxanium', 'Eurostile', 'Bank Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --m-filter: #7C5CE6; --m-out: #E0582E; --m-kit: #101521;
+  --font-head: 'Oxanium', 'Eurostile', system-ui, sans-serif;
+  --font-ui: 'Chakra Petch', 'Eurostile', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -32,45 +36,45 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #090C14; --glow: rgba(70,100,180,.16); --panel: #121722; --well: #0C1019;
-    --ink: #E6EAF2; --muted: #8B94AA; --edge: #263044; --shadow: #020307;
-    --cap-hi: #252D3E; --cap-lo: #181E2B; --track: rgba(255,255,255,.08);
-    --now: #3BE0FF; --hold: #FFD21F; --on-ink: #14110A; --rec: #FF3B5C;
+    --bg: #05070C; --panel: #0C111B; --well: #0E1320;
+    --ink: #E4E9F3; --muted: #8590A8; --edge: #2B3650; --shadow: #000;
+    --cap-hi: #1E2638; --cap-lo: #141B29; --track: rgba(255,255,255,.08);
+    --now: #3BE0FF; --hold: #FFD21F; --rec: #FF3B5C;
+    --sky: #03050A; --sky-line: rgba(200,212,255,.22); --sky-star: rgba(220,228,255,.6);
     --m-body: #FF6B91; --m-noise: #A9B2C8; --m-metal: #7F9BFF; --m-res: #FFAA3D;
-    --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E6EAF2;
+    --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E4E9F3;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #090C14; --glow: rgba(70,100,180,.16); --panel: #121722; --well: #0C1019;
-  --ink: #E6EAF2; --muted: #8B94AA; --edge: #263044; --shadow: #020307;
-  --cap-hi: #252D3E; --cap-lo: #181E2B; --track: rgba(255,255,255,.08);
-  --now: #3BE0FF; --hold: #FFD21F; --on-ink: #14110A; --rec: #FF3B5C;
+  --bg: #05070C; --panel: #0C111B; --well: #0E1320;
+  --ink: #E4E9F3; --muted: #8590A8; --edge: #2B3650; --shadow: #000;
+  --cap-hi: #1E2638; --cap-lo: #141B29; --track: rgba(255,255,255,.08);
+  --now: #3BE0FF; --hold: #FFD21F; --rec: #FF3B5C;
+  --sky: #03050A; --sky-line: rgba(200,212,255,.22); --sky-star: rgba(220,228,255,.6);
   --m-body: #FF6B91; --m-noise: #A9B2C8; --m-metal: #7F9BFF; --m-res: #FFAA3D;
-  --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E6EAF2;
+  --m-filter: #A98BFF; --m-out: #FF7D52; --m-kit: #E4E9F3;
   color-scheme: dark;
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 *, *::before, *::after { box-sizing: inherit; }
 body {
-  margin: 0; min-height: 100%; color: var(--ink);
-  background: radial-gradient(140% 70% at 50% -10%, var(--glow), transparent 70%) var(--bg) fixed;
+  margin: 0; min-height: 100%; color: var(--ink); background: var(--bg);
   font: 500 15px/1.45 var(--font-ui);
   -webkit-text-size-adjust: 100%;
 }
 .app { max-width: 760px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
-/* ---------- key: the shared 3D button body. It sits on a hard shadow and
-   sinks onto it when pressed or switched on. ---------- */
+/* ---------- key: the shared 3D button body ---------- */
 .cap {
   position: relative; border: 1.5px solid var(--edge); border-radius: 10px;
   background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
   color: var(--ink); cursor: pointer; font-family: var(--font-ui);
-  box-shadow: 0 4px 0 var(--shadow), inset 0 1px 0 rgba(255,255,255,.14);
+  box-shadow: 0 4px 0 var(--shadow);
   transition: transform .07s, box-shadow .07s, background-color .12s;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.cap:active, .cap.pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), inset 0 1px 0 rgba(255,255,255,.14); }
+.cap:active, .cap.pressed { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow); }
 .cap:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
 /* switched on: sunk, and lit in the indicator yellow */
 .cap.lit, .cap[aria-pressed="true"], .cap[aria-selected="true"] {
@@ -78,16 +82,19 @@ body {
   transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold);
 }
 
-header.top { margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-ui); letter-spacing: .16em; margin: 0 auto 0 0; }
-h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-transform: uppercase; text-wrap: balance; }
+header.top { display: grid; gap: 8px; margin-bottom: 14px; }
+.toprow { display: flex; align-items: center; gap: 8px; }
+h1 { font: 700 clamp(20px, 5vw, 30px)/1 var(--font-head); letter-spacing: .18em; margin: 0 auto 0 0; }
+h2 { font: 600 14px/1.2 var(--font-head); margin: 0; letter-spacing: .16em; text-transform: uppercase; text-wrap: balance; }
+h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text-transform: uppercase; }
 
-.pagenav { display: flex; gap: 7px; flex: none; }
+.pagenav { display: flex; gap: 6px; flex: none; }
 .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; }
+.subrow { display: flex; align-items: center; gap: 8px; }
+.subrow .dicecap { margin-left: auto; font: 600 10.5px/1.2 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); text-align: right; }
+#helpBtn { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 
-/* pages slide sideways as a strip: the old one leaves as the new one
-   arrives (driven from ui.js with the Web Animations API, so an
-   interrupted slide always settles back to a clean state) */
+/* pages slide sideways as a strip (Web Animations in ui.js) */
 .pages { position: relative; overflow: hidden; touch-action: pan-y; padding: 0 6px 8px; margin: 0 -6px; }
 .page { display: none; }
 .page.active { display: block; }
@@ -97,22 +104,20 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .padrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; max-width: 768px; margin: 0 auto; }
 .padwrap {
   position: relative; max-width: 100%; aspect-ratio: 1 / 1;
-  border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: #070912;
+  border: 1.5px solid var(--edge); border-radius: 16px; overflow: hidden; background: var(--sky);
   box-shadow: 0 5px 0 var(--shadow);
 }
-#pad {
+.padwrap canvas {
   display: block; width: 100%; height: 100%;
   touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
-#pad:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
-/* ratchet bar: rests at 1/16 at the bottom and springs back when let go */
+.padwrap canvas:focus-visible { outline: 2px solid var(--hold); outline-offset: -5px; }
 .ratchet {
   position: relative; border-radius: 12px; background: var(--well); border: 1.5px solid var(--edge);
   box-shadow: inset 0 2px 0 rgba(0,0,0,.12); touch-action: none; cursor: ns-resize; outline: none;
   user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
-/* each stop: its value with a short tick just under it */
 .ratchet .rstop { position: absolute; left: 0; right: 0; display: grid; justify-items: center; gap: 3px; transform: translateY(50%); pointer-events: none; }
 .ratchet .rstop span { font: 500 9px/1 var(--font-mono); color: var(--muted); }
 .ratchet .rstop i { width: 10px; height: 1.5px; border-radius: 1px; background: var(--edge); }
@@ -125,11 +130,8 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .ratchet.held .rthumb { transition: none; background: var(--hold); color: var(--on-ink); border-color: transparent; box-shadow: 0 1px 0 var(--shadow), 0 0 14px -2px var(--hold); }
 .ratchet:focus-visible .rthumb { outline: 2px solid var(--hold); outline-offset: 2px; }
 
-/* ---------- panels ---------- */
-.panel { padding-top: 6px; }
-.panel .sub { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; max-width: 65ch; }
-
-/* ---------- knob ---------- */
+/* ---------- knob: the arc ring and the cap's shadow stay put; only the
+   pointer turns ---------- */
 .knobgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px 4px; margin-top: 12px; }
 .knob {
   --rot: 0deg; display: grid; justify-items: center; align-content: start; gap: 3px; min-width: 0;
@@ -142,11 +144,11 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob-dial .val { fill: none; stroke: var(--accent, var(--ink)); stroke-width: 4; stroke-linecap: round; }
 .knob-cap {
   position: absolute; inset: 18%; border-radius: 50%; border: 1.5px solid var(--edge);
-  background: radial-gradient(circle at 50% 30%, var(--cap-hi), var(--cap-lo) 75%);
+  background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
   box-shadow: 0 3px 0 var(--shadow);
-  transform: rotate(var(--rot));
 }
-.knob-cap::after {
+.knob-ptr { position: absolute; inset: 0; transform: rotate(var(--rot)); }
+.knob-ptr::after {
   content: ''; position: absolute; top: 10%; left: 50%; width: 2.5px; height: 30%;
   background: var(--ink); border-radius: 2px; transform: translateX(-50%);
 }
@@ -154,33 +156,32 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .knob-label { font: 600 10px/1.15 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; text-align: center; max-width: 100%; }
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
+/* a knob's modulation source: a tiny native picker under its label */
+.modsel {
+  appearance: none; -webkit-appearance: none; border: 1px solid var(--edge); border-radius: 5px; background: var(--well);
+  font: 600 9px/1 var(--font-mono); color: var(--muted); padding: 2px 4px; text-align: center; text-align-last: center; cursor: pointer; max-width: 46px;
+}
+.modsel.set { color: var(--on-ink); background: var(--hold); border-color: transparent; }
 
-/* ---------- dice: a short track in the top bar. The die is the key
-   itself, five pips on its face. Drag it right for a stronger roll of
-   whichever page is showing; it rolls home on release. */
+/* ---------- dice: a track with the die as a key-sized face; drag right
+   for a stronger roll of whichever page is showing ---------- */
 .dicefield { flex: none; }
 .dicetrack {
-  --dh: 42px; position: relative; width: 104px; height: var(--dh); border-radius: 10px; overflow: hidden; cursor: pointer;
-  background: var(--well); border: 1.5px solid var(--edge);
-  box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
+  --dh: 34px; position: relative; width: 96px; height: var(--dh); border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: var(--well); border: 1.5px solid var(--edge); box-shadow: inset 0 2px 0 rgba(0,0,0,.12);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
 .dicetrack[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 .dicetrack .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--hold); opacity: .85; }
-.dicetrack .die {
-  position: absolute; top: 0; left: 0; width: calc(var(--dh) - 3px); height: calc(var(--dh) - 3px); border-radius: 8.5px; z-index: 2;
-  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--dh) * .2);
-  background: #F7F9FC;
-  cursor: grab;
+.die {
+  position: absolute; top: 0; left: 0; width: calc(var(--dh) - 3px); height: calc(var(--dh) - 3px); border-radius: 7.5px; z-index: 2;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--dh) * .2); background: #F7F9FC;
   transition: left .5s cubic-bezier(.3,.9,.3,1.1), transform .5s cubic-bezier(.3,.9,.3,1.1);
 }
-.dicetrack .die i { width: 5px; height: 5px; border-radius: 50%; background: #0E1320; place-self: center; }
-.dicetrack .die i:nth-child(1) { grid-area: 1 / 1; }
-.dicetrack .die i:nth-child(2) { grid-area: 1 / 3; }
-.dicetrack .die i:nth-child(3) { grid-area: 2 / 2; }
-.dicetrack .die i:nth-child(4) { grid-area: 3 / 1; }
-.dicetrack .die i:nth-child(5) { grid-area: 3 / 3; }
-.dicetrack.dragging .die { transition: none; cursor: grabbing; }
+.die i { width: 4.5px; height: 4.5px; border-radius: 50%; background: #0E1320; place-self: center; }
+.die i:nth-child(1) { grid-area: 1 / 1; } .die i:nth-child(2) { grid-area: 1 / 3; } .die i:nth-child(3) { grid-area: 2 / 2; }
+.die i:nth-child(4) { grid-area: 3 / 1; } .die i:nth-child(5) { grid-area: 3 / 3; }
+.dicetrack.dragging .die { transition: none; }
 .dicetrack:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
 
 /* ---------- transport row + steps ---------- */
@@ -188,7 +189,7 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .transport { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .transport .knobslot { flex: 1 1 0; min-width: 0; }
 .transport .knob { --kd: 48px; }
-.btn { font: 700 12.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
+.btn { font: 700 12px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .1em; padding: 0 14px; min-height: 42px; }
 .btn.icon { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 10px; }
 #play, #record, #smooth { width: 54px; height: 54px; border-radius: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
 #record { color: var(--rec); }
@@ -212,19 +213,15 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent; transition: transform .07s, box-shadow .07s;
 }
-.step .n { position: absolute; top: 6px; left: 8px; font: 700 12px/1 var(--font-ui); letter-spacing: .04em; opacity: .5; }
+.step .n { position: absolute; top: 6px; left: 8px; font: 600 12px/1 var(--font-head); letter-spacing: .04em; opacity: .5; }
 .step .dot {
   display: none; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff;
   box-shadow: 0 0 0 2px rgba(5,7,12,.55);
   left: calc(14% + var(--dx, .5) * 72%); bottom: calc(12% + var(--dy, .5) * 56%); transform: translate(-50%, 50%);
 }
-.step.on {
-  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 55%), var(--c, #555);
-  color: var(--tc, #fff); border-color: rgba(0,0,0,.35);
-}
+.step.on { background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0) 55%), var(--c, #555); color: var(--tc, #fff); border-color: rgba(0,0,0,.35); }
 .step.on .n { opacity: .9; }
 .step.on .dot { display: block; }
-/* ratchet hits: one pip per hit along the top edge */
 .step .hits { position: absolute; top: 4px; right: 6px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
 .cell.now .step { transform: translateY(-2px); box-shadow: 0 6px 0 var(--shadow), 0 0 0 2px var(--now); }
 .step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--hold); }
@@ -232,6 +229,52 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
 .tools .gap { flex: 1 1 8px; }
+
+/* ---------- modulation page ---------- */
+.modsky { aspect-ratio: 16 / 11; }
+.mods { display: grid; gap: 6px; margin-top: 14px; }
+.mod {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center;
+  padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer;
+}
+.mod.sel { border-color: var(--hold); box-shadow: 0 0 0 1px var(--hold); }
+.mod canvas { width: 40px; height: 40px; display: block; border-radius: 8px; background: var(--sky); }
+.mod .nm { font: 600 11px/1.15 var(--font-head); letter-spacing: .16em; display: flex; align-items: center; gap: 6px; }
+.mod .nm i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
+.mod .sm { font: 500 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign { font: 700 9.5px/1.05 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 48px; height: 38px; padding: 0 2px; border-radius: 9px; touch-action: none; }
+.minidie { width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 0; background: #F7F9FC; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 7px; cursor: pointer; box-shadow: 0 3px 0 var(--shadow); transition: transform .07s, box-shadow .07s; }
+.minidie:active { transform: translateY(2px) rotate(20deg); box-shadow: 0 1px 0 var(--shadow); }
+.minidie i { width: 4px; height: 4px; border-radius: 50%; background: #0E1320; place-self: center; }
+.minidie i:nth-child(1) { grid-area: 1 / 1; } .minidie i:nth-child(2) { grid-area: 1 / 3; } .minidie i:nth-child(3) { grid-area: 2 / 2; }
+.minidie i:nth-child(4) { grid-area: 3 / 1; } .minidie i:nth-child(5) { grid-area: 3 / 3; }
+.minidie:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.modedit { margin-top: 16px; display: grid; gap: 12px; }
+.pickrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.pick { display: grid; gap: 5px; min-width: 0; }
+.pick > span { font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.pickbtn, .picksel {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 30px 0 10px; text-align: left;
+  font: 600 13px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
+}
+.pickwrap { position: relative; display: flex; }
+.pickwrap::after { content: '\25BE'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 13px; color: var(--ink); }
+.pickbtn svg { flex: none; }
+.shapemenu {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(300px, 86vw); max-height: 320px; overflow-y: auto;
+  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; padding: 6px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.5);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+}
+.shapemenu[hidden] { display: none; }
+.shapemenu button {
+  display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
+  font: 600 11.5px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-align: left;
+}
+.shapemenu button:hover, .shapemenu button:focus-visible { background: var(--well); outline: none; }
+.shapemenu button[aria-checked="true"] { background: var(--hold); color: var(--on-ink); }
+.shapemenu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 2px; }
+.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
 
 /* ---------- lanes ---------- */
 .lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; }
@@ -241,14 +284,14 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .btn.small { min-height: 36px; font-size: 11.5px; border-radius: 9px; }
 #laneCanvas {
   display: block; width: 100%; height: min(58vh, 460px); margin-top: 14px; border-radius: 10px;
-  touch-action: none; cursor: crosshair; background: #070912; border: 1.5px solid var(--edge);
+  touch-action: none; cursor: crosshair; background: var(--sky); border: 1.5px solid var(--edge);
 }
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- engine ---------- */
 .enginepick { display: flex; gap: 8px; margin: 12px 0 2px; }
 .enginepick select {
-  flex: 1 1 auto; min-width: 0; font: 700 15px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .12em;
+  flex: 1 1 auto; min-width: 0; font: 600 15px/1 var(--font-head); text-transform: uppercase; letter-spacing: .14em;
   padding: 0 12px; min-height: 44px; appearance: none; -webkit-appearance: none;
 }
 .selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
@@ -256,30 +299,39 @@ h2 { font: 700 14px/1.2 var(--font-ui); margin: 0; letter-spacing: .14em; text-t
 .selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
 .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
 .module { padding-top: 10px; border-top: 1px solid var(--edge); }
-.module h3 { margin: 0; font: 700 11.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.module h3 { display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
 .module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
 .module .knob { --kd: 42px; }
 .module .knob-label { font-size: 9px; }
 .module .knob-value { font-size: 10px; }
 
-.how { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
+/* ---------- help sheet: what's on the page you're looking at ---------- */
+.help {
+  position: fixed; z-index: 50; inset: auto 0 0 0; max-height: 72vh; overflow-y: auto;
+  background: var(--panel); border-top: 1.5px solid var(--edge); border-radius: 18px 18px 0 0; box-shadow: 0 -20px 50px -20px rgba(0,0,0,.5);
+  padding-block: 18px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
+}
+.help .inner { max-width: 720px; margin: 0 auto; display: grid; gap: 10px; }
+.help .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.how { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 14px; max-width: 70ch; }
 .how b { color: var(--ink); font-weight: 700; }
 kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var(--edge); border-radius: 5px; background: var(--panel); color: var(--ink); box-shadow: 0 2px 0 var(--shadow); }
 
 @media (max-width: 640px) {
   .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
-  .navbtn { width: 36px; height: 36px; }
+  .navbtn { width: 38px; height: 38px; }
   .pagenav { gap: 4px; }
-  header.top { gap: 6px; }
-  .dicetrack { --dh: 36px; width: 84px; }
   .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
   .transport .knob { --kd: 42px; }
   #play, #record, #smooth { width: 48px; height: 48px; }
+  .mod { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 6px; }
+  .assign { width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .step, .cap, .dicetrack .die { transition: none; }
+  .step, .cap, .die, .minidie, .rthumb { transition: none; }
   #record[aria-pressed="true"] svg { animation: none; }
 }
 </style>
@@ -287,34 +339,42 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
 <body>
 <main class="app">
   <header class="top">
-    <h1>PIXY</h1>
-    <nav class="pagenav" aria-label="Pages">
-      <button class="navbtn cap" type="button" data-page="pad" aria-pressed="true" aria-label="Pad &amp; sequencer" title="Pad &amp; sequencer">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="6" cy="6" r="2.2" fill="currentColor"/><circle cx="12" cy="6" r="2.2" fill="currentColor"/><circle cx="18" cy="6" r="2.2" fill="currentColor"/><circle cx="6" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="18" cy="12" r="2.2" fill="currentColor"/><circle cx="6" cy="18" r="2.2" fill="currentColor"/><circle cx="12" cy="18" r="2.2" fill="currentColor"/><circle cx="18" cy="18" r="2.2" fill="currentColor"/></svg>
+    <div class="toprow">
+      <h1>PIXY</h1>
+      <nav class="pagenav" aria-label="Pages">
+        <button class="navbtn cap" type="button" data-page="pad" aria-pressed="true" aria-label="Star chart: pad and sequencer" title="Star chart">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 17l5-9 5 6 4-8" opacity=".5"/><circle cx="5" cy="17" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.6" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="2.2" fill="currentColor" stroke="none"/><circle cx="19" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="mod" aria-pressed="false" aria-label="Modulation" title="Modulation">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="8.5" opacity=".55"/><circle cx="18" cy="6" r="2.3" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="lanes" aria-pressed="false" aria-label="Step lanes" title="Step lanes">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="kit" aria-pressed="false" aria-label="Whole kit" title="Whole kit">
+          <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><circle cx="12" cy="16" r="1.3" fill="currentColor" stroke="none"/><path d="M6.2 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="8.8" cy="7.4" rx="2.6" ry="1.2"/><path d="M12.6 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="15.2" cy="7.4" rx="2.6" ry="1.2"/><path d="M1.2 4.6l4.4-1.4M3.4 4v17M22.8 4.6l-4.4-1.4M20.6 4v17"/></svg>
+        </button>
+        <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><ellipse cx="12" cy="7" rx="8" ry="3.4"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3"/></svg>
+        </button>
+      </nav>
+    </div>
+    <div class="subrow">
+      <button id="helpBtn" class="cap" type="button" aria-label="Help for this page" aria-expanded="false" aria-controls="help" title="Help for this page">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>
       </button>
-      <button class="navbtn cap" type="button" data-page="lanes" aria-pressed="false" aria-label="Automation lanes" title="Automation lanes">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="10" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="10.4" y="4" width="3.2" height="17" rx="1" fill="currentColor"/><rect x="17.8" y="13" width="3.2" height="8" rx="1" fill="currentColor"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="kit" aria-pressed="false" aria-label="Kit editor" title="Kit editor">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="5.2"/><circle cx="12" cy="16" r="1.3" fill="currentColor" stroke="none"/><path d="M6.2 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="8.8" cy="7.4" rx="2.6" ry="1.2"/><path d="M12.6 7.4v2.2a2.6 1.2 0 0 0 5.2 0V7.4"/><ellipse cx="15.2" cy="7.4" rx="2.6" ry="1.2"/><path d="M1.2 4.6l4.4-1.4M3.4 4v17M22.8 4.6l-4.4-1.4M20.6 4v17"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><ellipse cx="12" cy="7" rx="8" ry="3.4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <button class="navbtn cap" type="button" data-page="info" aria-pressed="false" aria-label="Info" title="Info">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="11" y="10.5" width="2" height="6.5" rx="1" fill="currentColor"/><circle cx="12" cy="7.2" r="1.4" fill="currentColor"/></svg>
-      </button>
-    </nav>
-    <div class="dicefield" id="diceField"></div>
+      <span class="dicecap" id="diceCap" aria-hidden="true">Randomize sequence</span>
+      <div class="dicefield" id="diceField"></div>
+    </div>
   </header>
 
   <div class="pages" id="pages">
     <section class="page active" data-page="pad">
       <div class="padrow">
         <div class="padwrap">
-          <canvas id="pad" tabindex="0" role="application" aria-label="Pixy pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
+          <canvas id="pad" tabindex="0" role="application" aria-label="Star chart pad. Touch or drag to choose a drum sound; the closest sound plays. Arrow keys move the cursor and Enter plays it."></canvas>
         </div>
-        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher to cut each step into more hits. Springs back to 1/16 when you let go.">
+        <div class="ratchet" id="ratchet" tabindex="0" role="slider" aria-label="Ratchet" aria-valuemin="16" aria-valuemax="96" aria-valuenow="16" aria-valuetext="1/16" title="Ratchet: hold higher while recording to cut each step into more hits. Springs back to 1/16 when you let go.">
           <div class="rthumb" id="rthumb">16</div>
         </div>
       </div>
@@ -325,7 +385,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg class="ic-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
             <svg class="ic-stop" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
           </button>
-          <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes your live position into whichever step is passing">
+          <button id="record" class="cap icon" type="button" aria-pressed="false" aria-label="Record" title="While playing, touching the pad writes into whichever step is passing">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
           <button id="smooth" class="cap icon" type="button"></button>
@@ -356,65 +416,64 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
       </section>
     </section>
 
-    <section class="page" data-page="lanes">
-      <div class="panel" aria-labelledby="lanesH">
-        <div class="lanehead">
-          <h2 id="lanesH">Step lanes</h2>
-          <button id="laneReset" class="btn cap small" type="button">Reset lane</button>
+    <section class="page" data-page="mod" aria-label="Modulation">
+      <div class="padwrap modsky">
+        <canvas id="modSky" tabindex="0" role="application" aria-label="Star chart for assigning modulation. Hold Step or Drum on a modulator and tap stars, or hold a star and tap Step or Drum."></canvas>
+      </div>
+      <div class="mods" id="mods"></div>
+      <div class="modedit" id="modEdit">
+        <div class="pickrow">
+          <div class="pick"><span id="shapeLbl">Shape</span>
+            <div class="pickwrap">
+              <button id="shapeBtn" class="pickbtn cap" type="button" aria-haspopup="menu" aria-expanded="false" aria-labelledby="shapeLbl shapeBtn"></button>
+              <div class="shapemenu" id="shapeMenu" role="menu" hidden></div>
+            </div>
+          </div>
+          <div class="pick"><span id="destLbl">Destination</span>
+            <div class="pickwrap"><select id="destSel" class="picksel cap" aria-labelledby="destLbl"></select></div>
+          </div>
         </div>
-        <div class="lanetabs" role="tablist" aria-label="Lane to edit">
-          <button class="tab cap" type="button" data-lane="prob" role="tab" aria-selected="true">Chance</button>
-          <button class="tab cap" type="button" data-lane="devx" role="tab" aria-selected="false">X drift</button>
-          <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
-          <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
-        </div>
-        <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
-        <p class="lanereadout" id="laneReadout">&nbsp;</p>
+        <div class="knobgrid" id="modKnobs" style="--accent: var(--mc)"></div>
       </div>
     </section>
 
-    <section class="page" data-page="kit">
-      <section class="panel" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
-        <h2 id="tweakH">Whole kit</h2>
-        <div class="knobgrid" id="kitKnobs"></div>
-      </section>
+    <section class="page" data-page="lanes">
+      <div class="lanehead">
+        <h2 id="lanesH">Step lanes</h2>
+        <button id="laneReset" class="btn cap small" type="button">Reset lane</button>
+      </div>
+      <div class="lanetabs" role="tablist" aria-label="Lane to edit">
+        <button class="tab cap" type="button" data-lane="prob" role="tab" aria-selected="true">Chance</button>
+        <button class="tab cap" type="button" data-lane="devx" role="tab" aria-selected="false">X drift</button>
+        <button class="tab cap" type="button" data-lane="devy" role="tab" aria-selected="false">Y drift</button>
+        <button class="tab cap" type="button" data-lane="decay" role="tab" aria-selected="false">Decay</button>
+      </div>
+      <canvas id="laneCanvas" role="img" aria-label="Per-step lane values. Drag a bar up or down to set it, or drag sideways to set several steps at once."></canvas>
+      <p class="lanereadout" id="laneReadout">&nbsp;</p>
     </section>
 
-    <section class="page" data-page="engine">
-      <section class="panel" aria-labelledby="engineH">
-        <h2 id="engineH">Drum engine</h2>
-        <div class="enginepick">
-          <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
-          <button id="engineReset" class="btn cap small" type="button">Reset</button>
-        </div>
-        <div id="engineParams" class="modules"></div>
-      </section>
+    <section class="page" data-page="kit" aria-labelledby="tweakH" style="--accent: var(--m-kit)">
+      <h2 id="tweakH">Whole kit</h2>
+      <div class="knobgrid" id="kitKnobs"></div>
     </section>
 
-    <section class="page" data-page="info">
-      <section class="panel">
-        <h2>How it works</h2>
-        <ul class="how">
-          <li><b>Tap a step</b> to switch it on or off. A new step takes the sound your cursor was last on; switching one off clears it completely, so tapping it back on starts fresh.</li>
-          <li><b>Hold the pad, then tap a step</b> to give that step the sound under your finger.</li>
-          <li><b>Hold one or more steps, then touch the pad</b> and those steps take the point you touched last.</li>
-          <li>Only one pointer? <b>Select</b> (the dotted square) latches steps so the pad updates them without needing to hold them down. On a keyboard, hold <kbd>1</kbd> to <kbd>8</kbd> and <kbd>Q</kbd> to <kbd>I</kbd> for steps 1 to 16 while using the mouse on the pad, or focus the pad and use the arrow keys.</li>
-          <li><b>Hold a step, then tap another</b> to copy the first step's sound onto the second.</li>
-          <li><b>Knobs</b>: drag up or right to turn up, down or left to turn down. Hold <kbd>Shift</kbd> for fine moves, double-tap to reset.</li>
-          <li><b>Step lanes</b> (the bars icon) add per-step odds: how often a step plays, how often (and how far) it strays from its saved X, Y or decay when it does.</li>
-          <li>The <b>ratchet bar</b> beside the pad rests at 1/16 and springs back when you let go. Hold it higher to cut each step into 2, 3, 4 or 6 hits. While recording, whatever it reads is written into each step that passes; a move in the first half of a step counts for that step, a later one for the next.</li>
-          <li><b>Record</b> arms live recording: while it's playing, touching the pad writes your live position into whichever step is currently passing, overdub-style &mdash; steps you don't touch keep whatever they already had. Hold the ratchet bar up at the same time to record ratchets, or use the bar on its own to re-cut steps that are already there.</li>
-          <li><b>Stepped / smooth</b> (the key beside record): stepped gives each hit one position. Smooth lets a ringing hit follow your finger, and recording keeps the whole gesture through each step and its ratchets. It only affects new touches, so one sequence can mix both.</li>
-          <li><b>Choke</b> (the cut-off wave) makes the kit monophonic: a new hit cuts off whatever's still ringing.</li>
-          <li><b>Drum engine</b> layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style hat squares), <b>resonator</b> (a struck physical model that morphs from string to drum skin to bar), then a <b>filter</b>, a <b>wavefolder</b> and <b>drive</b>.</li>
-          <li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) step back and forward through edits &mdash; steps, lanes, kit and engine tweaks, all of it.</li>
-          <li>The <b>die</b> in the top bar randomizes whichever page you're on: the sequence, the current lane, the whole kit or the drum you're editing. Drag it further right for a stronger roll.</li>
-          <li>Swipe left or right, or use the icons beside the title, to switch between the pad, lanes, whole kit, drum engine and this page.</li>
-        </ul>
-      </section>
+    <section class="page" data-page="engine" aria-labelledby="engineH">
+      <h2 id="engineH">Drum engine</h2>
+      <div class="enginepick">
+        <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
+        <button id="engineReset" class="btn cap small" type="button">Reset</button>
+      </div>
+      <div id="engineParams" class="modules"></div>
     </section>
   </div>
 </main>
+
+<div class="help" id="help" role="dialog" aria-modal="false" aria-labelledby="helpH" hidden>
+  <div class="inner">
+    <div class="head"><h2 id="helpH">Star chart</h2><button id="helpClose" class="btn cap small" type="button">Close</button></div>
+    <ul class="how" id="helpList"></ul>
+  </div>
+</div>
 
 <script>
 /*CORE*/

@@ -151,3 +151,48 @@ test('setAuto stores a gesture and moves ratchets onto it; recordStep clears it'
   s.toggle(3);
   assert.deepEqual(s.steps[3], C.freshStep());
 });
+
+test('every LFO shape stays roughly within -1..1 and sine/kepler(0) agree', () => {
+  for (const sh of C.MOD_SHAPES.filter((s) => !s.env)) {
+    for (let k = 0; k < 400; k++) {
+      const v = C.lfoAt(sh.id, k / 97, 0.5).x;
+      assert.ok(Number.isFinite(v) && v >= -1.3 && v <= 1.3, `${sh.id} gave ${v}`);
+    }
+  }
+  near(C.lfoAt('kepler', 0.3, 0).x, Math.cos(2 * Math.PI * 0.3), 1e-6);
+});
+
+test('envelope rises over the attack, then falls to zero', () => {
+  const m = Object.assign(C.freshMod(), { atk: 0.5, dec: 0.5 });
+  const a = C.envAttack(m), d = C.envDecay(m);
+  near(C.envAt(m, a / 2), 0.5);
+  near(C.envAt(m, a), 1);
+  assert.equal(C.envAt(m, a + d + 0.01), 0);
+  assert.equal(C.envLook(Object.assign(C.freshMod(), { atk: 0.9 })), 'flare');
+  assert.equal(C.envLook(Object.assign(C.freshMod(), { atk: 0, dec: 0.1 })), 'impact');
+  assert.equal(C.envLook(Object.assign(C.freshMod(), { atk: 0, dec: 0.9 })), 'supernova');
+});
+
+test('modulation moves position, pitch, decay and single controls within range', () => {
+  near(C.modulatePos({ x: 0.5, y: 0.5 }, 'x', 1).x, 1);
+  const P = C.paramsAt(0.12, 0.10);
+  near(C.modulateParams(P, 'pitch', 1).f, P.f * 2, 1e-9);
+  near(C.modulateParams(P, 'decay', -1).tDec, P.tDec / 4, 1e-9);
+  const sp = C.PARAM_BY_KEY.fold;
+  assert.equal(C.modulateParams(P, 'fold', 1).fold, Math.min(sp.max, P.fold + 0.5));
+  assert.equal(C.modulateParams(P, 'lp', 5).lp, C.PARAM_BY_KEY.lp.max);
+});
+
+test('targets: steps, drums and kit; toggling adds then removes', () => {
+  const m = C.freshMod();
+  assert.equal(C.toggleTarget(m, { kind: 'step', i: 3 }), true);
+  assert.equal(C.modCovers(m, 3, 0), true);
+  assert.equal(C.modCovers(m, 4, 0), false);
+  C.toggleTarget(m, { kind: 'drum', a: 6 });
+  assert.equal(C.modCovers(m, 9, 6), true);
+  assert.equal(C.toggleTarget(m, { kind: 'step', i: 3 }), false);
+  assert.equal(C.modCovers(m, 3, 0), false);
+  C.toggleTarget(m, { kind: 'kit' });
+  assert.equal(C.modCovers(m, 11, 2), true);
+  assert.equal(C.nearestAnchor(0.12, 0.10), C.ANCHORS.findIndex((a) => a.name === 'kick'));
+});

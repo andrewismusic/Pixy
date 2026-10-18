@@ -21,15 +21,19 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 - Swing is a percentage, 50 (straight) to 75; `swingOffset` turns it into a delay for odd steps.
 - While playing, live pad hits are scheduled only `LIVE_AHEAD` (35 ms) ahead so lifting a finger stops them promptly.
 - Toggling a step off resets it fully via `freshStep()`.
+- Modulation (`MOD_COUNT` = 6): each modulator has one destination and any number of targets (step, drum = hits whose `nearestAnchor` is that drum, or kit). LFOs are read once per hit at the strike; an envelope glides the voice through the hit for destinations in `GLIDE_DESTS` and applies its peak at the strike for the rest. All hits go through `strike()` / `soundAt()` in ui.js.
+- Stolen voices are stopped outright (`Engine.silence`), and finished voices disconnect, so dense ratchets don't pile up nodes.
 - Resonator exciter sources must outlive the ring: Chromium stops processing a biquad ~0.28 s after its input source ends.
 - New synth params default in `BASE` so the original 14 anchors render byte-identically; check with an offline render before/after.
 
 ## Design rules (template.html)
 
-- Look: sci-fi instrument panel, not cartoon. No halftone, chromatic aberration or comic effects; the pad has no readouts or overlays.
+- Look: a star chart. The pad is a sky (night console in dark mode, printed star atlas in light); sequenced steps are stars joined in playing order; modulators are moons orbiting the steps they move. No halftone, chromatic aberration, comic effects or readouts on the pad.
+- Type: Oxanium for titles (`--font-head`), Chakra Petch for everything else (`--font-ui`), JetBrains Mono for values.
 - Yellow (`--hold`) = on / selected / highlighted (toggles, active page and tab, playing, touched knob, held step). Cyan (`--now`) = the playhead. Red (`--rec`) = recording.
-- Sound colours (`voiceSignature` hue, orange -> pink -> violet) stay clear of yellow and cyan.
-- Raised controls use `.cap` and sink when pressed or on; knob arcs take their colour from the module accent (`--m-*`).
+- Sound colours follow stellar classes from `voiceSignature(P).t` (ui.js `STAR_NIGHT` / `STAR_DAY` on the sky, the stronger `TILE` on step tiles and lanes); they stay clear of yellow and cyan. The six modulator colours (`MOD_COL`) do too.
+- Raised controls use `.cap` and sink when pressed or on; knob arcs take their colour from the module accent (`--m-*`). A knob's cap and shadow stay put; only `.knob-ptr` turns.
+- Help is a sheet for the page you're on (`HELP` in ui.js), not a page. Keep it current when a page changes.
 - Check both light and dark themes, at phone width (430px).
 - No explanatory text at the top of pages, and no boxes around pages or engine sections.
-- `design/style-board.html` is the working style board (artifact https://claude.ai/artifact/8KpJmX9YTn1KA2oiTf6vxX); the space direction there isn't in the app yet.
+- `design/style-board.html` is the working style board (artifact https://claude.ai/artifact/8KpJmX9YTn1KA2oiTf6vxX).

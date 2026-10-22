@@ -151,12 +151,15 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .knob-label { font: 600 10px/1.15 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; text-align: center; max-width: 100%; }
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
-/* a knob's modulation source: a tiny native picker under its label */
+/* a knob's modulation source: a tiny picker under its label, in the
+   modulator's own colour once set; the ring round the dial is its depth */
 .modsel {
-  appearance: none; -webkit-appearance: none; border: 1px solid var(--edge); border-radius: 5px; background: var(--well);
-  font: 600 9px/1 var(--font-mono); color: var(--muted); padding: 2px 4px; text-align: center; text-align-last: center; cursor: pointer; max-width: 46px;
+  border: 1px solid var(--edge); border-radius: 5px; background: var(--well); min-width: 30px; height: 18px; padding: 0 5px;
+  font: 600 9px/1 var(--font-mono); color: var(--muted); cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.modsel.set { color: var(--on-ink); background: var(--hold); border-color: transparent; }
+.modsel.set { color: #0E1320; border-color: transparent; }
+.modsel .dot { display: none; }
+.knob-dial .mring { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .95; }
 
 /* ---------- dice: a track with the die as a key-sized face; drag right
    for a stronger roll of whichever page is showing ---------- */
@@ -225,51 +228,59 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
 .tools .gap { flex: 1 1 8px; }
 
+/* ---------- dropdowns: an app key that opens a list (ui.js createMenu) ---------- */
+.dd {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 34px; padding: 0 22px 0 8px; border-radius: 9px;
+  font: 600 11px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; text-align: left; white-space: nowrap;
+}
+.dd > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dd::after { content: ''; position: absolute; right: 8px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); opacity: .7; }
+.dd svg { flex: none; }
+.dd[aria-expanded="true"] { border-color: var(--hold); }
+.menu {
+  position: fixed; z-index: 60; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.55);
+}
+.menu[hidden] { display: none; }
+.menu.two { grid-template-columns: 1fr 1fr; }
+.menu button {
+  display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
+  font: 600 11.5px/1.15 var(--font-ui); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) { .menu button:hover { background: var(--well); } }
+.menu button:focus-visible { background: var(--well); outline: none; }
+.menu button[aria-selected="true"] { background: var(--hold); color: var(--on-ink); }
+.menu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 3px; }
+.menu.tiny button { min-height: 32px; font-size: 11px; }
+.dot { flex: none; width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+/* rolled by holding the die and tapping */
+@keyframes rolled { 0% { transform: rotate(0); } 30% { transform: rotate(-8deg) scale(1.06); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
+.rolled { animation: rolled .35s ease-out; }
+
 /* ---------- modulation page ---------- */
 .modsky { aspect-ratio: 16 / 11; }
-.mods { display: grid; gap: 6px; margin-top: 14px; }
-.mod {
-  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center;
-  padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer;
-}
+.mods { display: grid; gap: 6px; margin-top: 12px; }
+.modhead, .mod { display: grid; grid-template-columns: 40px minmax(0, 1fr) 46px 46px; gap: 6px; align-items: center; }
+.modhead { padding: 0 7px 0 6px; margin-bottom: -2px; }
+.modhead span:last-child { grid-column: 3 / 5; text-align: center; font: 600 9.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.mod { padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer; }
 .mod.sel { border-color: var(--hold); box-shadow: 0 0 0 1px var(--hold); }
 .mod canvas { width: 40px; height: 40px; display: block; border-radius: 8px; background: var(--sky); }
-.mod .nm { font: 600 11px/1.15 var(--font-head); letter-spacing: .16em; display: flex; align-items: center; gap: 6px; }
+.mod .mid { display: grid; gap: 4px; min-width: 0; }
+.mod .nm { justify-self: start; display: flex; align-items: center; gap: 6px; padding: 1px 4px 1px 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: 600 11px/1.1 var(--font-head); letter-spacing: .16em; -webkit-tap-highlight-color: transparent; }
 .mod .nm i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
-.mod .sm { font: 500 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.assign { font: 700 9.5px/1.05 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 48px; height: 38px; padding: 0 2px; border-radius: 9px; touch-action: none; }
-.minidie { width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 0; background: #F7F9FC; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 7px; cursor: pointer; box-shadow: 0 3px 0 var(--shadow); transition: transform .07s, box-shadow .07s; }
-.minidie:active { transform: translateY(2px) rotate(20deg); box-shadow: 0 1px 0 var(--shadow); }
-.minidie i { width: 4px; height: 4px; border-radius: 50%; background: #0E1320; place-self: center; }
-.minidie i:nth-child(1) { grid-area: 1 / 1; } .minidie i:nth-child(2) { grid-area: 1 / 3; } .minidie i:nth-child(3) { grid-area: 2 / 2; }
-.minidie i:nth-child(4) { grid-area: 3 / 1; } .minidie i:nth-child(5) { grid-area: 3 / 3; }
-.minidie:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
-.modedit { margin-top: 16px; display: grid; gap: 12px; }
-.pickrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-.pick { display: grid; gap: 5px; min-width: 0; }
-.pick > span { font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.pickbtn, .picksel {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 30px 0 10px; text-align: left;
-  font: 600 13px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; appearance: none; -webkit-appearance: none;
-  background-image: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
-}
-.pickwrap { position: relative; display: flex; }
-.pickwrap::after { content: '\25BE'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 13px; color: var(--ink); }
-.pickbtn svg { flex: none; }
-.shapemenu {
-  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(300px, 86vw); max-height: 320px; overflow-y: auto;
-  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; padding: 6px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.5);
-  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
-}
-.shapemenu[hidden] { display: none; }
-.shapemenu button {
-  display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
-  font: 600 11.5px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-align: left;
-}
-.shapemenu button:hover, .shapemenu button:focus-visible { background: var(--well); outline: none; }
-.shapemenu button[aria-checked="true"] { background: var(--hold); color: var(--on-ink); }
-.shapemenu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 2px; }
-.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
+.mod .dds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px; }
+.mod .dd { height: 28px; font-size: 10px; padding: 0 18px 0 6px; gap: 4px; border-radius: 8px; box-shadow: 0 3px 0 var(--shadow); }
+.mod .dd::after { right: 7px; }
+.assign { font: 700 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 46px; height: 40px; padding: 0 2px; border-radius: 9px; touch-action: none; }
+.assign:disabled { opacity: .3; cursor: default; }
+.modedit { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 2px 4px; margin-top: 2px; border-top: 1px solid var(--edge); cursor: default; }
+.modkeys { display: grid; gap: 8px; }
+.mini { font: 700 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; min-width: 52px; height: 30px; padding: 0 6px; border-radius: 8px; }
+.mini b { font: 700 13px/1 var(--font-mono); }
+.mini[hidden] { display: none; }
+.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 2px; margin-top: 0; --accent: var(--mc); }
+.modedit .knob { --kd: 44px; }
 
 /* ---------- lanes ---------- */
 .lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; }
@@ -284,22 +295,47 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- engine ---------- */
-.enginepick { display: flex; gap: 8px; margin: 12px 0 2px; }
-.enginepick select {
-  flex: 1 1 auto; min-width: 0; font: 600 15px/1 var(--font-head); text-transform: uppercase; letter-spacing: .14em;
-  padding: 0 12px; min-height: 44px; appearance: none; -webkit-appearance: none;
-}
-.selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
-.selwrap select { width: 100%; }
-.selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
-.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
+.enginepick { display: flex; gap: 8px; margin: 10px 0 2px; align-items: center; }
+.dd.drum { width: auto; min-width: 150px; max-width: 60%; height: 36px; font: 600 12.5px/1 var(--font-head); letter-spacing: .12em; }
+.modules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 14px; margin-top: 14px; }
+.module[data-mod="body"], .module[data-mod="res"] { grid-column: 1 / -1; }
 .module { padding-top: 10px; border-top: 1px solid var(--edge); }
 .module h3 { display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
-.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
+.module .knobgrid { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 8px 0; margin-top: 8px; }
+.module h3 { cursor: default; }
 .module .knob { --kd: 42px; }
 .module .knob-label { font-size: 9px; }
 .module .knob-value { font-size: 10px; }
+
+.dd.mode { height: 42px; border-radius: 10px; font-size: 10.5px; padding: 0 22px 0 9px; max-width: 128px; }
+.step.doomed { box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--rec); transform: translateY(3px); }
+#clip { width: 48px; height: 54px; border-radius: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+#clip.flash { background: var(--hold); color: var(--on-ink); }
+
+/* ---------- clips ---------- */
+.cliphead { display: flex; align-items: center; gap: 8px; }
+.cliphead h2 { margin-right: auto; }
+#clipPlay { width: 42px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+#clipPlay .ic-stop { display: none; }
+#clipPlay[aria-pressed="true"] .ic-play { display: none; }
+#clipPlay[aria-pressed="true"] .ic-stop { display: inline-block; }
+.cap:disabled { opacity: .35; cursor: default; }
+.clipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; margin-top: 14px; }
+.clipcard { display: grid; gap: 6px; padding: 5px; border-radius: 12px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer; text-align: left; color: var(--ink); font: inherit; -webkit-tap-highlight-color: transparent; }
+.clipcard img { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; background: var(--sky); }
+.clipcard span { font: 600 10.5px/1.2 var(--font-mono); color: var(--muted); padding: 0 3px 2px; }
+.clipcard[aria-selected="true"] { border-color: var(--hold); box-shadow: 0 0 0 2px var(--hold); }
+.clipcard.playing span { color: var(--now); }
+.clipnote { margin: 14px 0 0; color: var(--muted); font-size: 13px; min-height: 1.3em; }
+
+/* ---------- preferences ---------- */
+#prefBtn { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.prefrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--edge); }
+.prefrow > span { display: grid; gap: 2px; font-weight: 600; }
+.prefrow small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.seg { display: flex; gap: 6px; }
+#prefAssign { min-width: 58px; }
 
 /* ---------- help sheet: what's on the page you're looking at ---------- */
 .help {
@@ -320,13 +356,13 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
   .pagenav { gap: 4px; }
   .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
-  .transport .knob { --kd: 42px; }
   #play, #record, #smooth { width: 48px; height: 48px; }
-  .mod { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 6px; }
-  .assign { width: 44px; }
+  #play, #record, #smooth, #clip { width: 46px; height: 48px; }
+  .transport .knob { --kd: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .step, .cap, .die, .minidie, .rthumb { transition: none; }
+  .step, .cap, .die, .rthumb { transition: none; }
+  .rolled { animation: none; }
   #record[aria-pressed="true"] svg { animation: none; }
 }
 </style>
@@ -350,11 +386,17 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
           <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><ellipse cx="12" cy="7" rx="8" ry="3.4"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3"/></svg>
         </button>
+        <button class="navbtn cap" type="button" data-page="clips" aria-pressed="false" aria-label="Clips" title="Clips">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v12" opacity=".55"/><circle cx="8" cy="15" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
       </nav>
     </div>
     <div class="subrow">
       <button id="helpBtn" class="cap" type="button" aria-label="Help for this page" aria-expanded="false" aria-controls="help" title="Help for this page">
         <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button id="prefBtn" class="cap" type="button" aria-label="Preferences" aria-expanded="false" aria-controls="prefs" title="Preferences">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
       </button>
       <span class="dicecap" id="diceCap" aria-hidden="true">Randomize sequence</span>
       <div class="dicefield" id="diceField"></div>
@@ -382,6 +424,9 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
           <button id="smooth" class="cap icon" type="button"></button>
+          <button id="clip" class="cap icon" type="button" aria-label="Clip: keep this loop in Clips" title="Clip: keep this loop in Clips">
+            <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="10" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="9.5" r="1.8" fill="currentColor" stroke="none"/><path d="M10 14l4.5-4.5" opacity=".5"/></svg>
+          </button>
           <div class="knobslot" id="tempoField"></div>
           <div class="knobslot" id="swingField"></div>
         </div>
@@ -395,6 +440,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <button id="redo" class="btn cap icon" type="button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          <button id="playMode" class="dd cap mode" type="button"></button>
           <span class="gap"></span>
           <button id="mono" class="btn cap icon" type="button" aria-pressed="false" aria-label="Choke" title="Choke: a new hit cuts off whatever is still ringing">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.2-6 2.4-6 3.6 0s2.4 6 3.6 0 2.2-4.4 3.3 0"/><path d="M15.5 4.5v15" stroke-width="2.4"/><path d="M18.5 12h3.5" opacity=".45"/></svg>
@@ -414,20 +460,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <canvas id="modSky" tabindex="0" role="application" aria-label="Star chart for assigning modulation. Hold Step or Drum on a modulator and tap stars, or hold a star and tap Step or Drum."></canvas>
       </div>
       <div class="mods" id="mods"></div>
-      <div class="modedit" id="modEdit">
-        <div class="pickrow">
-          <div class="pick"><span id="shapeLbl">Shape</span>
-            <div class="pickwrap">
-              <button id="shapeBtn" class="pickbtn cap" type="button" aria-haspopup="menu" aria-expanded="false" aria-labelledby="shapeLbl shapeBtn"></button>
-              <div class="shapemenu" id="shapeMenu" role="menu" hidden></div>
-            </div>
-          </div>
-          <div class="pick"><span id="destLbl">Destination</span>
-            <div class="pickwrap"><select id="destSel" class="picksel cap" aria-labelledby="destLbl"></select></div>
-          </div>
-        </div>
-        <div class="knobgrid" id="modKnobs" style="--accent: var(--mc)"></div>
-      </div>
     </section>
 
     <section class="page" data-page="lanes">
@@ -453,13 +485,37 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
     <section class="page" data-page="engine" aria-labelledby="engineH">
       <h2 id="engineH">Drum engine</h2>
       <div class="enginepick">
-        <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
+        <button id="engineSelect" class="dd cap drum" type="button"></button>
         <button id="engineReset" class="btn cap small" type="button">Reset</button>
       </div>
       <div id="engineParams" class="modules"></div>
     </section>
+    <section class="page" data-page="clips" aria-labelledby="clipsH">
+      <div class="cliphead">
+        <h2 id="clipsH">Clips</h2>
+        <button id="clipPlay" class="cap icon" type="button" aria-pressed="false" aria-label="Play this clip" title="Play this clip" disabled>
+          <svg class="ic-play" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
+          <svg class="ic-stop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
+        </button>
+        <button id="clipLoad" class="btn cap small" type="button" disabled>Load</button>
+        <button id="clipExport" class="btn cap small" type="button" disabled>Export</button>
+        <button id="clipDelete" class="btn cap icon small" type="button" aria-label="Delete this clip" title="Delete this clip" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 7V4.5h4V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>
+        </button>
+      </div>
+      <div class="clipgrid" id="clipGrid" role="listbox" aria-label="Clips"></div>
+      <p class="clipnote" id="clipNote"></p>
+    </section>
   </div>
 </main>
+
+<div class="help" id="prefs" role="dialog" aria-modal="false" aria-labelledby="prefsH" hidden>
+  <div class="inner">
+    <div class="head"><h2 id="prefsH">Preferences</h2><button id="prefsClose" class="btn cap small" type="button">Close</button></div>
+    <div class="prefrow"><span>Dice can change modulation assignments<small>Past halfway on the modulation page</small></span><button id="prefAssign" class="btn cap small" type="button" aria-pressed="false">Off</button></div>
+    <div class="prefrow"><span>Theme</span><div class="seg" id="prefTheme" role="group" aria-label="Theme"><button class="btn cap small" type="button" data-v="auto">Auto</button><button class="btn cap small" type="button" data-v="light">Light</button><button class="btn cap small" type="button" data-v="dark">Dark</button></div></div>
+  </div>
+</div>
 
 <div class="help" id="help" role="dialog" aria-modal="false" aria-labelledby="helpH" hidden>
   <div class="inner">
@@ -681,6 +737,19 @@ function foldCurve(amount) {
   return c;
 }
 
+/* the glide voice's folder: one fixed sine fold, k = 8, with the amount
+   set by how hard it's driven and how much of it is mixed in. Close to
+   foldCurve(amount) behind its input gain, and it can move mid-note. */
+const GLIDE_FOLD = (() => {
+  const n = 2048, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) c[i] = Math.sin((i / (n - 1) * 2 - 1) * 4 * Math.PI);
+  return c;
+})();
+function foldMix(amount) {
+  const a = clamp(amount, 0, 1), g = 1 + 2.2 * a, m = Math.min(1, a * 4);
+  return { dry: (1 - m) * g, drive: g * (1 + 7 * a) / 8, wet: m };
+}
+
 /* resonator mode ratios. resShape morphs (log domain) between three
    idealized bodies: a string/tube (harmonic), a circular membrane, and a
    free bar (marimba, bell-ish). */
@@ -780,8 +849,18 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
   pre.connect(shp); shp.connect(post); post.connect(out);
   // every layer feeds `bus`: straight into the drive stage, or through the
   // wavefolder first when there's any fold
-  let bus = pre;
-  if (fold > 0.01) {
+  let bus = pre, foldNodes = null;
+  if (glide) {
+    // glide voices always carry a folder so a glide can fade fold in: a
+    // dry path and a sine fold path, crossfaded (see foldMix)
+    bus = ctx.createGain();
+    const dry = ctx.createGain(), fin = ctx.createGain(), wet = ctx.createGain();
+    const fs = ctx.createWaveShaper(); fs.curve = GLIDE_FOLD; fs.oversample = '2x';
+    bus.connect(dry); dry.connect(pre); bus.connect(fin); fin.connect(fs); fs.connect(wet); wet.connect(pre);
+    const fm = foldMix(fold);
+    dry.gain.value = fm.dry; fin.gain.value = fm.drive; wet.gain.value = fm.wet;
+    foldNodes = { dry, fin, wet };
+  } else if (fold > 0.01) {
     // more fold also drives the folder harder, so it keeps biting into the tail
     bus = ctx.createGain(); bus.gain.value = 0.8 + fold * 2.4;
     const fs = ctx.createWaveShaper(); fs.curve = foldCurve(fold); fs.oversample = '2x';
@@ -809,14 +888,18 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
     osc.frequency.setTargetAtTime(f, t, tau);
     const g = ctx.createGain();
     ampEnv(g.gain, t, P.atk, glide ? 1 : P.tone, dur);
-    if (P.fm > 0.02) {
+    if (P.fm > 0.02 || glide) {
       const mod = ctx.createOscillator(); mod.type = 'sine';
       mod.frequency.setValueAtTime(fs * P.fmRatio, t);
       mod.frequency.setTargetAtTime(f * P.fmRatio, t, tau);
       const mg = ctx.createGain();
-      mg.gain.setValueAtTime(P.fm * f * 4, t);
+      // glide voices: the envelope runs at unit depth into a gain that
+      // carries the FM amount, so the amount can move later
+      mg.gain.setValueAtTime((glide ? 1 : P.fm) * f * 4, t);
       mg.gain.setTargetAtTime(0, t, Math.max(0.008, dur * 0.25));
-      mod.connect(mg); mg.connect(osc.frequency);
+      mod.connect(mg);
+      if (glide) { G.fmAmt = ctx.createGain(); G.fmAmt.gain.value = P.fm; mg.connect(G.fmAmt); G.fmAmt.connect(osc.frequency); }
+      else mg.connect(osc.frequency);
       mod.start(t); stopAt(mod, t + P.atk + dur + 0.05);
       G.mod = mod;
     }
@@ -895,6 +978,7 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
       const f = Q.f * tune, when = Math.max(at, G.sweepEnd || at);
       if (G.osc) G.osc.frequency.setTargetAtTime(f, when, GLIDE_TAU);
       if (G.mod) G.mod.frequency.setTargetAtTime(f * Q.fmRatio, when, GLIDE_TAU);
+      if (G.fmAmt) to(G.fmAmt.gain, Q.fm);
       if (G.tone) to(G.tone.gain, Q.tone);
       if (G.noise) to(G.noise.gain, Q.noise);
       if (G.metal) to(G.metal.gain, Q.metal);
@@ -905,7 +989,10 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
         const rr = modeRatios(Q.resShape);
         for (const [bp, k] of G.modes) to(bp.frequency, Math.min(Q.resF * tune * rr[k], ctx.sampleRate * 0.45));
       }
-      to(post.gain, Q.lvl * 0.9 / (1 + drive * 0.8));
+      const d2 = clamp(P2.drive + trims.drive, 0, 1), fm2 = foldMix(clamp((P2.fold || 0) + (trims.fold || 0), 0, 1));
+      to(pre.gain, 1 + d2 * 5);
+      to(post.gain, Q.lvl * 0.9 / (1 + d2 * 0.8));
+      to(foldNodes.dry.gain, fm2.dry); to(foldNodes.fin.gain, fm2.drive); to(foldNodes.wet.gain, fm2.wet);
     },
   };
 }
@@ -920,7 +1007,8 @@ const AUTO_POINTS = 16; // automation points recorded per step in smooth mode (a
 
 const MAX_VOICES = 14;
 class Engine {
-  constructor(ctx) {
+  /* opts.dry: no master compressor (stems for export) */
+  constructor(ctx, opts) {
     this.ctx = ctx;
     this.trims = { tune: 0, decay: 1, drive: 0 };
     this.noise = makeNoise(ctx);
@@ -930,7 +1018,8 @@ class Engine {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 6;
     comp.attack.value = 0.003; comp.release.value = 0.12;
-    this.master.connect(comp); comp.connect(ctx.destination);
+    if (opts && opts.dry) this.master.connect(ctx.destination);
+    else { this.master.connect(comp); comp.connect(ctx.destination); }
   }
   /* stop a voice: a short fade, then its sources are stopped outright so a
      stolen voice stops costing CPU (fading alone left every oscillator
@@ -1094,6 +1183,14 @@ class Sequence {
     this.held.delete(i);
     if (!this.consumed.has(i)) this.toggle(i);
     this.consumed.delete(i);
+    this.onChange();
+  }
+  /* erase: delete a step outright (the trash key). keepHeld: it's still
+     held, so its release mustn't toggle it back on */
+  erase(i, keepHeld) {
+    this.steps[i] = freshStep();
+    if (keepHeld && this.held.has(i)) this.consumed.add(i);
+    else { this.held.delete(i); this.consumed.delete(i); }
     this.onChange();
   }
   stepCancel(i) { this.held.delete(i); this.consumed.delete(i); this.onChange(); }
@@ -1263,7 +1360,7 @@ const MOD_RATES = [
 /* ctl: what the shape's own knob does, and the range it maps 0..1 onto */
 const MOD_SHAPES = [
   { id: 'sine', name: 'Sine' }, { id: 'triangle', name: 'Triangle' }, { id: 'saw', name: 'Saw' },
-  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random' },
+  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random', ctl: ['Smooth', 0, 1] },
   { id: 'kepler', name: 'Kepler', orbit: true, ctl: ['Eccentric', 0, 0.9] },
   { id: 'precession', name: 'Precession', orbit: true, ctl: ['Precess', 0.02, 0.3] },
   { id: 'halo', name: 'Halo', orbit: true, ctl: ['Detune', 0.01, 0.25] },
@@ -1315,7 +1412,13 @@ function lfoAt(shape, p, ctl) {
     case 'triangle': return { x: 1 - 4 * Math.abs(((f + 0.25) % 1) - 0.5), y: 0 };
     case 'saw': return { x: 2 * f - 1, y: 0 };
     case 'square': return { x: f < 0.5 ? 1 : -1, y: 0 };
-    case 'random': return { x: 2 * hash01(Math.floor(p * 4)) - 1, y: 0 };
+    case 'random': {
+      // four values a cycle; Smooth eases each one into the next over that
+      // share of its step (0 = held steps)
+      const q = p * 4, n = Math.floor(q), u = q - n, a0 = hash01(n), a1 = hash01(n + 1);
+      const w = c > 0.001 ? 0.5 - 0.5 * Math.cos(Math.PI * clamp((u - (1 - c)) / c, 0, 1)) : 0;
+      return { x: 2 * (a0 + (a1 - a0) * w) - 1, y: 0 };
+    }
     case 'kepler': { const E = kepler(a, c), b = Math.sqrt(1 - c * c); return { x: (Math.cos(E) - c) / (1 + c), y: b * Math.sin(E) / (1 + c) }; }
     case 'precession': {
       const e = 0.5, E = kepler(a, e), b = Math.sqrt(1 - e * e), x0 = (Math.cos(E) - e) / 1.5, y0 = b * Math.sin(E) / 1.5, w = c * a;
@@ -1344,16 +1447,28 @@ function envLook(m) {
   if (envAttack(m) > 0.06) return 'flare';
   return envDecay(m) > 0.5 ? 'supernova' : 'impact';
 }
+/* free: the LFO runs on its own clock in Hz (0.05..20, log), even with the
+   transport stopped; synced, it runs at MOD_RATES in beats of the song.
+   uni: unipolar, 0..1 instead of -1..1 (envelopes are always 0..1). */
 function freshMod() {
-  return { shape: 'sine', rate: 2, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
+  return { shape: 'sine', rate: 2, free: false, hz: 0.45, uni: false, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
 }
-/* the LFO's output at a point in the song, in beats from the start */
-const modLfo = (m, beats) => lfoAt(m.shape, beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats + m.phase, m.ctl).x;
+const modHz = (m) => 0.05 * Math.pow(400, clamp(m.hz == null ? 0.45 : m.hz, 0, 1));
+/* the LFO's phase in cycles, from the song position in beats or (free)
+   seconds of the audio clock */
+const modCycles = (m, beats, secs) => (m.free ? secs * modHz(m) : beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats) + m.phase;
+/* its output, -1..1 (or 0..1 unipolar) */
+function modLfo(m, beats, secs) {
+  const x = lfoAt(m.shape, modCycles(m, beats, secs || 0), m.ctl).x;
+  return m.uni ? (x + 1) / 2 : x;
+}
 
 /* destinations: the hit's position on the map, pitch and decay across every
    layer, or any one engine control */
 const MOD_DESTS = [
   { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
+  // transport: global, so a modulator sent here needs no targets (LFOs only)
+  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
   { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
   // engine controls carry their layer's name: there's a body decay and a noise decay
   ...PARAM_SPECS.map((p) => {
@@ -1363,6 +1478,11 @@ const MOD_DESTS = [
     return { id: p.key, name, group: layer };
   }),
 ];
+const GLOBAL_DESTS = new Set(MOD_DESTS.filter((d) => d.global).map((d) => d.id));
+/* transport destinations: tempo moves by up to x1.5 either way, swing by
+   up to 25 points (it stays within 50..75) */
+const modTempo = (bpm, amt) => clamp(bpm * Math.pow(1.5, amt), 30, 300);
+const modSwing = (sw, amt) => clamp(sw + amt * 25, 50, 75);
 function modulatePos(pos, dest, amt) {
   if (dest === 'x') return { x: clamp(pos.x + amt * 0.5, 0, 1), y: pos.y };
   if (dest === 'y') return { x: pos.x, y: clamp(pos.y + amt * 0.5, 0, 1) };
@@ -1384,6 +1504,7 @@ function modulateParams(P, dest, amt) {
 /* does a target cover this hit? step: that step; drum: hits whose nearest
    anchor is that drum; kit: every hit */
 function modCovers(m, stepIndex, anchor) {
+  if (GLOBAL_DESTS.has(m.dest)) return false; // the transport, not hits
   return m.targets.some((g) => g.kind === 'kit' || (g.kind === 'step' && g.i === stepIndex) || (g.kind === 'drum' && g.a === anchor));
 }
 /* toggle a target in or out of a modulator's list */
@@ -1394,6 +1515,133 @@ function toggleTarget(m, g) {
   return k < 0;
 }
 const nearestAnchor = (x, y) => { const w = weightsAt(x, y); return w.indexOf(Math.max(...w)); };
+
+/* ==========================================================================
+   Randomizing. rng() is 0..1 (Math.random, or seeded in tests).
+   ========================================================================== */
+/* bounce off the edges instead of piling up against them */
+const reflect01 = (v) => { v = ((v % 2) + 2) % 2; return v > 1 ? 2 - v : v; };
+const MAX_NEW_RATCHETS = 6;
+/* randomizeSteps: an empty pattern gets 5..16 new steps (more with
+   strength); an existing one has its stars moved, and from halfway up
+   steps may be added (often) or removed (less often), and ratchets added
+   or removed, never more than MAX_NEW_RATCHETS newly ratcheted steps */
+function randomizeSteps(steps, strength, rng) {
+  rng = rng || Math.random;
+  const s01 = clamp(strength, 0, 1), pick = (a) => a[Math.floor(rng() * a.length)];
+  const hitsChoices = RATCHET_VALUES.slice(1).map(ratchetHits);
+  const place = (s) => { s.on = true; s.set = true; s.x = 0.04 + rng() * 0.92; s.y = 0.04 + rng() * 0.92; };
+  let newRatchets = 0;
+  const maybeRatchet = (s, chance) => {
+    if (newRatchets < MAX_NEW_RATCHETS && rng() < chance) { s.ratchets = evenRatchets(s.x, s.y, pick(hitsChoices)); newRatchets++; }
+  };
+  const on = steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+  if (!on.length) {
+    const n = Math.round(5 + s01 * 11), free = steps.map((_, i) => i);
+    for (let k = 0; k < n; k++) {
+      const i = free.splice(Math.floor(rng() * free.length), 1)[0];
+      steps[i] = freshStep(); place(steps[i]);
+      maybeRatchet(steps[i], s01 >= 0.5 ? (s01 - 0.4) * 0.3 : 0);
+    }
+    return steps;
+  }
+  const reach = s01 * 0.6;
+  for (const i of on) {
+    const s = steps[i], nx = reflect01(s.x + (rng() * 2 - 1) * reach), ny = reflect01(s.y + (rng() * 2 - 1) * reach), dx = nx - s.x, dy = ny - s.y;
+    s.x = nx; s.y = ny;
+    if (s.auto) s.auto = s.auto.map((q) => ({ x: reflect01(q.x + dx), y: reflect01(q.y + dy) }));
+    for (const r of s.ratchets) { r.x = reflect01(r.x + dx); r.y = reflect01(r.y + dy); }
+  }
+  if (s01 > 0.5) {
+    const over = (s01 - 0.5) * 2; // 0..1 over the top half
+    for (let i = 0; i < steps.length; i++) {
+      if (!steps[i].on && rng() < 0.12 + 0.3 * over) { steps[i] = freshStep(); place(steps[i]); }
+    }
+    let left = steps.filter((s) => s.on).length;
+    for (const i of on) if (left > 1 && rng() < 0.06 + 0.16 * over) { steps[i] = freshStep(); left--; }
+  }
+  if (s01 >= 0.45) {
+    const r = (s01 - 0.4) / 0.6; // 0.1..1
+    for (const s of steps) {
+      if (!s.on) continue;
+      if (s.ratchets.length) { if (rng() < 0.35 * r) s.ratchets = []; }
+      else maybeRatchet(s, 0.2 * r);
+    }
+  }
+  return steps;
+}
+/* jitterParams: one drum's engine controls. Pitches and times move in
+   ratio (log), the rest linearly; drive and fold lean low, since a little
+   of either takes over a sound quickly */
+function jitterParams(p, strength, rng) {
+  rng = rng || Math.random;
+  const s01 = clamp(strength, 0, 1);
+  for (const spec of PARAM_SPECS) {
+    const v = p[spec.key];
+    if (spec.key === 'drive' || spec.key === 'fold') {
+      const target = Math.pow(rng(), 3) * (spec.key === 'fold' ? 0.6 : 0.7);
+      p[spec.key] = clamp(v + (target - v) * s01 * 0.8, spec.min, spec.max);
+    } else if (spec.log && spec.min > 0) {
+      p[spec.key] = clamp(v * Math.pow(spec.max / spec.min, (rng() * 2 - 1) * s01 * 0.3), spec.min, spec.max);
+    } else {
+      p[spec.key] = clamp(v + (rng() * 2 - 1) * s01 * (spec.max - spec.min) * 0.5, spec.min, spec.max);
+    }
+  }
+  return p;
+}
+
+/* play modes: which step plays at position n of the run (n counts every
+   step since play) */
+const PLAY_MODES = [
+  { id: 'fwd', name: 'Forward' }, { id: 'back', name: 'Backward' },
+  { id: 'pingpong', name: 'Ping-pong' }, { id: 'random', name: 'Random' },
+];
+function stepAt(mode, n, rng) {
+  const L = N_STEPS;
+  if (mode === 'back') return L - 1 - (n % L);
+  if (mode === 'pingpong') { const m = n % (2 * L - 2); return m < L ? m : 2 * L - 2 - m; }
+  if (mode === 'random') return Math.floor((rng || Math.random)() * L);
+  return n % L;
+}
+
+/* ==========================================================================
+   Export files: 16-bit WAV, and a zip that stores (doesn't compress) them.
+   ========================================================================== */
+function encodeWav(samples, sampleRate) {
+  const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(clamp(samples[i], -1, 1) * 32767), true);
+  return new Uint8Array(buf);
+}
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+/* files: [{name, data: Uint8Array}] -> one zip (method 0, stored) */
+function zipStore(files) {
+  const enc = (t) => Array.from(unescape(encodeURIComponent(t)), (ch) => ch.charCodeAt(0));
+  const parts = [], central = [];
+  let off = 0;
+  const u16 = (a, v) => a.push(v & 255, (v >>> 8) & 255), u32 = (a, v) => a.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255);
+  for (const f of files) {
+    const name = enc(f.name), crc = crc32(f.data), h = [];
+    u32(h, 0x04034b50); u16(h, 20); u16(h, 0x0800); u16(h, 0); u16(h, 0); u16(h, 0x21);
+    u32(h, crc); u32(h, f.data.length); u32(h, f.data.length); u16(h, name.length); u16(h, 0); h.push(...name);
+    parts.push(new Uint8Array(h), f.data);
+    const c = [];
+    u32(c, 0x02014b50); u16(c, 20); u16(c, 20); u16(c, 0x0800); u16(c, 0); u16(c, 0); u16(c, 0x21);
+    u32(c, crc); u32(c, f.data.length); u32(c, f.data.length); u16(c, name.length); u16(c, 0); u16(c, 0); u16(c, 0); u16(c, 0); u32(c, 0); u32(c, off);
+    c.push(...name); central.push(new Uint8Array(c));
+    off += h.length + f.data.length;
+  }
+  const cdSize = central.reduce((a, c) => a + c.length, 0), e = [];
+  u32(e, 0x06054b50); u16(e, 0); u16(e, 0); u16(e, files.length); u16(e, files.length); u32(e, cdSize); u32(e, off); u16(e, 0);
+  const all = [...parts, ...central, new Uint8Array(e)], out = new Uint8Array(all.reduce((a, c) => a + c.length, 0));
+  let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
 
 const DEMO_BEAT = [
   [0, 0.12, 0.10], [2, 0.70, 0.86], [3, 0.31, 0.87], [4, 0.45, 0.42],
@@ -1446,15 +1694,23 @@ const DEMO_BEAT = [
 
   /* knob geometry (see createKnob) */
   const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
-  function arcPath(a0, a1) {
+  function arcPath(a0, a1, R = KNOB_R) {
     // angles in degrees, 0 = 12 o'clock, clockwise
-    const pt = (a) => [KNOB_C + KNOB_R * Math.sin(a * Math.PI / 180), KNOB_C - KNOB_R * Math.cos(a * Math.PI / 180)];
+    const pt = (a) => [KNOB_C + R * Math.sin(a * Math.PI / 180), KNOB_C - R * Math.cos(a * Math.PI / 180)];
     if (Math.abs(a1 - a0) < 0.5) a1 = a0 + 0.5;
     const [x0, y0] = pt(Math.min(a0, a1)), [x1, y1] = pt(Math.max(a0, a1));
-    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${KNOB_R} ${KNOB_R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${R} ${R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   }
   /* ---------- state ---------- */
   let actx = null, engine = null;
+  let trash = null; // the trash key while it's held: {id, used, steps}
+  const randTargets = new WeakMap(); // element -> roll(strength), for hold-the-die-and-tap
+  let morph = null; // the sky resizing between the pad and modulation pages
+  /* preferences, kept in this browser */
+  const prefs = { diceAssign: false, theme: 'auto' };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem('pixy.prefs') || '{}')); } catch (_) {}
+  const savePrefs = () => { try { localStorage.setItem('pixy.prefs', JSON.stringify(prefs)); } catch (_) {} };
+  if (prefs.theme !== 'auto') document.documentElement.dataset.theme = prefs.theme;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
   let tempo = 118, swing = 50; // swing in percent: 50 straight .. 75
@@ -1517,9 +1773,9 @@ const DEMO_BEAT = [
      soundAt: the parameters for a hit at (x, y) on step i (-1 = a live
      touch), struck at time t, envT seconds into the hit (null = the strike
      itself, envelopes at zero). LFOs are read once at the strike; an
-     envelope moves pitch, filters, levels and position through the hit
-     (the voice glides), and anything fixed at the strike (decays, drive,
-     fold...) takes the envelope's peak. */
+     envelope moves pitch, filters, levels, position, FM, fold and drive
+     through the hit (the voice glides), and anything fixed at the strike
+     (decays, attack, sweep, clap) takes the envelope's peak. */
   const mods = Array.from({ length: MOD_COUNT }, freshMod);
   // a starting set: two at work on the demo beat, the rest ready to assign
   const anchorNamed = (n) => ANCHORS.findIndex((a) => a.name === n);
@@ -1530,9 +1786,21 @@ const DEMO_BEAT = [
   Object.assign(mods[4], { shape: 'random', rate: 5, depth: 0.3, dest: 'fold' });
   Object.assign(mods[5], { shape: 'figure8', rate: 1, depth: 0.25, dest: 'y' });
   const knobMods = [], knobRefreshers = []; // knob source pickers (kit and engine pages)
-  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'hp', 'lp', 'q', 'lvl']);
-  let playT0 = 0;
-  const beatsAt = (t) => (playing ? t - playT0 : t) / (60 / tempo);
+  // what an envelope moves through the whole hit; the rest (decays, attack,
+  // sweep, clap) are fixed when the voice is struck, so they take its peak
+  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fm', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'resShape', 'hp', 'lp', 'q', 'lvl', 'drive', 'fold']);
+  /* the song clock. Synced LFOs read beats from the steps actually
+     scheduled (each mark is one step: its time, its beat, its length), so
+     a modulated tempo keeps them in step; stopped, they rest at beat 0.
+     Free LFOs read seconds of the audio clock and never stop. */
+  let beatMarks = [];
+  function beatsAt(t) {
+    if (!playing || !beatMarks.length) return 0;
+    let m = beatMarks[0];
+    for (let k = beatMarks.length - 1; k >= 0; k--) if (beatMarks[k].t <= t) { m = beatMarks[k]; break; }
+    return m.beat + (t - m.t) / m.dur * 0.25;
+  }
+  const clockNow = () => (actx ? actx.currentTime : performance.now() / 1000);
   function activeMods(i, x, y) {
     const a = nearestAnchor(x, y), out = [];
     for (const m of mods) if (m.targets.length && modCovers(m, i, a)) out.push(m);
@@ -1545,7 +1813,7 @@ const DEMO_BEAT = [
     const beats = beatsAt(t);
     const amt = (m) => isEnv(m)
       ? m.depth * (GLIDE_DESTS.has(m.dest) ? (envT == null ? 0 : envAt(m, envT)) : 1)
-      : m.depth * modLfo(m, beats);
+      : m.depth * modLfo(m, beats, t);
     let pos = { x, y };
     for (const m of act) pos = modulatePos(pos, m.dest, amt(m));
     let P = paramsAt(pos.x, pos.y);
@@ -1597,11 +1865,11 @@ const DEMO_BEAT = [
   }
 
   /* the 16th-note grid the live clock locks to: while playing, phase-locked
-     to the running scheduler (nextBase/stepIdx); otherwise free-running from
+     to the running scheduler (nextBase/runPos); otherwise free-running from
      time zero, since there's no transport to lock to. */
   function gridAnchor() {
     const dur = 60 / tempo / 4;
-    return { stepDur: dur, barStart: playing ? nextBase - stepIdx * dur : 0 };
+    return { stepDur: playing ? curDur : dur, barStart: playing ? nextBase - (runPos % N_STEPS) * curDur : 0 };
   }
 
   /* stopped: holding the pad retriggers at the bar's rate, free-running */
@@ -1609,7 +1877,6 @@ const DEMO_BEAT = [
   function triggerLive() {
     const { x, y } = seq.cursor;
     const P = playLive(x, y);
-    spawnBurst(x, y, P, performance.now());
   }
   function startPadHold() {
     stopPadHold();
@@ -1625,7 +1892,7 @@ const DEMO_BEAT = [
      span). They're scheduled only ~35 ms ahead, so lifting a finger stops
      them promptly and bar moves are heard at once. */
   const LIVE_AHEAD = 0.035;
-  let liveNext = 0, liveQueue = [];
+  let liveNext = 0;
   function nextGridHit(T) {
     const { barStart, stepDur } = gridAnchor();
     const n = ratchetHits(ratchetN);
@@ -1647,7 +1914,7 @@ const DEMO_BEAT = [
     while (liveNext < now + LIVE_AHEAD) {
       if (liveNext > now - 0.03) {
         const t = Math.max(liveNext, now), { x, y } = seq.cursor;
-        liveQueue.push({ t, x, y, P: playLive(x, y, t) });
+        playLive(x, y, t);
       }
       liveNext = nextGridHit(liveNext + 1e-4);
     }
@@ -1708,24 +1975,45 @@ const DEMO_BEAT = [
         liveNext = 0;
         if (recording) {
           pendingPress = { x, y, id: gestureId, smooth };
-          const { barStart, stepDur } = gridAnchor();
-          silenceStored(((catchStep(actx.currentTime, barStart, stepDur) % N_STEPS) + N_STEPS) % N_STEPS);
+          const next = locks.find((L) => L.t > actx.currentTime);
+          if (next) silenceStored(next.i);
         }
       }
       else startPadHold();
     }
-    const P = playLive(x, y);
-    spawnBurst(x, y, P, now);
+    playLive(x, y);
   }
 
   /* ---------- sequencer clock ---------- */
-  let timer = null, nextBase = 0, stepIdx = 0, queue = [], playing = false, recording = false;
+  let timer = null, nextBase = 0, runPos = 0, curDur = 0.125, queue = [], playing = false, recording = false;
+  let playMode = 'fwd';
+  /* which step plays at run position n. Random modes are rolled ahead
+     and remembered, so the playhead knows where it's going next. */
+  let rollAhead = new Map();
+  function stepFor(n) {
+    if (playMode !== 'random') return stepAt(playMode, n);
+    if (!rollAhead.has(n)) rollAhead.set(n, stepAt('random', n));
+    return rollAhead.get(n);
+  }
+  /* the transport's own modulation: tempo and swing at one moment */
+  function transportAt(beat, t) {
+    let bpm = tempo, sw = swing;
+    for (const m of mods) {
+      if (m.dest === 'bpm' && !isEnv(m)) bpm = modTempo(bpm, m.depth * modLfo(m, beat, t));
+      else if (m.dest === 'swing' && !isEnv(m)) sw = modSwing(sw, m.depth * modLfo(m, beat, t));
+    }
+    return { bpm, sw };
+  }
 
   function tick() {
-    const dur = 60 / tempo / 4;
     while (nextBase < actx.currentTime + 0.12) {
-      const i = stepIdx;
-      const sw = swingOffset(i, swing, dur), t = nextBase + sw;
+      const beat = runPos * 0.25, tp = transportAt(beat, nextBase), dur = 60 / tp.bpm / 4;
+      curDur = dur;
+      const i = stepFor(runPos);
+      beatMarks.push({ t: nextBase, beat, dur });
+      if (beatMarks.length > 64) beatMarks.shift();
+      for (const k of rollAhead.keys()) if (k < runPos - 40) rollAhead.delete(k);
+      const sw = swingOffset(runPos % N_STEPS, tp.sw, dur), t = nextBase + sw;
       const r = seq.trial(i);
       const fired = r.fired, decMult = r.decMult;
       let P = null;
@@ -1745,10 +2033,10 @@ const DEMO_BEAT = [
           }
         }
       }
-      queue.push({ i, t, fired: fired && !!P, x: r.x, y: r.y, P });
+      queue.push({ i, n: runPos, t, fired: fired && !!P, x: r.x, y: r.y, P });
       locks.push({ i, t: nextBase + RATCHET_CATCH * dur, S: nextBase, dur });
       nextBase += dur;
-      stepIdx = (stepIdx + 1) % N_STEPS;
+      runPos++;
     }
     tickLocks();
     tickLive();
@@ -1789,15 +2077,15 @@ const DEMO_BEAT = [
     if (on) {
       ensureAudio();
       stopPadHold();
-      stepIdx = 0; queue = []; locks = []; finals = []; liveNext = 0; pendingPress = pendingBar = null;
+      runPos = 0; queue = []; locks = []; finals = []; beatMarks = []; rollAhead = new Map(); liveNext = 0; pendingPress = pendingBar = null;
       nextBase = actx.currentTime + 0.06;
-      playT0 = nextBase;
       playing = true;
       tick();
       timer = setInterval(tick, 25);
     } else {
-      clearInterval(timer); timer = null; queue = []; locks = []; finals = []; cur = -1; headDirty = true;
+      clearInterval(timer); timer = null; queue = []; locks = []; finals = []; cur = -1; curN = -1; headDirty = true;
       playing = false;
+      if (recording) setRecording(false); // stop disarms record
       if (seq.padHeld()) startPadHold();
     }
     btn.setAttribute('aria-label', on ? 'Stop' : 'Play');
@@ -1809,141 +2097,6 @@ const DEMO_BEAT = [
     recording = on;
     const btn = $('#record');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-
-  /* ==========================================================================
-     Particle feedback: every hit spawns a small cluster whose colour, size,
-     speed and behaviour come entirely from that hit's own synth parameters
-     (via voiceSignature), not from any label. A sound that's mostly body
-     tone reads as droplets; mostly noise reads as smoke; mostly metal reads
-     as sparks. A sound can be any blend of the three at once.
-     ========================================================================== */
-  let particles = [];
-  const PARTICLE_CAP = 260;
-
-  const SPREAD = 2.6;     // particle speed multiplier: hits spread well past the finger
-  const FINGER = 0.045;  // particles start this far out (pad units), clear of the fingertip
-  function spawnBurst(x, y, P, now) {
-    const sig = voiceSignature(P);
-    sig.rgb = starRGB(sig.t);
-    const n = Math.round(8 + sig.level * 26);
-    const nLiquid = Math.round(n * sig.tW);
-    const nSmoke = Math.round(n * sig.nW);
-    const nSpark = sig.mW > 0.04 ? Math.max(3, Math.round(n * sig.mW * 1.3)) : 0;
-    for (let k = 0; k < nLiquid; k++) particles.push(makeLiquid(x, y, sig, now));
-    for (let k = 0; k < nSmoke; k++) particles.push(makeSmoke(x, y, sig, now));
-    for (let k = 0; k < nSpark; k++) particles.push(makeSpark(x, y, sig, now));
-    particles.push(makeRing(x, y, sig, now));
-    if (particles.length > PARTICLE_CAP) particles.splice(0, particles.length - PARTICLE_CAP);
-    dirty = true;
-  }
-
-  function makeLiquid(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * (0.11 + sig.t * 0.16) * (0.55 + Math.random() * 0.8) * (0.55 + sig.level * 0.65);
-    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER * 0.5;
-    return {
-      kind: 'liquid', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd * 0.5,
-      r: (0.011 + 0.018 * sig.level) * (1.25 - sig.t * 0.7) * (0.7 + Math.random() * 0.6),
-      born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.1, 200, 950),
-      rgb: sig.rgb, drive: sig.drive,
-    };
-  }
-  function updateLiquid(p, dt) {
-    p.px = p.x; p.py = p.y;
-    p.vy -= 0.22 * dt;
-    p.vx *= Math.pow(0.93, dt * 60);
-    if (p.drive > 0.1) { p.vx += (Math.random() - 0.5) * p.drive * 0.02; p.vy += (Math.random() - 0.5) * p.drive * 0.02; }
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawLiquid(pg, p, age, px, py, u) {
-    const a = Math.pow(1 - age, 0.75) * 0.85;
-    const scale = Math.min(px(1) - px(0), 1e9);
-    const r = p.r * (1 - 0.25 * age) * scale;
-    // a short flat streak rather than a soft blob, so motion reads without any blur
-    pg.strokeStyle = rgbs(p.rgb, a * 0.55);
-    pg.lineWidth = Math.max(1 * u, r * 1.3);
-    pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs(p.rgb, a);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), r, 0, 6.283); pg.fill();
-  }
-
-  function makeSmoke(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * (0.045 + Math.random() * 0.1) * (0.6 + sig.level * 0.6);
-    x += Math.cos(ang) * FINGER; y += Math.abs(Math.sin(ang)) * FINGER;
-    return {
-      kind: 'smoke', x, y, vx: Math.cos(ang) * spd, vy: Math.abs(Math.sin(ang)) * spd * 0.55 + 0.02,
-      r: (0.006 + 0.01 * sig.level) * (1.2 - sig.t * 0.4) * (0.7 + Math.random() * 0.6),
-      born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.5, 280, 1500),
-      rgb: mixc(sig.rgb, theme.dark ? [180, 182, 196] : [90, 96, 112], 0.35), drive: sig.drive,
-    };
-  }
-  function updateSmoke(p, dt) {
-    p.vx += (Math.random() - 0.5) * (0.02 + p.drive * 0.04) * dt * 60;
-    p.vy *= Math.pow(0.996, dt * 60);
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawSmoke(pg, p, age, px, py, u) {
-    // many small flat specks scattering outward reads as dust, not a blurred cloud
-    const a = Math.pow(1 - age, 1.1) * 0.55;
-    const scale = Math.min(px(1) - px(0), 1e9);
-    const r = p.r * (0.8 + 0.5 * age) * scale;
-    pg.fillStyle = rgbs(p.rgb, a);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), r, 0, 6.283); pg.fill();
-  }
-
-  function makeSpark(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * 0.85 * (0.22 + sig.t * 0.34) * (0.6 + Math.random() * 0.8) * (0.55 + sig.level * 0.75);
-    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER;
-    return {
-      kind: 'spark', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-      r: (0.0024 + 0.0042 * sig.level) * (1.15 - sig.t * 0.35),
-      born: now, life: reduceMotion ? 100 : clamp(sig.dec * 1000 * 0.75 + 50, 80, 420),
-      rgb: mixc(sig.rgb, theme.glint, 0.4), drive: sig.drive,
-    };
-  }
-  function updateSpark(p, dt) {
-    p.px = p.x; p.py = p.y;
-    const drag = Math.pow(0.86, dt * 60);
-    p.vx *= drag; p.vy *= drag; p.vy -= 0.06 * dt;
-    if (p.drive > 0.08) { p.vx += (Math.random() - 0.5) * p.drive * 0.35 * dt; p.vy += (Math.random() - 0.5) * p.drive * 0.35 * dt; }
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawSpark(pg, p, age, px, py, u) {
-    const a = Math.pow(1 - age, 1.3);
-    const scale = Math.min(px(1) - px(0), 1e9);
-    pg.strokeStyle = rgbs(p.rgb, a * 0.85);
-    pg.lineWidth = Math.max(1 * u, p.r * scale * 1.4);
-    pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs(theme.glint, a * 0.95);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
-  }
-
-  /* ring: a thin pulse whose reach follows the decay, sized to clear a
-     fingertip (about a tenth of the pad) even for the shortest hits */
-  function makeRing(x, y, sig, now) {
-    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 320, 1400), r: 0.16 + 0.2 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
-  }
-  function drawRing(pg, p, age, px, py, u) {
-    const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
-    pg.strokeStyle = rgbs(mixc(p.rgb, theme.glint, 0.4), (1 - age) * 0.7);
-    pg.lineWidth = (2.5 - 1.5 * age) * u;
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.03 + p.r * e) * scale, 0, 6.283); pg.stroke();
-  }
-  const noop = () => {};
-
-  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, ring: noop };
-  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, ring: drawRing };
-
-  function stepParticles(dt, now) {
-    if (!particles.length) return;
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      if (now - p.born >= p.life) { particles.splice(i, 1); continue; }
-      UPDATE[p.kind](p, dt);
-    }
   }
 
   /* ---------- the sky: a plain field with a faint nebula of the sound map
@@ -1974,7 +2127,8 @@ const DEMO_BEAT = [
     dpr = Math.min(2.5, window.devicePixelRatio || 1);
     pad.width = Math.max(2, Math.round(r.width * dpr));
     pad.height = Math.max(2, Math.round(r.height * dpr));
-    field = buildSky(pad.width, pad.height);
+    // while the sky is resizing between pages, stretch the old field
+    if (!morph || !field.width) field = buildSky(pad.width, pad.height);
     dirty = true;
   }
 
@@ -1989,7 +2143,7 @@ const DEMO_BEAT = [
     });
     return [...groups.values()];
   }
-  let curT = 0; // when the current step started sounding (audio clock)
+  let curT = 0, curN = -1; // when the current step started sounding (audio clock), and its run position
   /* the constellation, the playhead travelling along it, the stars and the
      moons of every modulator orbiting the steps it moves */
   function drawStarChart(g, W, H, u, now, opts) {
@@ -1999,11 +2153,19 @@ const DEMO_BEAT = [
       g.lineWidth = 1 * u; g.strokeStyle = theme.line;
       g.beginPath(); order.forEach((i, k) => { const [x, y] = P(seq.steps[i]); if (k) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); g.stroke();
     }
-    const stepDur = 60 / tempo / 4, frac = playing && actx ? clamp((actx.currentTime - curT) / stepDur, 0, 1) : 0;
-    if (playing && cur >= 0 && order.length > 1 && opts.playhead) {
-      let a = -1; for (let k = 0; k < order.length; k++) if (order[k] <= cur) a = k; if (a < 0) a = order.length - 1;
-      const b = (a + 1) % order.length, sa = order[a], sb = order[b], span = ((sb - sa + 16) % 16) || 16;
-      const prog = clamp((((cur - sa + 16) % 16) + frac) / span, 0, 1);
+    const frac = playing && actx ? clamp((actx.currentTime - curT) / curDur, 0, 1) : 0;
+    // the playhead runs from the star that last played to the next one
+    // due, in whatever order the play mode visits them
+    let ends = null;
+    if (playing && curN >= 0 && order.length > 1 && opts.playhead) {
+      const isOn = (n) => n >= 0 && seq.steps[stepFor(n)].on;
+      let a = -1, b = -1;
+      for (let n = curN; n >= Math.max(0, curN - 32); n--) if (isOn(n)) { a = n; break; }
+      for (let n = curN + 1; n <= curN + 32; n++) if (isOn(n)) { b = n; break; }
+      if (a >= 0 && b > a && stepFor(a) !== stepFor(b)) ends = { a, b };
+    }
+    if (ends) {
+      const sa = stepFor(ends.a), sb = stepFor(ends.b), prog = clamp((curN - ends.a + frac) / (ends.b - ends.a), 0, 1);
       const [x0, y0] = P(seq.steps[sa]), [x1, y1] = P(seq.steps[sb]), hx = x0 + (x1 - x0) * prog, hy = y0 + (y1 - y0) * prog;
       const grad = g.createLinearGradient(x0, y0, hx, hy); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, theme.now);
       g.strokeStyle = grad; g.lineWidth = 2 * u; g.beginPath(); g.moveTo(x0, y0); g.lineTo(hx, hy); g.stroke();
@@ -2012,7 +2174,7 @@ const DEMO_BEAT = [
     const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
     for (const list of groups) {
       const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
-      const lit = list.includes(cur) && playing, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
       const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
       glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
       g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
@@ -2023,19 +2185,20 @@ const DEMO_BEAT = [
       if (theme.dark) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(x, y, R * 0.26, 0, 6.283); g.fill(); }
       else { g.strokeStyle = 'rgba(16,21,33,.55)'; g.lineWidth = 0.8 * u; g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.stroke(); }
       if (lit) { g.strokeStyle = theme.now; g.lineWidth = 1.6 * u; g.beginPath(); g.arc(x, y, R * 1.7, 0, 6.283); g.stroke(); }
+      if (opts.thumb) continue;
       if (list.some((i) => seq.held.has(i) || seq.latched.has(i))) { g.strokeStyle = theme.hold; g.lineWidth = 2.4 * u; g.beginPath(); g.arc(x, y, R * 2.2, 0, 6.283); g.stroke(); }
       if (opts.mark && opts.mark(list)) { g.strokeStyle = theme.hold; g.lineWidth = 2 * u; g.setLineDash(opts.mark(list) === 'drum' ? [3 * u, 3 * u] : []); g.beginPath(); g.arc(x, y, R * 2.6, 0, 6.283); g.stroke(); g.setLineDash([]); }
       g.fillStyle = theme.muted; g.font = `500 ${8.5 * u}px ${font}`; g.textAlign = 'left'; g.textBaseline = 'middle';
       g.fillText(list.map((i) => i + 1).join(' '), x + R * 1.5 + 2 * u, y - R * 1.4);
     }
-    drawMoons(g, W, H, u, now, groups);
+    if (!opts.thumb) drawMoons(g, W, H, u, now, groups);
   }
   /* moons: one per modulator around every star it moves. An LFO's moon
      follows its real path (an ellipse for Kepler, a figure-eight for the
      three-body orbit); an envelope shows when its step fires, as a flare,
      an impact or a supernova depending on its attack and decay. */
   function drawMoons(g, W, H, u, now, groups) {
-    const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo);
+    const T = clockNow(), beats = beatsAt(T);
     mods.forEach((m, k) => {
       if (!m.targets.length) return;
       const col = modCol(k), env = isEnv(m), sh = SHAPE_BY_ID[m.shape];
@@ -2067,7 +2230,7 @@ const DEMO_BEAT = [
           }
           continue;
         }
-        const p = beats / MOD_RATES[m.rate].beats + m.phase, q = lfoAt(m.shape, p, m.ctl);
+        const p = modCycles(m, beats, T), q = lfoAt(m.shape, p, m.ctl);
         let mx, my;
         if (sh && sh.orbit) { mx = cx + q.x * R; my = cy - q.y * R; }
         else { const a = 2 * Math.PI * p; mx = cx + Math.cos(a) * R; my = cy + Math.sin(a) * R; }
@@ -2084,12 +2247,6 @@ const DEMO_BEAT = [
     const px = (x) => x * W, py = (y) => (1 - y) * H;
     pg.clearRect(0, 0, W, H);
     pg.drawImage(field, 0, 0, W, H);
-    for (const p of particles) {
-      // timer-spawned particles can be born a few ms after this frame's timestamp
-      const age = Math.max(0, (now - p.born) / p.life);
-      if (age >= 1) continue;
-      DRAW[p.kind](pg, p, age, px, py, u);
-    }
     drawStarChart(pg, W, H, u, now, { playhead: true });
     // cursor: a plain dot, deliberately unthemed so it always reads as
     // "you". Touching grows it and adds a thin ring.
@@ -2165,9 +2322,16 @@ const DEMO_BEAT = [
         e.preventDefault(); ensureAudio();
         viaPointer = true; clearTimeout(clearTimer);
         try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+        // trash held: this step is deleted when it's let go
+        if (trash) { trash.used = true; trash.steps.add(i); btn.classList.add('doomed'); return; }
         seq.stepDown(i);
       });
-      btn.addEventListener('pointerup', () => { seq.stepUp(i); endPointer(); history.commit(); });
+      btn.addEventListener('pointerup', () => {
+        btn.classList.remove('doomed');
+        if (trash && trash.steps.has(i)) { trash.steps.delete(i); seq.erase(i); }
+        else seq.stepUp(i);
+        endPointer(); history.commit();
+      });
       btn.addEventListener('pointercancel', () => { seq.stepCancel(i); endPointer(); });
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
@@ -2227,11 +2391,13 @@ const DEMO_BEAT = [
   }
 
   const ORIGINAL_PARAMS = ANCHORS.map((a) => Object.assign({}, a.p));
-  const engineSelect = $('#engineSelect'), engineParams = $('#engineParams');
-  ANCHORS.forEach((a, i) => {
-    const opt = document.createElement('option');
-    opt.value = String(i); opt.textContent = a.name;
-    engineSelect.appendChild(opt);
+  const engineParams = $('#engineParams');
+  let engineIdx = 0; // the drum being edited
+  const engineMenu = createMenu($('#engineSelect'), {
+    label: 'Drum to edit', cls: 'two', minWidth: 260,
+    items: () => ANCHORS.map((a, i) => ({ value: i, label: a.name, icon: `<i class="dot" style="background:${rgbs(starRGB(voiceSignature(a.p).t), 1)}"></i>` })),
+    value: () => engineIdx,
+    onPick: (i) => { engineIdx = i; loadAnchorIntoEditor(); },
   });
   let fieldRefreshTimer = null, engineAuditionTimer = null;
   function scheduleFieldRefresh() {
@@ -2243,7 +2409,6 @@ const DEMO_BEAT = [
     engineAuditionTimer = setTimeout(() => {
       ensureAudio();
       const P = playAt(a.x, a.y);
-      spawnBurst(a.x, a.y, P, performance.now());
     }, 60);
   }
   /* while a slider is being dragged and the sequence isn't playing,
@@ -2253,7 +2418,7 @@ const DEMO_BEAT = [
   function startSliderPreview(a) {
     stopSliderPreview();
     ensureAudio();
-    const fire = () => { const P = playAt(a.x, a.y); spawnBurst(a.x, a.y, P, performance.now()); };
+    const fire = () => playAt(a.x, a.y);
     fire();
     sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
   }
@@ -2265,38 +2430,46 @@ const DEMO_BEAT = [
     const el = document.createElement('div');
     el.className = 'module'; el.style.setProperty('--accent', `var(${m.accent})`);
     el.innerHTML = '<h3></h3><div class="knobgrid"></div>';
+    el.dataset.mod = m.id;
+    el.style.setProperty('--n', PARAM_SPECS.filter((p) => p.mod === m.id).length);
     el.querySelector('h3').textContent = m.label;
     engineParams.appendChild(el);
     moduleGrids[m.id] = el.querySelector('.knobgrid');
+    // hold the die and tap a section's name: roll just that section
+    randTargets.set(el.querySelector('h3'), (st) => {
+      const a = ANCHORS[engineIdx], q = jitterParams(Object.assign({}, a.p), st);
+      for (const p of PARAM_SPECS) if (p.mod === m.id) a.p[p.key] = q[p.key];
+      loadAnchorIntoEditor(); scheduleFieldRefresh();
+    });
   }
   const paramRows = PARAM_SPECS.map((spec) => {
     const container = document.createElement('div');
     moduleGrids[spec.mod].appendChild(container);
     const slider = createKnob(container, {
       min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key], log: spec.log,
-      def: () => ORIGINAL_PARAMS[+engineSelect.value][spec.key],
+      def: () => ORIGINAL_PARAMS[engineIdx][spec.key],
       label: spec.label, fmt: (v) => fmtParam(spec.unit, v),
       onInput: (v) => {
-        const a = ANCHORS[+engineSelect.value];
+        const a = ANCHORS[engineIdx];
         a.p[spec.key] = v;
         scheduleFieldRefresh();
         stepsDirty = readoutDirty = laneDirty = true;
         if (playing) auditionAnchorSoon(a);
       },
-      onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[+engineSelect.value]); },
+      onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[engineIdx]); },
       onPointerUp: stopSliderPreview,
       onChange: () => history.commit(),
-      mod: knobMod(spec.key, () => ({ kind: 'drum', a: +engineSelect.value })),
+      mod: knobMod(spec.key, () => ({ kind: 'drum', a: engineIdx })),
     });
     return { spec, slider };
   });
   function loadAnchorIntoEditor() {
-    const a = ANCHORS[+engineSelect.value];
+    const a = ANCHORS[engineIdx];
+    engineMenu.paint();
     paramRows.forEach(({ spec, slider }) => { slider.set(a.p[spec.key]); slider.refreshMod(); });
   }
-  engineSelect.addEventListener('change', loadAnchorIntoEditor);
   $('#engineReset').addEventListener('click', () => {
-    const idx = +engineSelect.value;
+    const idx = engineIdx;
     ANCHORS[idx].p = Object.assign({}, ORIGINAL_PARAMS[idx]);
     loadAnchorIntoEditor();
     scheduleFieldRefresh();
@@ -2448,10 +2621,10 @@ const DEMO_BEAT = [
   function createKnob(container, opts) {
     container.style.display = 'grid'; container.style.justifyItems = 'center'; container.style.gap = '4px';
     container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
-      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
+      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/><path class="mring"/></svg>' +
       '<div class="knob-cap"><i class="knob-ptr"></i></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
     const el = container.querySelector('.knob');
-    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
+    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value'), ringPath = el.querySelector('.mring');
     el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
     el.querySelector('.knob-label').textContent = opts.label;
     el.setAttribute('aria-label', opts.ariaLabel || opts.label);
@@ -2477,6 +2650,20 @@ const DEMO_BEAT = [
       valueEl.textContent = opts.fmt ? opts.fmt(value) : String(value);
       el.setAttribute('aria-valuenow', value);
       el.setAttribute('aria-valuetext', valueEl.textContent);
+      drawRing(ang);
+    }
+    /* a modulated knob gets a ring in its modulator's colour: how far the
+       modulation reaches either side of the value (one side if unipolar or
+       an envelope). Drag the ring to set the depth. */
+    const srcK = () => (opts.mod ? opts.mod.current() : -1);
+    function drawRing(ang) {
+      const k = srcK();
+      if (k < 0) { ringPath.style.display = 'none'; return; }
+      const m = mods[k], span = Math.abs(m.depth) * 0.5 * KNOB_SWEEP, lim = KNOB_SWEEP / 2;
+      const one = m.uni || isEnv(m), sgn = m.depth < 0 ? -1 : 1;
+      const a0 = clamp(one ? ang : ang - span, -lim, lim), a1 = clamp(one ? ang + sgn * span : ang + span, -lim, lim);
+      ringPath.setAttribute('d', arcPath(Math.min(a0, a1), Math.max(a0, a1), KNOB_R + 5.5));
+      ringPath.style.display = ''; ringPath.style.stroke = modCol(k);
     }
     const emit = () => { if (opts.onInput) opts.onInput(value); };
     let drag = null, lastTap = 0;
@@ -2495,11 +2682,25 @@ const DEMO_BEAT = [
       }
       lastTap = t;
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, pos: clamp(toPos(value), 0, 1) };
+      // on the ring (outside the cap) of a modulated knob: set the depth
+      const dial = el.querySelector('.knob-dial').getBoundingClientRect(), k = srcK();
+      if (k >= 0 && Math.hypot(e.clientX - (dial.left + dial.width / 2), e.clientY - (dial.top + dial.height / 2)) > dial.width * 0.34) {
+        drag.depth = { k, d0: mods[k].depth };
+        lastTap = 0;
+        valueEl.textContent = `M${k + 1} ${Math.round(mods[k].depth * 100)}%`;
+      }
       el.classList.add('active');
       if (opts.onPointerDown) opts.onPointerDown(value);
     });
     el.addEventListener('pointermove', (e) => {
       if (!drag || drag.id !== e.pointerId) return;
+      if (drag.depth) {
+        const m = mods[drag.depth.k];
+        m.depth = Math.round(clamp(drag.depth.d0 + ((e.clientX - drag.x) - (e.clientY - drag.y)) / 160, -1, 1) * 100) / 100;
+        drawRing(-KNOB_SWEEP / 2 + clamp(toPos(value), 0, 1) * KNOB_SWEEP);
+        valueEl.textContent = `M${drag.depth.k + 1} ${m.depth > 0 ? '+' : ''}${Math.round(m.depth * 100)}%`;
+        return;
+      }
       const travel = e.shiftKey ? 800 : 200;
       const p = clamp(drag.pos + ((e.clientX - drag.x) - (e.clientY - drag.y)) / travel, 0, 1);
       const v = snap(fromPos(p));
@@ -2507,6 +2708,7 @@ const DEMO_BEAT = [
     });
     const end = (e) => {
       if (!drag || drag.id !== e.pointerId) return;
+      if (drag.depth) { drag = null; el.classList.remove('active'); render(); refreshKnobMods(); renderMods(); history.commit(); return; }
       drag = null; el.classList.remove('active');
       if (opts.onPointerUp) opts.onPointerUp(value);
       if (opts.onChange) opts.onChange(value);
@@ -2526,19 +2728,31 @@ const DEMO_BEAT = [
       if (opts.onChange) opts.onChange(value);
     });
     render();
+    // hold the die and tap the knob: a new value, further away with strength
+    randTargets.set(el, (st) => {
+      const p = clamp(toPos(value), 0, 1), q = st > 0.9 ? Math.random() : clamp(p + (Math.random() * 2 - 1) * st, 0, 1);
+      value = snap(fromPos(q)); render(); emit(); if (opts.onChange) opts.onChange(value);
+    });
     // a modulation source picker under the knob (kit and engine pages)
-    let srcSel = null;
+    let src = null;
     if (opts.mod) {
-      srcSel = document.createElement('select');
-      srcSel.className = 'modsel';
-      srcSel.setAttribute('aria-label', `Modulation source for ${opts.ariaLabel || opts.label}`);
-      srcSel.innerHTML = '<option value="-1">\u00b7</option>' + mods.map((_, k) => `<option value="${k}">M${k + 1}</option>`).join('');
-      srcSel.addEventListener('change', () => { opts.mod.pick(+srcSel.value); });
-      container.appendChild(srcSel);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'modsel';
+      container.appendChild(b);
+      const name = opts.ariaLabel || opts.label;
+      src = createMenu(b, {
+        label: `Modulation for ${name}`, cls: 'tiny', minWidth: 180,
+        items: () => [{ value: -1, label: 'None', short: '\u00b7' }, ...mods.map((m, k) => ({
+          value: k, short: `M${k + 1}`, icon: `<i class="dot" style="background:${modCol(k)}"></i>`,
+          label: `M${k + 1} ${SHAPE_BY_ID[m.shape].name}` + (m.dest === opts.mod.dest ? '' : ` \u00b7 now ${MOD_DESTS.find((d) => d.id === m.dest)?.name || m.dest}`),
+        }))],
+        value: () => opts.mod.current(),
+        onPick: (k) => opts.mod.pick(k),
+        paint: (btn, it) => { const k = it ? it.value : -1; btn.classList.toggle('set', k >= 0); btn.style.background = k >= 0 ? modCol(k) : ''; },
+      });
     }
-    const refreshMod = () => { if (!srcSel) return; const k = opts.mod.current(); srcSel.value = String(k); srcSel.classList.toggle('set', k >= 0); };
-    if (srcSel) knobRefreshers.push(refreshMod);
-    refreshMod();
+    const refreshMod = () => { if (!src) return; src.paint(); render(); };
+    if (src) knobRefreshers.push(refreshMod);
     return { get value() { return value; }, set(v) { value = snap(v); render(); }, refreshMod };
   }
 
@@ -2573,15 +2787,17 @@ const DEMO_BEAT = [
     el.addEventListener('pointerdown', (e) => {
       dragging = true; el.classList.add('dragging');
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
-      fromClientX(e.clientX);
+      dieHold = { strength: fromClientX(e.clientX), used: false };
+      updateDice(dieHold.strength);
     });
-    el.addEventListener('pointermove', (e) => { if (dragging) fromClientX(e.clientX); });
+    el.addEventListener('pointermove', (e) => { if (dragging) { dieHold.strength = fromClientX(e.clientX); updateDice(dieHold.strength); } });
     const end = (e) => {
       if (!dragging) return;
       dragging = false; el.classList.remove('dragging');
-      const strength = fromClientX(e.clientX);
-      place(0);
-      if (strength > 0.01) onRoll(strength);
+      const strength = fromClientX(e.clientX), used = dieHold && dieHold.used;
+      dieHold = null;
+      place(0); updateDice();
+      if (!used && strength > 0.01) onRoll(strength);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
@@ -2696,6 +2912,17 @@ const DEMO_BEAT = [
     el.addEventListener('click', () => { if (viaPointer) { viaPointer = false; return; } fn(); });
   }
   press($('#play'), () => setPlaying(!playing));
+  const MODE_ICON = {
+    fwd: '<path d="M4 12h14M13 7l5 5-5 5"/>', back: '<path d="M20 12H6M11 7l-5 5 5 5"/>',
+    pingpong: '<path d="M3 9h15M15 6l3 3-3 3M21 15H6M9 12l-3 3 3 3"/>', random: '<path d="M3 7h3c5 0 7 10 12 10h3M3 17h3c2 0 3-2 4-4M14 11c1-2 2-4 4-4h3M18 4l3 3-3 3M18 14l3 3-3 3"/>',
+  };
+  const modeIcon = (id) => `<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON[id]}</svg>`;
+  const playModeMenu = createMenu($('#playMode'), {
+    label: 'Play mode', minWidth: 170,
+    items: () => PLAY_MODES.map((m) => ({ value: m.id, label: m.name, icon: modeIcon(m.id) })),
+    value: () => playMode,
+    onPick: (v) => { playMode = v; rollAhead = new Map(); history.commit(); },
+  });
   const smoothBtn = $('#smooth');
   const SMOOTH_ICON = {
     stepped: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15H6V9H10V12H14V5H18"/></svg>',
@@ -2709,7 +2936,26 @@ const DEMO_BEAT = [
   press(smoothBtn, () => { smooth = !smooth; paintSmooth(); });
   paintSmooth();
   press($('#record'), () => setRecording(!recording));
-  $('#clear').addEventListener('click', () => { seq.clear(); history.commit(); });
+  const clearBtn = $('#clear');
+  clearBtn.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    try { clearBtn.setPointerCapture(e.pointerId); } catch (_) {}
+    trash = { id: e.pointerId, used: seq.held.size > 0, steps: new Set() };
+    clearBtn.classList.add('pressed');
+  });
+  const trashUp = (e) => {
+    if (!trash || trash.id !== e.pointerId) return;
+    const t = trash; trash = null; clearBtn.classList.remove('pressed');
+    if (e.type === 'pointercancel') return;
+    const held = [...seq.held].filter((i) => !t.steps.has(i));
+    if (held.length) held.forEach((i) => seq.erase(i, true));
+    else if (!t.used) seq.clear();
+    history.commit();
+  };
+  clearBtn.addEventListener('pointerup', trashUp);
+  clearBtn.addEventListener('pointercancel', trashUp);
+  clearBtn.addEventListener('click', (e) => { if (e.detail === 0) { seq.clear(); history.commit(); } }); // keyboard
   const selBtn = $('#select');
   press(selBtn, () => {
     const v = selBtn.getAttribute('aria-pressed') !== 'true';
@@ -2726,9 +2972,108 @@ const DEMO_BEAT = [
   });
   let pendingMono = false; // applied to `engine` once it's created (ensureAudio runs lazily)
 
+  /* ---------- dropdown: a key showing the current choice; pressing it
+     opens a list in the app's own style, not the system picker. It opens
+     on touch-down, and nothing stays lit once a choice is made. ---------- */
+  const menuEl = document.createElement('div');
+  menuEl.className = 'menu'; menuEl.hidden = true; menuEl.setAttribute('role', 'listbox');
+  document.body.appendChild(menuEl);
+  let menuOwner = null;
+  function closeMenu() {
+    if (!menuOwner) return;
+    menuEl.hidden = true; menuOwner.btn.setAttribute('aria-expanded', 'false'); menuOwner = null;
+  }
+  /* o: items() -> [{value, label, short?, icon?, group?}], value() -> current,
+     onPick(value), cls (extra class for the list), paint(btn, item) */
+  function createMenu(btn, o) {
+    btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
+    const paint = () => {
+      const it = o.items().find((x) => x.value === o.value());
+      btn.innerHTML = (it && it.icon ? it.icon : '') + `<span>${it ? (it.short || it.label) : ''}</span>`;
+      if (o.label) btn.setAttribute('aria-label', `${o.label}: ${it ? it.label : ''}`);
+      if (o.paint) o.paint(btn, it);
+    };
+    const open = () => {
+      if (menuOwner && menuOwner.btn === btn) { closeMenu(); return; }
+      closeMenu();
+      const items = o.items(), cur = o.value();
+      let html = '', grp = null;
+      items.forEach((it, n) => {
+        if (it.group && it.group !== grp) { grp = it.group; html += `<div class="grouplabel">${grp}</div>`; }
+        html += `<button type="button" role="option" data-n="${n}" aria-selected="${it.value === cur}">${it.icon || ''}<span>${it.label}</span></button>`;
+      });
+      menuEl.innerHTML = html;
+      menuEl.className = 'menu' + (o.cls ? ' ' + o.cls : '');
+      menuEl.hidden = false;
+      menuOwner = { btn, items, o, paint };
+      btn.setAttribute('aria-expanded', 'true');
+      // place it under the key (or above, if there's more room there)
+      const r = btn.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      const w = Math.min(vw - 16, Math.max(r.width, o.minWidth || 170));
+      menuEl.style.width = w + 'px';
+      menuEl.style.left = clamp(r.left, 8, vw - w - 8) + 'px';
+      const below = vh - r.bottom - 12, above = r.top - 12, h = menuEl.scrollHeight;
+      const up = h > below && above > below;
+      menuEl.style.maxHeight = Math.max(120, up ? above : below) + 'px';
+      menuEl.style.top = (up ? Math.max(8, r.top - 6 - Math.min(h, above)) : r.bottom + 6) + 'px';
+      const sel = menuEl.querySelector('[aria-selected="true"]');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    };
+    press(btn, open);
+    btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); open(); const f = menuEl.querySelector('[aria-selected="true"]') || menuEl.querySelector('button'); if (f) f.focus(); } });
+    randTargets.set(btn, () => { const items = o.items(); o.onPick(items[Math.floor(Math.random() * items.length)].value); paint(); });
+    paint();
+    return { paint, btn };
+  }
+  menuEl.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b || !menuOwner) return;
+    const { btn, items, o, paint } = menuOwner, it = items[+b.dataset.n];
+    closeMenu();
+    o.onPick(it.value); paint();
+    btn.blur();
+  });
+  menuEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { const b = menuOwner && menuOwner.btn; closeMenu(); if (b) b.focus(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const list = [...menuEl.querySelectorAll('button')], k = list.indexOf(document.activeElement);
+      const nx = list[clamp(k + (e.key === 'ArrowDown' ? 1 : -1), 0, list.length - 1)]; if (nx) nx.focus();
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (menuOwner && !menuEl.contains(e.target) && !menuOwner.btn.contains(e.target)) closeMenu();
+  }, true);
+  window.addEventListener('resize', closeMenu);
+
+  /* ---------- hold the die and tap something: that one thing is rolled
+     (a knob, a dropdown, a modulator's name, a step, an engine section).
+     randTargets maps an element to its roll(strength). ---------- */
+  let dieHold = null; // {strength, used} while the top-bar die is held
+  function rollTarget(e) {
+    if (!dieHold || e.target.closest('.dicetrack')) return false;
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      const fn = randTargets.get(el);
+      if (!fn) continue;
+      e.preventDefault(); e.stopPropagation();
+      fn(dieHold.strength > 0.05 ? dieHold.strength : 0.5);
+      dieHold.used = true;
+      el.classList.remove('rolled'); void el.offsetWidth; el.classList.add('rolled');
+      suppressClick = performance.now();
+      dirty = stepsDirty = laneDirty = true;
+      history.commit();
+      return true;
+    }
+    return false;
+  }
+  let suppressClick = 0;
+  document.addEventListener('pointerdown', rollTarget, true);
+  document.addEventListener('click', (e) => { if (performance.now() - suppressClick < 600) { e.preventDefault(); e.stopPropagation(); } }, true);
+
   /* ==========================================================================
-     Modulation page. Six modulators, each a row: a live thumbnail, what it
-     does, Step and Drum assign keys and its own die (rolls its settings).
+     Modulation page. Six modulators, each a row: a live thumbnail, its
+     name, its shape and destination, and Step / Drum assign keys. The
+     selected one opens its controls right under its row.
      Assigning: hold Step or Drum and tap stars on the sky above, or hold a
      star and tap Step or Drum; several either way in one hold. A quick tap
      on Step or Drum latches it (lit) until tapped again, for one pointer.
@@ -2736,29 +3081,57 @@ const DEMO_BEAT = [
   const modSky = $('#modSky'), msg = modSky.getContext('2d');
   let modField = null, modSel = 0;
   const modsEl = $('#mods');
-  const fmtRate = (m) => MOD_RATES[m.rate].name;
-  const destName = (id) => { const d = MOD_DESTS.find((x) => x.id === id); return d ? d.name : id; };
-  function modSummary(m) {
-    const sh = SHAPE_BY_ID[m.shape].name, n = m.targets.length;
-    const where = n ? m.targets.map((g) => g.kind === 'kit' ? 'kit' : g.kind === 'step' ? `step ${g.i + 1}` : ANCHORS[g.a].name).join(', ') : 'not assigned';
-    return `${sh} → ${destName(m.dest)} · ${where}`;
-  }
-  const PIPS = '<i></i><i></i><i></i><i></i><i></i>';
-  modsEl.innerHTML = mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
+  const isGlobal = (m) => GLOBAL_DESTS.has(m.dest);
+  modsEl.innerHTML = '<div class="modhead" aria-hidden="true"><span></span><span>Assign</span></div>' + mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
       <canvas aria-hidden="true"></canvas>
-      <div style="min-width:0"><div class="nm"><i></i>M${k + 1}</div><div class="sm"></div></div>
-      <button class="assign cap" type="button" data-kind="step" aria-label="Step assign M${k + 1}: hold and tap stars">Step<br>assign</button>
-      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum assign M${k + 1}: hold and tap stars">Drum<br>assign</button>
-      <button class="minidie" type="button" aria-label="Randomize M${k + 1}'s settings" title="Randomize this modulator's settings">${PIPS}</button>
+      <div class="mid"><button type="button" class="nm" aria-label="M${k + 1}"><i></i>M${k + 1}</button>
+        <div class="dds"><button type="button" class="dd cap shape"></button><button type="button" class="dd cap dest"></button></div></div>
+      <button class="assign cap" type="button" data-kind="step" aria-label="Step: hold and tap stars to send M${k + 1} to those steps">Step</button>
+      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum: hold and tap a star to send M${k + 1} to every hit of its drum">Drum</button>
     </div>`).join('');
   const modRows = [...modsEl.querySelectorAll('.mod')];
+  // the selected modulator's controls, moved under its row
+  const modEdit = document.createElement('div');
+  modEdit.className = 'modedit';
+  modEdit.innerHTML = '<div class="modkeys"><button type="button" class="mini cap" data-t="free"></button><button type="button" class="mini cap" data-t="uni"></button></div><div class="knobgrid"></div>';
+  const modKnobsEl = modEdit.querySelector('.knobgrid');
+
+  /* shape icons, drawn from the shapes themselves */
+  function shapeIcon(id, size = 22) {
+    const sh = SHAPE_BY_ID[id], pts = [];
+    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
+    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 1.5 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
+    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, id === 'random' ? 0 : 0.5).x * 7]);
+    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
+  }
+  const SHAPE_GROUP = (s) => (s.env ? 'One-shot' : s.orbit ? 'Orbits' : 'Waves');
+  const SHAPE_ITEMS = MOD_SHAPES.map((sh) => ({ value: sh.id, label: sh.name, short: sh.id === 'figure8' ? 'Figure 8' : sh.name, icon: shapeIcon(sh.id, 18), group: SHAPE_GROUP(sh) }));
+  const destItems = (m) => MOD_DESTS.filter((d) => !(d.global && isEnv(m))).map((d) => ({ value: d.id, label: d.name, group: d.group }));
+  const shapeMenus = [], destMenus = [];
+  function setShape(k, id) {
+    const m = mods[k]; m.shape = id;
+    if (isEnv(m) && isGlobal(m)) m.dest = 'pitch'; // an envelope can't move the transport
+    modSel = k; renderMods(); refreshKnobMods(); history.commit();
+  }
+  modRows.forEach((row, k) => {
+    shapeMenus[k] = createMenu(row.querySelector('.shape'), { label: `M${k + 1} shape`, cls: 'two', minWidth: 290, items: () => SHAPE_ITEMS, value: () => mods[k].shape, onPick: (v) => setShape(k, v) });
+    destMenus[k] = createMenu(row.querySelector('.dest'), { label: `M${k + 1} destination`, minWidth: 220, items: () => destItems(mods[k]), value: () => mods[k].dest, onPick: (v) => { mods[k].dest = v; modSel = k; renderMods(); refreshKnobMods(); history.commit(); } });
+    randTargets.set(row.querySelector('.nm'), (st) => { randomizeModSettings(k, st, true); modSel = k; renderMods(); refreshKnobMods(); });
+  });
+
   function renderMods() {
     modRows.forEach((row, k) => {
+      const m = mods[k];
       row.classList.toggle('sel', k === modSel);
       row.style.setProperty('--mc', modCol(k));
-      row.querySelector('.sm').textContent = modSummary(mods[k]);
+      shapeMenus[k].paint(); destMenus[k].paint();
+      row.querySelectorAll('.assign').forEach((b) => { b.disabled = isGlobal(m); b.title = isGlobal(m) ? 'Tempo and swing are global: nothing to assign' : ''; });
     });
-    $('#modEdit').style.setProperty('--mc', modCol(modSel));
+    const row = modRows[modSel];
+    if (modEdit.parentElement !== row) row.appendChild(modEdit);
+    modEdit.style.setProperty('--mc', modCol(modSel));
+    loadModEditor();
   }
 
   /* assigning */
@@ -2771,7 +3144,8 @@ const DEMO_BEAT = [
   }
   function assign(k, kind, list) {
     for (const g of targetFor(kind, list)) toggleTarget(mods[k], g);
-    modSel = k; renderMods(); refreshKnobMods(); dirty = true;
+    if (modSel !== k) { modSel = k; renderMods(); }
+    refreshKnobMods(); dirty = true;
   }
   function paintAssignKeys() {
     modRows.forEach((row, k) => row.querySelectorAll('.assign').forEach((b) => {
@@ -2780,7 +3154,10 @@ const DEMO_BEAT = [
     }));
   }
   modRows.forEach((row, k) => {
-    row.addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) { modSel = k; renderMods(); loadModEditor(); } });
+    row.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.dd, .assign, .modedit')) return;
+      if (modSel !== k) { modSel = k; renderMods(); dirty = true; }
+    });
     row.querySelectorAll('.assign').forEach((b) => {
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -2799,7 +3176,6 @@ const DEMO_BEAT = [
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
       b.addEventListener('click', (e) => { if (e.detail === 0) { assignLatch = assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind ? null : { k, kind: b.dataset.kind }; paintAssignKeys(); } });
     });
-    row.querySelector('.minidie').addEventListener('click', () => { randomizeModSettings(k, 0.8); modSel = k; renderMods(); loadModEditor(); history.commit(); });
   });
   function starAt(e) {
     const r = modSky.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = 1 - (e.clientY - r.top) / r.height;
@@ -2827,8 +3203,9 @@ const DEMO_BEAT = [
   function drawModSky(now) {
     const r = modSky.getBoundingClientRect(), d = Math.min(2.5, window.devicePixelRatio || 1);
     const W = Math.max(2, Math.round(r.width * d)), H = Math.max(2, Math.round(r.height * d));
-    if (modSky.width !== W || modSky.height !== H || !modField) { modSky.width = W; modSky.height = H; modField = buildSky(W, H); }
-    msg.drawImage(modField, 0, 0);
+    if (modSky.width !== W || modSky.height !== H) { modSky.width = W; modSky.height = H; if (!morph) modField = null; }
+    if (!modField) modField = buildSky(W, H);
+    msg.drawImage(modField, 0, 0, W, H);
     const m = mods[modSel];
     const held = new Set([...heldStars.values()].flat());
     drawStarChart(msg, W, H, d, now, {
@@ -2844,7 +3221,7 @@ const DEMO_BEAT = [
   }
 
   /* thumbnails: an LFO's path or wave with its body, or the envelope's shape */
-  function drawModThumbs(now) {
+  function drawModThumbs() {
     modRows.forEach((row, k) => {
       const cv = row.querySelector('canvas'), d = Math.min(2, window.devicePixelRatio || 1), S = Math.round(40 * d);
       if (cv.width !== S) { cv.width = S; cv.height = S; }
@@ -2858,86 +3235,83 @@ const DEMO_BEAT = [
         g.stroke();
         return;
       }
-      const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo), p = beats / MOD_RATES[m.rate].beats + m.phase;
+      const T = clockNow(), p = modCycles(m, beatsAt(T), T);
       if (sh.orbit) {
         const R = S * 0.36; g.beginPath();
         for (let q = 0; q <= 120; q++) { const o = lfoAt(m.shape, p - 1 + q / 120, m.ctl); const X = c + o.x * R, Y = c - o.y * R; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
         g.stroke();
         const o = lfoAt(m.shape, p, m.ctl); g.fillStyle = col; g.beginPath(); g.arc(c + o.x * R, c - o.y * R, 3 * d, 0, 6.283); g.fill();
       } else {
+        // unipolar waves sit on the floor of the thumbnail
+        const yOf = (v) => (m.uni ? S - 6 * d - (v + 1) / 2 * (S - 12 * d) : c - v * S * 0.32);
+        if (m.uni) { g.beginPath(); g.moveTo(3 * d, S - 6 * d); g.lineTo(S - 3 * d, S - 6 * d); g.stroke(); }
         g.strokeStyle = col; g.beginPath();
-        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = c - lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x * S * 0.32; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = yOf(lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x); if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
         g.stroke();
       }
     });
   }
 
-  /* shape icons, drawn from the shapes themselves */
-  function shapeIcon(id, size = 22) {
-    const sh = SHAPE_BY_ID[id], pts = [];
-    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
-    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 6 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
-    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, 0.5).x * 7]);
-    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
-    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
-  }
-  const shapeBtn = $('#shapeBtn'), shapeMenu = $('#shapeMenu');
-  const SHAPE_GROUPS = [['Waves', (s) => !s.orbit && !s.env], ['Orbits', (s) => s.orbit], ['One-shot', (s) => s.env]];
-  shapeMenu.innerHTML = SHAPE_GROUPS.map(([name, f]) => `<div class="grouplabel">${name}</div>` +
-    MOD_SHAPES.filter(f).map((sh) => `<button type="button" role="menuitemradio" data-id="${sh.id}">${shapeIcon(sh.id)}${sh.name}</button>`).join('')).join('');
-  function closeShapeMenu() { shapeMenu.hidden = true; shapeBtn.setAttribute('aria-expanded', 'false'); }
-  shapeBtn.addEventListener('click', () => {
-    const open = shapeMenu.hidden;
-    shapeMenu.hidden = !open; shapeBtn.setAttribute('aria-expanded', String(open));
-    if (open) (shapeMenu.querySelector('[aria-checked="true"]') || shapeMenu.querySelector('button')).focus();
-  });
-  shapeMenu.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    mods[modSel].shape = b.dataset.id; closeShapeMenu(); loadModEditor(); renderMods(); history.commit(); shapeBtn.focus();
-  });
-  shapeMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeShapeMenu(); shapeBtn.focus(); } });
-  document.addEventListener('pointerdown', (e) => { if (!shapeMenu.hidden && !e.target.closest('.pickwrap')) closeShapeMenu(); });
-
-  const destSel = $('#destSel');
-  destSel.innerHTML = [...new Set(MOD_DESTS.map((d) => d.group))].map((grp) => `<optgroup label="${grp}">` +
-    MOD_DESTS.filter((d) => d.group === grp).map((d) => `<option value="${d.id}">${d.name}</option>`).join('') + '</optgroup>').join('');
-  destSel.addEventListener('change', () => { mods[modSel].dest = destSel.value; renderMods(); refreshKnobMods(); history.commit(); });
-
-  /* the editor's four knobs: rate, depth, the shape's own control and
-     phase for LFOs; attack, decay and depth for the envelope */
-  const modKnobsEl = $('#modKnobs');
+  /* the selected modulator's controls: Sync / Free and polarity keys, then
+     rate (or Hz), depth, the shape's own control and phase for LFOs;
+     attack, decay and depth for the envelope */
+  const modKeys = { free: modEdit.querySelector('[data-t="free"]'), uni: modEdit.querySelector('[data-t="uni"]') };
+  press(modKeys.free, () => { const m = mods[modSel]; m.free = !m.free; loadModEditor(); history.commit(); });
+  press(modKeys.uni, () => { const m = mods[modSel]; m.uni = !m.uni; loadModEditor(); refreshKnobMods(); history.commit(); });
+  const fmtHzRate = (m) => { const h = modHz(m); return h < 1 ? h.toFixed(2) + ' Hz' : h.toFixed(h < 10 ? 1 : 0) + ' Hz'; };
   function loadModEditor() {
     const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
-    shapeBtn.innerHTML = shapeIcon(m.shape) + sh.name;
-    shapeMenu.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.id === m.shape)));
-    destSel.value = m.dest;
+    modKeys.free.hidden = modKeys.uni.hidden = !!sh.env;
+    modKeys.free.textContent = m.free ? 'Free' : 'Sync';
+    modKeys.free.setAttribute('aria-pressed', String(!!m.free));
+    modKeys.free.title = m.free ? 'Free: runs on its own clock, even when stopped' : 'Sync: follows the song\'s tempo';
+    modKeys.uni.innerHTML = m.uni ? '<b>+</b>&thinsp;Uni' : '<b>±</b>&thinsp;Bi';
+    modKeys.uni.title = m.uni ? 'Unipolar: moves one way, 0 to depth' : 'Bipolar: swings both ways';
     modKnobsEl.innerHTML = '';
-    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { renderMods(); history.commit(); } }, o)); };
+    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { refreshKnobMods(); history.commit(); } }, o)); };
     if (sh.env) {
       knob({ min: 0, max: 1, step: 0.01, value: m.atk, label: 'Attack', fmt: () => fmtT(envAttack(m)), onInput: (v) => { m.atk = v; } });
       knob({ min: 0, max: 1, step: 0.01, value: m.dec, label: 'Decay', fmt: () => fmtT(envDecay(m)), onInput: (v) => { m.dec = v; } });
+    } else if (m.free) {
+      knob({ min: 0, max: 1, step: 0.005, value: m.hz == null ? 0.45 : m.hz, label: 'Rate', fmt: () => fmtHzRate(m), onInput: (v) => { m.hz = v; } });
     } else {
       knob({ min: 0, max: MOD_RATES.length - 1, step: 1, value: m.rate, label: 'Rate', fmt: (v) => MOD_RATES[v].name, onInput: (v) => { m.rate = v; } });
     }
-    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; } });
+    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; refreshKnobMods(); } });
     if (!sh.env && sh.ctl) knob({ min: 0, max: 1, step: 0.01, value: m.ctl, label: sh.ctl[0], fmt: (v) => (sh.ctl[1] + v * (sh.ctl[2] - sh.ctl[1])).toFixed(2), onInput: (v) => { m.ctl = v; } });
     if (!sh.env) knob({ min: 0, max: 359, step: 1, value: Math.round(m.phase * 360), label: 'Phase', fmt: (v) => v + '°', onInput: (v) => { m.phase = v / 360; } });
   }
 
-  /* each modulator's die rolls its settings, not its assignments */
-  function randomizeModSettings(k, strength) {
-    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)];
-    if (Math.random() < strength) m.shape = pick(MOD_SHAPES).id;
-    m.rate = clamp(Math.round(m.rate + (Math.random() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
-    m.depth = clamp((Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.6 * strength), -1, 1);
-    m.ctl = clamp(m.ctl + (Math.random() * 2 - 1) * strength, 0, 1);
-    m.phase = Math.random() < strength ? Math.random() : m.phase;
-    m.atk = clamp(m.atk + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
-    m.dec = clamp(m.dec + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+  /* rolling a modulator's settings: rate, depth, its shape's control and
+   phase always move; at higher strength the shape and destination may
+   change too (to ones that suit it). Never its assignments. */
+  const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch', 'fold', 'drive', 'fm'];
+  const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
+  function randomizeModSettings(k, strength, all) {
+    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)], r = Math.random;
+    if (r() < (all ? 0.4 + 0.6 * strength : strength * 0.6)) { m.shape = pick(MOD_SHAPES).id; if (isEnv(m) && isGlobal(m)) m.dest = 'pitch'; }
+    if (!isGlobal(m) && r() < (all ? 0.25 + 0.5 * strength : strength * 0.35)) m.dest = pick(isEnv(m) ? ENV_DESTS : LFO_DESTS);
+    m.rate = clamp(Math.round(m.rate + (r() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
+    m.hz = clamp((m.hz == null ? 0.45 : m.hz) + (r() * 2 - 1) * 0.4 * strength, 0, 1);
+    m.depth = clamp((r() < 0.5 ? -1 : 1) * (0.15 + r() * 0.6 * strength), -1, 1);
+    m.ctl = clamp(m.ctl + (r() * 2 - 1) * strength, 0, 1);
+    if (r() < strength) m.phase = r();
+    if (r() < strength * 0.25) m.free = !m.free;
+    if (r() < strength * 0.25) m.uni = !m.uni;
+    m.atk = clamp(m.atk + (r() * 2 - 1) * strength * 0.6, 0, 1);
+    m.dec = clamp(m.dec + (r() * 2 - 1) * strength * 0.6, 0, 1);
   }
-  /* the page's die makes assignments: each modulator picks a destination
-     that suits it (envelopes on things that glide through a hit) and lands
-     on the drums the pattern actually uses most, or on a few steps */
+  /* the page's die: below halfway it rolls every modulator's settings;
+     past halfway, if Preferences allow it, it also makes new assignments */
+  function randomizeModPage(strength) {
+    mods.forEach((_, k) => { if (Math.random() < 0.4 + 0.6 * strength) randomizeModSettings(k, strength, false); });
+    if (prefs.diceAssign && strength >= 0.5) randomizeAssignments(strength);
+    renderMods(); refreshKnobMods(); dirty = true;
+    history.commit();
+  }
+  /* new assignments: each modulator picks a destination that suits it
+     (envelopes on things that glide through a hit) and lands on the drums
+     the pattern actually uses most, or on a few steps */
   function randomizeAssignments(strength) {
     const on = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
     if (!on.length) return;
@@ -2945,8 +3319,6 @@ const DEMO_BEAT = [
     for (const i of on) { const s = seq.steps[i], a = nearestAnchor(s.x, s.y); counts.set(a, (counts.get(a) || 0) + 1); }
     const drums = [...counts.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
-    const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch'];
-    const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
     mods.forEach((m) => {
       if (Math.random() > 0.3 + 0.7 * strength) return;
       m.targets = [];
@@ -2959,8 +3331,6 @@ const DEMO_BEAT = [
       } else m.targets.push({ kind: 'kit' });
       m.depth = (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.5 * strength);
     });
-    renderMods(); loadModEditor(); refreshKnobMods(); dirty = true;
-    history.commit();
   }
 
   /* the knob pickers on the kit and engine pages: a modulator moves that
@@ -2968,6 +3338,7 @@ const DEMO_BEAT = [
   function knobMod(dest, target) {
     const sameT = (g, t) => g.kind === t.kind && g.a === t.a;
     const o = {
+      dest,
       current() { const t = target(); return mods.findIndex((m) => m.dest === dest && m.targets.some((g) => sameT(g, t))); },
       pick(k) {
         const t = target();
@@ -2988,7 +3359,7 @@ const DEMO_BEAT = [
       return {
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
-        trims: { ...trims }, tempo, swing, mono: pendingMono,
+        trims: { ...trims }, tempo, swing, mono: pendingMono, playMode,
         mods: JSON.parse(JSON.stringify(mods)),
       };
     },
@@ -2997,6 +3368,7 @@ const DEMO_BEAT = [
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing;
+      if (s.playMode) { playMode = s.playMode; playModeMenu.paint(); }
       if (s.mods) s.mods.forEach((m, k) => { mods[k] = JSON.parse(JSON.stringify(m)); });
       renderMods(); loadModEditor(); refreshKnobMods();
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
@@ -3017,6 +3389,7 @@ const DEMO_BEAT = [
       seq.onChange();
     },
     commit() {
+      if (stash) return; // a clip is only being auditioned
       const snap = this.snapshot();
       const top = this.stack[this.index];
       if (top && JSON.stringify(top) === JSON.stringify(snap)) return;
@@ -3028,25 +3401,242 @@ const DEMO_BEAT = [
     undo() { if (this.index > 0) { this.index--; this.restore(this.stack[this.index]); } },
     redo() { if (this.index < this.stack.length - 1) { this.index++; this.restore(this.stack[this.index]); } },
   };
+  /* ==========================================================================
+     Clips: the clip key keeps the loop as it stands (pattern, kit,
+     modulation, tempo, play mode) in a pool on the Clips page, each shown
+     as a thumbnail of its sky. Select one to play it there, load it back
+     into the sequencer, or export it: a zip of WAVs, the mix plus one stem
+     per drum, rendered from one shared set of hits so chokes cut the
+     stems exactly as they cut the mix.
+     Clips are kept for this viewer in the artifact's database when it's
+     available, otherwise in this browser.
+     ========================================================================== */
+  let clips = [], clipSel = null, clipPlaying = null, stash = null, clipCount = 0;
+  const clipStore = { col: null };
+  const clipGrid = $('#clipGrid'), clipNote = $('#clipNote');
+  const clipBody = (c) => ({ kind: 'clip', name: c.name, at: c.at, snap: c.snap, thumb: c.thumb });
+  async function initClipStore() {
+    try {
+      if (window.claude && window.claude.use) {
+        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+        const uid = db && user ? await user.id() : null;
+        if (uid) {
+          clipStore.col = db.collection('data/users/' + uid);
+          const snap = await clipStore.col.get();
+          const got = snap.docs.filter((d) => d.exists && d.data().kind === 'clip').map((d) => Object.assign({ id: d.id }, JSON.parse(JSON.stringify(d.data()))));
+          mergeClips(got);
+          return;
+        }
+      }
+    } catch (_) { clipStore.col = null; }
+    try { mergeClips(JSON.parse(localStorage.getItem('pixy.clips') || '[]')); } catch (_) {}
+  }
+  function mergeClips(list) {
+    for (const c of list) if (!clips.some((d) => d.id === c.id)) clips.push(c);
+    clips.sort((a, b) => a.at - b.at);
+    clipCount = clips.reduce((n, c) => Math.max(n, +(/\d+$/.exec(c.name) || [0])[0]), clipCount);
+    if (currentPage === 'clips') renderClips();
+  }
+  function saveLocalClips() { if (!clipStore.col) try { localStorage.setItem('pixy.clips', JSON.stringify(clips)); } catch (_) {} }
+  async function storeClip(c) {
+    if (clipStore.col) { try { await clipStore.col.doc(c.id).set(clipBody(c)); return; } catch (_) { clipStore.col = null; } }
+    saveLocalClips();
+  }
+  async function unstoreClip(c) {
+    if (clipStore.col) { try { await clipStore.col.doc(c.id).delete(); return; } catch (_) {} }
+    saveLocalClips();
+  }
+
+  /* a clip's thumbnail: its sky and constellation, no moons or labels */
+  function clipThumb() {
+    const S = 180, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    g.drawImage(buildSky(S, S), 0, 0);
+    drawStarChart(g, S, S, S / 360, performance.now(), { thumb: true });
+    return cv.toDataURL('image/jpeg', 0.82);
+  }
+  async function takeClip() {
+    if (!seq.steps.some((s) => s.on)) { flashKey($('#clip'), 'Nothing to clip'); return; }
+    const snap = stash ? stash.snap : history.snapshot();
+    const c = { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: 'Clip ' + (++clipCount), at: Date.now(), snap, thumb: clipThumb() };
+    clips.push(c); clipSel = c.id;
+    flashKey($('#clip'));
+    if (currentPage === 'clips') renderClips();
+    await storeClip(c);
+  }
+  function flashKey(el, msg) {
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 380);
+    if (msg) el.title = msg;
+  }
+  press($('#clip'), takeClip);
+
+  const clipBtns = { play: $('#clipPlay'), load: $('#clipLoad'), exp: $('#clipExport'), del: $('#clipDelete') };
+  const selClip = () => clips.find((c) => c.id === clipSel) || null;
+  function renderClips() {
+    clipGrid.innerHTML = '';
+    for (const c of clips) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'clipcard'; b.setAttribute('role', 'option');
+      b.setAttribute('aria-selected', String(c.id === clipSel));
+      b.classList.toggle('playing', c.id === clipPlaying);
+      const n = c.snap.steps.filter((s) => s.on).length;
+      b.innerHTML = `<img alt="" src="${c.thumb}"><span>${c.name} · ${Math.round(c.snap.tempo)} bpm · ${n} steps</span>`;
+      b.setAttribute('aria-label', `${c.name}, ${Math.round(c.snap.tempo)} bpm, ${n} steps`);
+      b.addEventListener('click', () => {
+        clipSel = c.id;
+        if (clipPlaying && clipPlaying !== c.id) playClip(c); // selecting another while one plays switches to it
+        renderClips();
+      });
+      clipGrid.appendChild(b);
+    }
+    const c = selClip();
+    for (const k of ['play', 'load', 'exp', 'del']) clipBtns[k].disabled = !c;
+    clipBtns.play.setAttribute('aria-pressed', String(!!c && clipPlaying === c.id));
+    if (!clips.length) clipNote.textContent = 'No clips yet. The clip key beside record keeps the loop as it is.';
+    else if (!clipNote.dataset.busy) clipNote.textContent = '';
+  }
+  /* playing a clip here swaps it in for the working pattern; stopping, or
+     leaving this page, puts the working pattern back */
+  function playClip(c) {
+    if (!stash) stash = { snap: history.snapshot(), wasPlaying: playing };
+    history.restore(c.snap);
+    clipPlaying = c.id;
+    if (!playing) setPlaying(true);
+    renderClips();
+  }
+  function stopClip() {
+    if (!stash) return;
+    const st = stash; stash = null; clipPlaying = null;
+    if (!st.wasPlaying) setPlaying(false);
+    history.restore(st.snap);
+    renderClips();
+  }
+  function leaveClips() { stopClip(); }
+  press(clipBtns.play, () => { const c = selClip(); if (!c) return; if (clipPlaying === c.id) stopClip(); else playClip(c); });
+  clipBtns.load.addEventListener('click', () => {
+    const c = selClip(); if (!c) return;
+    if (stash) { const st = stash; stash = null; clipPlaying = null; if (!st.wasPlaying) setPlaying(false); }
+    history.restore(c.snap); history.commit();
+    clipNote.textContent = `${c.name} is in the sequencer.`;
+    renderClips();
+  });
+  clipBtns.del.addEventListener('click', async () => {
+    const c = selClip(); if (!c) return;
+    if (clipPlaying === c.id) stopClip();
+    clips = clips.filter((d) => d !== c); clipSel = null;
+    renderClips();
+    await unstoreClip(c);
+  });
+
+  /* ---------- export ---------- */
+  const EXPORT_BARS = 4, EXPORT_SR = 44100;
+  /* every hit of the clip, planned once: when, what, and which drum's stem
+     it belongs to. A bar is played first and thrown away, so the loop
+     starts with the tails it would have when looping. */
+  function planClip(snap) {
+    const keep = history.snapshot(), live = { beatMarks, playing };
+    history.restore(snap);
+    const hits = [], marks = [];
+    beatMarks = marks; playing = true;
+    let t = 0.02, loopStart = 0, loopEnd = 0;
+    const plan = (i, x, y, at, decMult, glidePts) => {
+      const act = activeMods(i, x, y), envs = act.filter((m) => isEnv(m) && GLIDE_DESTS.has(m.dest));
+      const P = soundAt(i, x, y, at, envs.length ? 0 : null, act), gl = glidePts ? glidePts.slice() : [];
+      if (envs.length) {
+        const span = Math.min(2, Math.max(...envs.map((m) => envAttack(m) + envDecay(m))));
+        for (let k = 1; k <= ENV_POINTS; k++) { const tau = span * k / ENV_POINTS; gl.push([soundAt(i, x, y, at, tau, act), at + tau]); }
+      }
+      hits.push({ t: at, P, decMult, glide: gl.length > 0 || !!glidePts, glides: gl, a: nearestAnchor(x, y) });
+    };
+    for (let n = 0; n < (EXPORT_BARS + 1) * N_STEPS; n++) {
+      if (n === N_STEPS) loopStart = t;
+      const beat = n * 0.25, tp = transportAt(beat, t), dur = 60 / tp.bpm / 4;
+      marks.push({ t, beat, dur });
+      const i = stepAt(playMode, n), sw = swingOffset(n % N_STEPS, tp.sw, dur), at = t + sw, span = dur - sw;
+      const r = seq.trial(i), s = seq.steps[i];
+      if (r.fired && s.auto) {
+        const dx = r.x - s.x, dy = r.y - s.y;
+        const q = (o) => { const p = autoAt(s.auto, o); return { x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }; };
+        const offs = [0, ...s.ratchets.map((rr) => rr.offset)];
+        offs.forEach((o, k) => {
+          const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = at + o * span, p0 = q(o), pts = [];
+          for (let j = 1; j < AUTO_POINTS; j++) { const oo = j / (AUTO_POINTS - 1); if (oo > o && oo <= o2) { const qq = q(oo); pts.push([soundAt(i, qq.x, qq.y, ht, (oo - o) * span), at + oo * span]); } }
+          hits.push({ t: ht, P: soundAt(i, p0.x, p0.y, ht, 0), decMult: r.decMult, glide: true, glides: pts, a: nearestAnchor(p0.x, p0.y) });
+        });
+      } else if (r.fired) {
+        plan(i, r.x, r.y, at, r.decMult);
+        for (const rr of s.ratchets) plan(i, rr.x, rr.y, at + rr.offset * span, r.decMult);
+      }
+      t += dur;
+    }
+    loopEnd = t;
+    const setup = { trims: { ...trims }, mono: pendingMono };
+    beatMarks = live.beatMarks; playing = live.playing;
+    history.restore(keep);
+    return { hits, loopStart, loopEnd, setup };
+  }
+  /* render the plan; stem = an anchor index (only its hits are heard, but
+     every hit is still struck so chokes land where they do in the mix) */
+  async function renderPlan(plan, stem) {
+    const len = Math.ceil((plan.loopEnd + 0.05) * EXPORT_SR);
+    const ctx = new OfflineAudioContext(1, len, EXPORT_SR);
+    const R = Math.random; let seed = 12345; Math.random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    try {
+      const eng = new Engine(ctx, { dry: stem != null });
+      eng.trims = plan.setup.trims; eng.mono = plan.setup.mono;
+      for (const h of plan.hits) {
+        const v = eng.trigger(h.P, h.t, h.decMult, h.glide ? { glide: true } : undefined);
+        if (stem != null && h.a !== stem) v.out.gain.value = 0;
+        if (v.glide) for (const [P, at] of h.glides) v.glide(P, at);
+      }
+    } finally { Math.random = R; }
+    const buf = (await ctx.startRendering()).getChannelData(0);
+    return buf.slice(Math.round(plan.loopStart * EXPORT_SR), Math.round(plan.loopEnd * EXPORT_SR));
+  }
+  const fileSafe = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  async function exportClip(c) {
+    const note = (t) => { clipNote.textContent = t; };
+    clipNote.dataset.busy = '1'; clipBtns.exp.disabled = true;
+    try {
+      note('Rendering the mix…');
+      const plan = planClip(c.snap), base = fileSafe(c.name);
+      const files = [{ name: `${base}/${base}-mix.wav`, data: encodeWav(await renderPlan(plan), EXPORT_SR) }];
+      const stems = [...new Set(plan.hits.map((h) => h.a))].sort((a, b) => a - b);
+      for (const [k, a] of stems.entries()) {
+        note(`Rendering stems… ${k + 1} of ${stems.length}`);
+        files.push({ name: `${base}/stems/${String(a + 1).padStart(2, '0')}-${fileSafe(ANCHORS[a].name)}.wav`, data: encodeWav(await renderPlan(plan, a), EXPORT_SR) });
+      }
+      const zip = new Blob([zipStore(files)], { type: 'application/zip' }), filename = `pixy-${base}.zip`;
+      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (dl) {
+        try { await dl.save({ filename, data: zip }); note(`Saved ${filename}: the mix and ${stems.length} stems, ${EXPORT_BARS} bars.`); }
+        catch (e) { note(e && e.code === 'declined' ? 'Export cancelled.' : 'Couldn’t save the file here.'); }
+      } else {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        note(`Exported ${filename}: the mix and ${stems.length} stems, ${EXPORT_BARS} bars.`);
+      }
+      window.__lastExport = { filename, files: files.map((f) => f.name), bytes: zip.size }; // for tests
+    } catch (e) {
+      note('Export failed: ' + (e && e.message ? e.message : e));
+    } finally {
+      delete clipNote.dataset.busy; clipBtns.exp.disabled = !selClip();
+    }
+  }
+  clipBtns.exp.addEventListener('click', () => { const c = selClip(); if (c) exportClip(c); });
+  initClipStore();
+
   /* ---------- randomizer dice: strength 0..1 (how far right the die was
      dragged) scales how much gets perturbed. ---------- */
-  function jitterAnchorParams(a, strength) {
-    PARAM_SPECS.forEach((spec) => {
-      const span = spec.max - spec.min;
-      a.p[spec.key] = clamp(a.p[spec.key] + (Math.random() * 2 - 1) * strength * span * 0.75, spec.min, spec.max);
-    });
-  }
+  const jitterAnchorParams = (a, strength) => jitterParams(a.p, strength);
   function randomizeSequence(strength) {
-    seq.steps.forEach((s) => {
-      if (!s.on) return;
-      s.x = clamp(s.x + (Math.random() * 2 - 1) * strength * 0.9, 0, 1);
-      s.y = clamp(s.y + (Math.random() * 2 - 1) * strength * 0.9, 0, 1);
-    });
+    randomizeSteps(seq.steps, strength);
     seq.onChange();
     history.commit();
   }
   function randomizeDrum(strength) {
-    jitterAnchorParams(ANCHORS[+engineSelect.value], strength);
+    jitterAnchorParams(ANCHORS[engineIdx], strength);
     loadAnchorIntoEditor(); scheduleFieldRefresh();
     stepsDirty = readoutDirty = laneDirty = true;
     history.commit();
@@ -3067,41 +3657,55 @@ const DEMO_BEAT = [
     seq.onChange();
     history.commit();
   }
+  /* the top-bar die, per page: what a roll does, and its caption (which
+     can change with how far the die is dragged) */
   const DICE = {
-    pad: ['Randomize sequence', randomizeSequence],
-    mod: ['Randomize modulation assignments', randomizeAssignments],
-    lanes: ['Randomize this lane', randomizeLane],
-    kit: ['Randomize whole kit', randomizeKit],
-    engine: ['Randomize this drum', randomizeDrum],
+    pad: [() => 'Randomize sequence', randomizeSequence],
+    mod: [(st) => (prefs.diceAssign ? (st >= 0.5 ? 'Randomize modulators + assignments' : 'Randomize modulators · past half: assignments') : 'Randomize modulator settings'), randomizeModPage],
+    lanes: [() => 'Randomize this lane', randomizeLane],
+    kit: [() => 'Randomize every drum', randomizeKit],
+    engine: [() => 'Randomize this drum', randomizeDrum],
+    clips: null,
   };
-  const dice = createDiceSlider($('#diceField'), DICE.pad[0], (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
-  function updateDice() {
-    const d = DICE[currentPage];
-    dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
-    dice.title = d ? d[0] : '';
+  const dice = createDiceSlider($('#diceField'), 'Randomize sequence', (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
+  function updateDice(st) {
+    const d = DICE[currentPage], cap = d ? d[0](st || 0) : '';
+    dice.setAttribute('aria-label', d ? cap + '. Hold it and tap a control to randomize just that.' : 'Nothing to randomize here');
+    dice.title = cap;
     dice.setAttribute('aria-disabled', String(!d));
-    $('#diceCap').textContent = d ? d[0] : '';
+    $('#diceCap').textContent = dieHold && dieHold.used ? 'Tap what to randomize' : cap;
   }
+  /* hold the die and tap a step: that one step is rolled */
+  tiles.forEach((btn, i) => randTargets.set(btn, (st) => {
+    const s = seq.steps[i];
+    if (!s.on) { s.on = true; s.set = true; s.x = 0.04 + Math.random() * 0.92; s.y = 0.04 + Math.random() * 0.92; }
+    else randomizeSteps([s], st);
+    seq.onChange();
+  }));
 
   const HELP = {
     pad: ['Star chart', [
-      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in playing order.',
+      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in step order.',
       '<b>Tap a step</b> to switch it on or off. Switching one off clears it completely.',
       '<b>Hold the pad, then tap a step</b> to give that step the sound under your finger. <b>Hold steps, then touch the pad</b> and they follow your finger.',
       '<b>Hold a step, then tap another</b> to copy its sound.',
-      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at.',
+      '<b>Trash</b>: hold it and tap steps to delete them, or hold steps and tap it. Tapped on its own, it clears the whole sequence.',
+      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at. Stopping also disarms record.',
       'The <b>ratchet bar</b> beside the sky sets how many hits a recorded step gets (2, 3, 4 or 6). Hold it up while recording with the sky; it springs back to 1/16 when you let go and does nothing on its own.',
       '<b>Stepped / smooth</b> (beside record): smooth lets a ringing hit follow your finger and records the whole gesture. It only affects new touches.',
+      '<b>Clip</b> (the framed stars) keeps the loop as it is, sound and all, on the Clips page.',
+      '<b>Play mode</b> (beside redo): forward, backward, ping-pong or random.',
       '<b>Choke</b> (the cut-off wave) lets only one hit ring at a time. <b>Select</b> (dotted square) latches steps for one-finger editing.',
       'Small <b>moons</b> orbit the stars a modulator moves. Set them up on the modulation page.',
     ]],
     mod: ['Modulation', [
-      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>.',
-      '<b>Hold Step assign</b> and tap stars to send a modulator to those steps. <b>Hold Drum assign</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it.',
-      'Or <b>hold a star</b> and tap Step or Drum assign on any modulator. A quick tap on an assign key latches it until you tap it again.',
-      '<b>Destination</b> is what it moves: position on the map, pitch, decay, or any engine control. The kit and engine pages also have a small picker under each knob.',
-      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: a slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
-      'The <b>die on each modulator</b> rolls its settings. The <b>die in the top bar</b> makes new assignments, aimed at the drums your pattern uses most.',
+      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>. Pick its shape and destination on its row.',
+      '<b>Assign</b>: hold <b>Step</b> and tap stars to send a modulator to those steps; hold <b>Drum</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it. Or hold a star and tap Step or Drum. A quick tap on Step or Drum latches it until you tap it again.',
+      'Tap a row to open its controls. <b>Sync</b> follows the song\'s tempo and rests when stopped; <b>Free</b> runs in Hz on its own clock, always. <b>Bi</b> swings both ways; <b>Uni</b> only moves one way.',
+      '<b>Tempo</b> and <b>swing</b> are destinations too; they\'re global, so there\'s nothing to assign.',
+      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: pitch, filters, levels, position, FM, fold and drive follow its whole shape; decays, attack, sweep and clap take its peak. A slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
+      'The kit and engine pages have a small picker under each knob. A modulated knob gets a ring in its modulator\'s colour; drag the ring to set the depth.',
+      '<b>The die</b> rolls every modulator\'s settings. In Preferences you can let it also make new assignments past halfway.',
     ]],
     lanes: ['Step lanes', [
       '<b>Chance</b>: how often each step plays. <b>X / Y drift</b>: how often, and how far, a step strays from its spot. <b>Decay</b>: each step\'s own decay length, and how often and how far it varies.',
@@ -3109,22 +3713,51 @@ const DEMO_BEAT = [
     ]],
     kit: ['Whole kit', [
       'These shift every drum on the map at once. Double-tap a knob to reset it.',
-      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit.',
+      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit; drag the coloured ring to set how far it moves.',
+      'The die rolls every drum\'s sound. To roll one macro, hold the die and tap its knob.',
     ]],
     engine: ['Drum engine', [
       'Each drum is a point the whole map blends toward, so shaping it reshapes nearby sounds too.',
       'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
-      'The small picker under each knob sends a modulator to that control for this drum.',
+      'The small picker under each knob sends a modulator to that control for this drum. Hold the die and tap a section\'s name to roll just that section.',
+    ]],
+    clips: ['Clips', [
+      'The <b>clip</b> key on the star chart keeps the loop as it is: pattern, sounds, modulation, tempo and play mode.',
+      'Tap a clip to select it. <b>Play</b> hears it here without touching your pattern (leaving the page puts yours back); <b>Load</b> puts it into the sequencer (undo covers it).',
+      '<b>Export</b> renders four bars as a zip of WAVs: the mix, and a stem for each drum. Every hit is struck in every stem, so choke cuts the stems exactly as it cuts the mix. Stems skip the master compressor.',
     ]],
   };
+  /* preferences sheet */
+  const prefSheet = $('#prefs'), prefBtn = $('#prefBtn'), prefAssign = $('#prefAssign');
+  function paintPrefs() {
+    prefAssign.setAttribute('aria-pressed', String(prefs.diceAssign));
+    prefAssign.textContent = prefs.diceAssign ? 'On' : 'Off';
+    prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
+  }
+  function setPrefs(open) {
+    if (open) setHelp(false);
+    prefSheet.hidden = !open; prefBtn.setAttribute('aria-expanded', String(open)); prefBtn.setAttribute('aria-pressed', String(open));
+    if (open) { paintPrefs(); $('#prefsClose').focus(); }
+  }
+  prefBtn.addEventListener('click', () => setPrefs(prefSheet.hidden));
+  $('#prefsClose').addEventListener('click', () => { setPrefs(false); prefBtn.focus(); });
+  prefAssign.addEventListener('click', () => { prefs.diceAssign = !prefs.diceAssign; savePrefs(); paintPrefs(); updateDice(); });
+  prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
+    prefs.theme = b.dataset.v; savePrefs(); paintPrefs();
+    if (prefs.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = prefs.theme;
+  }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !prefSheet.hidden) { setPrefs(false); prefBtn.focus(); } });
+
   const help = $('#help'), helpBtn = $('#helpBtn');
   function fillHelp() {
     const [title, items] = HELP[currentPage];
     $('#helpH').textContent = title;
     $('#helpList').innerHTML = items.map((t) => `<li>${t}</li>`).join('') +
+      '<li><b>Hold the die and tap</b> a knob, a dropdown, a step or a modulator\'s name to roll just that one. Drag the die further for a bigger change.</li>' +
       '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
   }
   function setHelp(open) {
+    if (open && !prefSheet.hidden) setPrefs(false);
     help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
     if (open) { fillHelp(); $('#helpClose').focus(); }
   }
@@ -3168,18 +3801,12 @@ const DEMO_BEAT = [
       const ct = actx.currentTime;
       while (queue.length && queue[0].t <= ct) {
         const q = queue.shift();
-        if (q.i !== cur || !q.ratchet) curT = q.t;
+        if (!q.ratchet) { curT = q.t; curN = q.n; }
         cur = q.i;
-        if (q.fired) spawnBurst(q.x, q.y, q.P, now);
         headDirty = dirty = laneDirty = true;
       }
     }
-    if (actx && liveQueue.length) {
-      const ct = actx.currentTime;
-      while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
-    }
-    stepParticles(dt, now);
-    if (particles.length || playing || mods.some((m) => m.targets.length)) dirty = true;
+    if (playing || mods.some((m) => m.targets.length || m.free)) dirty = true;
     if (actx) envFires = envFires.filter((f) => actx.currentTime - f.t < 2.5);
 
     if (headDirty) { updateHead(); headDirty = false; }
@@ -3195,9 +3822,20 @@ const DEMO_BEAT = [
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
+  /* a page's parts, in the order they assemble; the sky is its own part,
+     shared by the pad and modulation pages */
+  const PARTS = {
+    pad: '.ratchet, .transport > *, .cell, .tools > :not(.gap)',
+    mod: '.modhead, .mod',
+    lanes: '.lanehead > *, .lanetabs .tab, #laneCanvas, .lanereadout',
+    kit: 'h2, #kitKnobs > *',
+    engine: 'h2, .enginepick > *, .module h3, .module .knobgrid > *',
+    clips: '.cliphead > *, .clipcard, .clipnote',
+  };
+  const SKY = { pad: '.padrow .padwrap', mod: '.modsky' };
   function settleSlide() {
     if (!slide) return;
     const { from, anims, timer } = slide;
@@ -3205,44 +3843,70 @@ const DEMO_BEAT = [
     clearTimeout(timer);
     anims.forEach((an) => { try { an.cancel(); } catch (_) {} });
     from.classList.remove('active', 'leaving');
+    if (morph) { morph = null; resizePad(); modField = null; dirty = true; }
   }
   function setPage(page) {
     if (!PAGE_ORDER.includes(page) || page === currentPage) return;
     settleSlide();
+    closeMenu();
     const from = document.querySelector(`.page[data-page="${currentPage}"]`);
     const to = document.querySelector(`.page[data-page="${page}"]`);
-    const dir = PAGE_ORDER.indexOf(page) > PAGE_ORDER.indexOf(currentPage) ? 1 : -1;
+    const fromSky = SKY[currentPage] && from.querySelector(SKY[currentPage]), r0 = fromSky && fromSky.getBoundingClientRect();
+    const prev = currentPage;
     currentPage = page;
     updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
+    if (prev === 'clips') leaveClips();
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
     // force a resize+redraw now that the page is actually visible.
     if (page === 'pad') { resizePad(); dirty = true; }
     if (page === 'lanes') { resizeLaneCanvas(); laneDirty = true; }
-    if (page === 'mod') { modField = null; renderMods(); loadModEditor(); dirty = true; }
+    if (page === 'mod') { modField = null; renderMods(); dirty = true; }
+    if (page === 'clips') renderClips();
     if (!help.hidden) fillHelp();
     if (reduceMotion || !to.animate) { from.classList.remove('active'); return; }
-    // the old page leaves as the new one arrives, side by side like a strip;
-    // no fill mode, so once the animations end (or are cancelled) both pages
-    // are back to an untransformed resting state whatever happened
+    /* the old page comes apart and the new one assembles: each part flies
+       in from beyond its own side of the page, a few ms after the last.
+       Between the pad and modulation pages the sky stays and resizes. */
     from.classList.add('leaving');
-    const opts = { duration: 380, easing: 'cubic-bezier(.65, 0, .35, 1)' };
-    const off = (sign) => `translateX(calc(${sign} * (100% + 24px)))`;
-    const anims = [
-      from.animate([{ transform: 'translateX(0)' }, { transform: off(-dir) }], opts),
-      to.animate([{ transform: off(dir) }, { transform: 'translateX(0)' }], opts),
-    ];
-    const timer = setTimeout(settleSlide, opts.duration + 200); // in case finish never fires
+    const anims = [], pr = to.getBoundingClientRect(), cx = pr.left + pr.width / 2, cy = pr.top + Math.min(pr.height, window.innerHeight) / 2;
+    const toSky = SKY[page] && to.querySelector(SKY[page]);
+    const out = (el) => { const r = el.getBoundingClientRect(), dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy, n = Math.hypot(dx, dy) || 1; return [dx / n, dy / n]; };
+    const fromParts = [...from.querySelectorAll(PARTS[prev])];
+    if (fromSky) fromParts.push(fromSky);
+    fromParts.forEach((el) => {
+      if (el === fromSky && toSky) { el.style.visibility = 'hidden'; anims.push({ cancel() { el.style.visibility = ''; } }); return; }
+      const [ux, uy] = out(el);
+      anims.push(el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translate(${ux * 26}px, ${uy * 26}px) scale(.96)` }], { duration: 170, easing: 'cubic-bezier(.5, 0, .9, .4)', fill: 'forwards' }));
+    });
+    const parts = [...to.querySelectorAll(PARTS[page])];
+    if (toSky && !fromSky) parts.unshift(toSky);
+    parts.forEach((el, n) => {
+      const [ux, uy] = out(el), d = 34 + (n % 3) * 10;
+      anims.push(el.animate([{ opacity: 0, transform: `translate(${ux * d}px, ${uy * d + 10}px) scale(.94)` }, { opacity: 1, transform: 'none' }],
+        { duration: 420, delay: 70 + Math.min(n, 16) * 16, easing: 'cubic-bezier(.2, .85, .25, 1.06)', fill: 'backwards' }));
+    });
+    let last = 70 + Math.min(parts.length - 1, 16) * 16 + 420;
+    if (toSky && fromSky) {
+      // the sky resizes from where it was to where it lands on this page
+      const r1 = toSky.getBoundingClientRect();
+      morph = true;
+      anims.push(toSky.animate([
+        { transform: `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px)`, width: r0.width + 'px', height: r0.height + 'px' },
+        { transform: 'none', width: r1.width + 'px', height: r1.height + 'px' },
+      ], { duration: 460, easing: 'cubic-bezier(.65, 0, .35, 1)' }));
+      last = Math.max(last, 460);
+    }
+    const timer = setTimeout(settleSlide, last + 60);
     slide = { from, anims, timer };
-    anims[1].onfinish = () => { if (slide && slide.anims === anims) settleSlide(); };
   }
   function initPages() {
     document.querySelectorAll('.navbtn').forEach((btn) => {
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .shapemenu, button, select, input, .tab';
+    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .menu, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

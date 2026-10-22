@@ -196,3 +196,106 @@ test('targets: steps, drums and kit; toggling adds then removes', () => {
   assert.equal(C.modCovers(m, 11, 2), true);
   assert.equal(C.nearestAnchor(0.12, 0.10), C.ANCHORS.findIndex((a) => a.name === 'kick'));
 });
+
+const seeded = (seed) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+test('random LFO: smooth 0 holds steps, smooth 1 eases between them', () => {
+  const held = [0.01, 0.1, 0.2].map((p) => C.lfoAt('random', p, 0).x);
+  near(held[0], held[1]); near(held[1], held[2]);
+  const a = C.lfoAt('random', 0, 1).x, b = C.lfoAt('random', 0.25, 1).x, mid = C.lfoAt('random', 0.125, 1).x;
+  near(mid, (a + b) / 2, 1e-6);
+});
+
+test('free LFOs run in Hz on their own clock; unipolar stays 0..1', () => {
+  const m = Object.assign(C.freshMod(), { free: true, hz: 0, shape: 'saw' }); // 0.05 Hz
+  near(C.modHz(m), 0.05);
+  near(C.modCycles(m, 999, 10), 0.5);
+  m.uni = true;
+  for (let t = 0; t < 40; t += 0.7) { const v = C.modLfo(m, 0, t); assert.ok(v >= 0 && v <= 1); }
+});
+
+test('transport destinations are global and stay in range', () => {
+  const m = Object.assign(C.freshMod(), { dest: 'bpm', targets: [{ kind: 'kit' }] });
+  assert.equal(C.modCovers(m, 0, 0), false);
+  near(C.modTempo(120, 1), 180); near(C.modTempo(120, -1), 80);
+  assert.equal(C.modSwing(50, -1), 50); assert.equal(C.modSwing(70, 1), 75);
+});
+
+test('foldMix: no fold is dry, full fold is all wet', () => {
+  const z = C.foldMix(0), f = C.foldMix(1);
+  near(z.dry, 1); near(z.wet, 0); near(f.dry, 0); near(f.wet, 1);
+});
+
+test('randomizeSteps fills an empty pattern with 5..16 steps, never at the edges', () => {
+  for (const st of [0.01, 0.5, 1]) for (let seed = 1; seed < 30; seed++) {
+    const steps = Array.from({ length: 16 }, C.freshStep);
+    C.randomizeSteps(steps, st, seeded(seed));
+    const on = steps.filter((s) => s.on);
+    assert.ok(on.length >= 5 && on.length <= 16, String(on.length));
+    for (const s of on) assert.ok(s.x > 0.03 && s.x < 0.97 && s.y > 0.03 && s.y < 0.97);
+    assert.ok(on.filter((s) => s.ratchets.length).length <= C.MAX_NEW_RATCHETS);
+  }
+  const lo = Array.from({ length: 16 }, C.freshStep); C.randomizeSteps(lo, 0, seeded(3));
+  assert.equal(lo.filter((s) => s.on).length, 5);
+  const hi = Array.from({ length: 16 }, C.freshStep); C.randomizeSteps(hi, 1, seeded(3));
+  assert.equal(hi.filter((s) => s.on).length, 16);
+});
+
+test('randomizeSteps: low strength keeps the steps, high adds/removes and changes ratchets', () => {
+  const make = () => { const st = Array.from({ length: 16 }, C.freshStep); for (const i of [0, 4, 8, 12]) Object.assign(st[i], { on: true, set: true, x: 0.5, y: 0.5 }); st[4].ratchets = C.evenRatchets(0.5, 0.5, 3); return st; };
+  for (let seed = 1; seed < 20; seed++) {
+    const st = C.randomizeSteps(make(), 0.3, seeded(seed));
+    assert.deepEqual(st.map((s) => s.on), make().map((s) => s.on));
+    assert.equal(st[4].ratchets.length, 2);
+    for (const s of st) assert.ok(s.x >= 0 && s.x <= 1);
+  }
+  let changedOn = 0, changedRat = 0;
+  for (let seed = 1; seed < 40; seed++) {
+    const st = C.randomizeSteps(make(), 1, seeded(seed)), base = make();
+    if (st.some((s, i) => s.on !== base[i].on)) changedOn++;
+    if (st.some((s, i) => s.ratchets.length !== base[i].ratchets.length)) changedRat++;
+    assert.ok(st.some((s) => s.on));
+    const newR = st.filter((s, i) => s.ratchets.length && !base[i].ratchets.length).length;
+    assert.ok(newR <= C.MAX_NEW_RATCHETS);
+  }
+  assert.ok(changedOn > 30 && changedRat > 10, `${changedOn} ${changedRat}`);
+});
+
+test('jitterParams keeps drive and fold mostly low', () => {
+  let hi = 0, n = 0;
+  for (let seed = 1; seed < 200; seed++) {
+    const p = Object.assign({}, C.ANCHORS[0].p); C.jitterParams(p, 1, seeded(seed));
+    for (const sp of C.PARAM_SPECS) assert.ok(p[sp.key] >= sp.min && p[sp.key] <= sp.max, sp.key);
+    n++; if (p.fold > 0.5) hi++;
+  }
+  assert.ok(hi / n < 0.15, String(hi / n));
+});
+
+test('play modes visit every step', () => {
+  for (const mode of ['fwd', 'back', 'pingpong']) {
+    const seen = new Set(); for (let n = 0; n < 40; n++) seen.add(C.stepAt(mode, n));
+    assert.equal(seen.size, 16, mode);
+  }
+  assert.deepEqual([0, 1, 14, 15, 16, 29, 30].map((n) => C.stepAt('pingpong', n)), [0, 1, 14, 15, 14, 1, 0]);
+  assert.equal(C.stepAt('back', 0), 15);
+});
+
+test('crc32, wav header and stored zip', () => {
+  near(C.crc32(new TextEncoder().encode('123456789')), 0xCBF43926);
+  const w = C.encodeWav(new Float32Array([0, 1, -1]), 44100), v = new DataView(w.buffer);
+  assert.equal(String.fromCharCode(...w.slice(0, 4)), 'RIFF');
+  assert.equal(v.getUint32(24, true), 44100); assert.equal(v.getInt16(46, true), 32767); assert.equal(v.getInt16(48, true), -32767);
+  const z = C.zipStore([{ name: 'a/b.wav', data: w }, { name: 'c.txt', data: new Uint8Array([104, 105]) }]), zv = new DataView(z.buffer);
+  assert.equal(zv.getUint32(0, true), 0x04034b50);
+  assert.equal(zv.getUint32(z.length - 22, true), 0x06054b50);
+  assert.equal(zv.getUint16(z.length - 12, true), 2);
+});
+
+test('erase deletes a step; held ones stay consumed so release does not revive them', () => {
+  const s = new C.Sequence();
+  s.steps[3].on = true; s.stepDown(3);
+  s.erase(3, true);
+  assert.equal(s.steps[3].on, false);
+  s.stepUp(3);
+  assert.equal(s.steps[3].on, false);
+});

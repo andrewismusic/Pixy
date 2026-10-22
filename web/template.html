@@ -156,12 +156,15 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .knob-label { font: 600 10px/1.15 var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; text-align: center; max-width: 100%; }
 .knob.active .knob-cap, .knob:focus-visible .knob-cap { box-shadow: 0 0 0 2px var(--hold), 0 3px 0 var(--shadow); }
 .knob.active .knob-value, .knob:focus-visible .knob-value { background: var(--hold); color: var(--on-ink); }
-/* a knob's modulation source: a tiny native picker under its label */
+/* a knob's modulation source: a tiny picker under its label, in the
+   modulator's own colour once set; the ring round the dial is its depth */
 .modsel {
-  appearance: none; -webkit-appearance: none; border: 1px solid var(--edge); border-radius: 5px; background: var(--well);
-  font: 600 9px/1 var(--font-mono); color: var(--muted); padding: 2px 4px; text-align: center; text-align-last: center; cursor: pointer; max-width: 46px;
+  border: 1px solid var(--edge); border-radius: 5px; background: var(--well); min-width: 30px; height: 18px; padding: 0 5px;
+  font: 600 9px/1 var(--font-mono); color: var(--muted); cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.modsel.set { color: var(--on-ink); background: var(--hold); border-color: transparent; }
+.modsel.set { color: #0E1320; border-color: transparent; }
+.modsel .dot { display: none; }
+.knob-dial .mring { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .95; }
 
 /* ---------- dice: a track with the die as a key-sized face; drag right
    for a stronger roll of whichever page is showing ---------- */
@@ -230,51 +233,59 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
 .tools .gap { flex: 1 1 8px; }
 
+/* ---------- dropdowns: an app key that opens a list (ui.js createMenu) ---------- */
+.dd {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 34px; padding: 0 22px 0 8px; border-radius: 9px;
+  font: 600 11px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; text-align: left; white-space: nowrap;
+}
+.dd > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dd::after { content: ''; position: absolute; right: 8px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); opacity: .7; }
+.dd svg { flex: none; }
+.dd[aria-expanded="true"] { border-color: var(--hold); }
+.menu {
+  position: fixed; z-index: 60; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.55);
+}
+.menu[hidden] { display: none; }
+.menu.two { grid-template-columns: 1fr 1fr; }
+.menu button {
+  display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
+  font: 600 11.5px/1.15 var(--font-ui); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) { .menu button:hover { background: var(--well); } }
+.menu button:focus-visible { background: var(--well); outline: none; }
+.menu button[aria-selected="true"] { background: var(--hold); color: var(--on-ink); }
+.menu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 3px; }
+.menu.tiny button { min-height: 32px; font-size: 11px; }
+.dot { flex: none; width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+/* rolled by holding the die and tapping */
+@keyframes rolled { 0% { transform: rotate(0); } 30% { transform: rotate(-8deg) scale(1.06); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
+.rolled { animation: rolled .35s ease-out; }
+
 /* ---------- modulation page ---------- */
 .modsky { aspect-ratio: 16 / 11; }
-.mods { display: grid; gap: 6px; margin-top: 14px; }
-.mod {
-  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center;
-  padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer;
-}
+.mods { display: grid; gap: 6px; margin-top: 12px; }
+.modhead, .mod { display: grid; grid-template-columns: 40px minmax(0, 1fr) 46px 46px; gap: 6px; align-items: center; }
+.modhead { padding: 0 7px 0 6px; margin-bottom: -2px; }
+.modhead span:last-child { grid-column: 3 / 5; text-align: center; font: 600 9.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.mod { padding: 5px 6px 5px 5px; border-radius: 11px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer; }
 .mod.sel { border-color: var(--hold); box-shadow: 0 0 0 1px var(--hold); }
 .mod canvas { width: 40px; height: 40px; display: block; border-radius: 8px; background: var(--sky); }
-.mod .nm { font: 600 11px/1.15 var(--font-head); letter-spacing: .16em; display: flex; align-items: center; gap: 6px; }
+.mod .mid { display: grid; gap: 4px; min-width: 0; }
+.mod .nm { justify-self: start; display: flex; align-items: center; gap: 6px; padding: 1px 4px 1px 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: 600 11px/1.1 var(--font-head); letter-spacing: .16em; -webkit-tap-highlight-color: transparent; }
 .mod .nm i { width: 8px; height: 8px; border-radius: 50%; background: var(--mc); }
-.mod .sm { font: 500 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.assign { font: 700 9.5px/1.05 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 48px; height: 38px; padding: 0 2px; border-radius: 9px; touch-action: none; }
-.minidie { width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 0; background: #F7F9FC; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 7px; cursor: pointer; box-shadow: 0 3px 0 var(--shadow); transition: transform .07s, box-shadow .07s; }
-.minidie:active { transform: translateY(2px) rotate(20deg); box-shadow: 0 1px 0 var(--shadow); }
-.minidie i { width: 4px; height: 4px; border-radius: 50%; background: #0E1320; place-self: center; }
-.minidie i:nth-child(1) { grid-area: 1 / 1; } .minidie i:nth-child(2) { grid-area: 1 / 3; } .minidie i:nth-child(3) { grid-area: 2 / 2; }
-.minidie i:nth-child(4) { grid-area: 3 / 1; } .minidie i:nth-child(5) { grid-area: 3 / 3; }
-.minidie:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
-.modedit { margin-top: 16px; display: grid; gap: 12px; }
-.pickrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-.pick { display: grid; gap: 5px; min-width: 0; }
-.pick > span { font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.pickbtn, .picksel {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 0 30px 0 10px; text-align: left;
-  font: 600 13px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; appearance: none; -webkit-appearance: none;
-  background-image: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
-}
-.pickwrap { position: relative; display: flex; }
-.pickwrap::after { content: '\25BE'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 13px; color: var(--ink); }
-.pickbtn svg { flex: none; }
-.shapemenu {
-  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(300px, 86vw); max-height: 320px; overflow-y: auto;
-  background: var(--panel); border: 1.5px solid var(--edge); border-radius: 12px; padding: 6px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.5);
-  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
-}
-.shapemenu[hidden] { display: none; }
-.shapemenu button {
-  display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--ink);
-  font: 600 11.5px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-align: left;
-}
-.shapemenu button:hover, .shapemenu button:focus-visible { background: var(--well); outline: none; }
-.shapemenu button[aria-checked="true"] { background: var(--hold); color: var(--on-ink); }
-.shapemenu .grouplabel { grid-column: 1 / -1; font: 600 9.5px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 2px; }
-.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
+.mod .dds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px; }
+.mod .dd { height: 28px; font-size: 10px; padding: 0 18px 0 6px; gap: 4px; border-radius: 8px; box-shadow: 0 3px 0 var(--shadow); }
+.mod .dd::after { right: 7px; }
+.assign { font: 700 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; width: 46px; height: 40px; padding: 0 2px; border-radius: 9px; touch-action: none; }
+.assign:disabled { opacity: .3; cursor: default; }
+.modedit { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 2px 4px; margin-top: 2px; border-top: 1px solid var(--edge); cursor: default; }
+.modkeys { display: grid; gap: 8px; }
+.mini { font: 700 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; min-width: 52px; height: 30px; padding: 0 6px; border-radius: 8px; }
+.mini b { font: 700 13px/1 var(--font-mono); }
+.mini[hidden] { display: none; }
+.modedit .knobgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 2px; margin-top: 0; --accent: var(--mc); }
+.modedit .knob { --kd: 44px; }
 
 /* ---------- lanes ---------- */
 .lanehead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; }
@@ -289,22 +300,47 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 .lanereadout { margin: 8px 0 0; min-height: 1.3em; font: 500 12px/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- engine ---------- */
-.enginepick { display: flex; gap: 8px; margin: 12px 0 2px; }
-.enginepick select {
-  flex: 1 1 auto; min-width: 0; font: 600 15px/1 var(--font-head); text-transform: uppercase; letter-spacing: .14em;
-  padding: 0 12px; min-height: 44px; appearance: none; -webkit-appearance: none;
-}
-.selwrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
-.selwrap select { width: 100%; }
-.selwrap::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 14px; color: var(--ink); }
-.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 22px; margin-top: 16px; }
+.enginepick { display: flex; gap: 8px; margin: 10px 0 2px; align-items: center; }
+.dd.drum { width: auto; min-width: 150px; max-width: 60%; height: 36px; font: 600 12.5px/1 var(--font-head); letter-spacing: .12em; }
+.modules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 14px; margin-top: 14px; }
+.module[data-mod="body"], .module[data-mod="res"] { grid-column: 1 / -1; }
 .module { padding-top: 10px; border-top: 1px solid var(--edge); }
 .module h3 { display: flex; align-items: center; gap: 8px; }
 .module h3::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
-.module .knobgrid { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px 2px; margin-top: 8px; }
+.module .knobgrid { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 8px 0; margin-top: 8px; }
+.module h3 { cursor: default; }
 .module .knob { --kd: 42px; }
 .module .knob-label { font-size: 9px; }
 .module .knob-value { font-size: 10px; }
+
+.dd.mode { height: 42px; border-radius: 10px; font-size: 10.5px; padding: 0 22px 0 9px; max-width: 128px; }
+.step.doomed { box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--rec); transform: translateY(3px); }
+#clip { width: 48px; height: 54px; border-radius: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+#clip.flash { background: var(--hold); color: var(--on-ink); }
+
+/* ---------- clips ---------- */
+.cliphead { display: flex; align-items: center; gap: 8px; }
+.cliphead h2 { margin-right: auto; }
+#clipPlay { width: 42px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+#clipPlay .ic-stop { display: none; }
+#clipPlay[aria-pressed="true"] .ic-play { display: none; }
+#clipPlay[aria-pressed="true"] .ic-stop { display: inline-block; }
+.cap:disabled { opacity: .35; cursor: default; }
+.clipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; margin-top: 14px; }
+.clipcard { display: grid; gap: 6px; padding: 5px; border-radius: 12px; border: 1.5px solid var(--edge); background: var(--well); cursor: pointer; text-align: left; color: var(--ink); font: inherit; -webkit-tap-highlight-color: transparent; }
+.clipcard img { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; background: var(--sky); }
+.clipcard span { font: 600 10.5px/1.2 var(--font-mono); color: var(--muted); padding: 0 3px 2px; }
+.clipcard[aria-selected="true"] { border-color: var(--hold); box-shadow: 0 0 0 2px var(--hold); }
+.clipcard.playing span { color: var(--now); }
+.clipnote { margin: 14px 0 0; color: var(--muted); font-size: 13px; min-height: 1.3em; }
+
+/* ---------- preferences ---------- */
+#prefBtn { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.prefrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--edge); }
+.prefrow > span { display: grid; gap: 2px; font-weight: 600; }
+.prefrow small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.seg { display: flex; gap: 6px; }
+#prefAssign { min-width: 58px; }
 
 /* ---------- help sheet: what's on the page you're looking at ---------- */
 .help {
@@ -325,13 +361,13 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
   .pagenav { gap: 4px; }
   .padrow { grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; }
   .transport { gap: 6px; }
-  .transport .knob { --kd: 42px; }
   #play, #record, #smooth { width: 48px; height: 48px; }
-  .mod { grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 6px; }
-  .assign { width: 44px; }
+  #play, #record, #smooth, #clip { width: 46px; height: 48px; }
+  .transport .knob { --kd: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .step, .cap, .die, .minidie, .rthumb { transition: none; }
+  .step, .cap, .die, .rthumb { transition: none; }
+  .rolled { animation: none; }
   #record[aria-pressed="true"] svg { animation: none; }
 }
 </style>
@@ -357,11 +393,17 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <button class="navbtn cap" type="button" data-page="engine" aria-pressed="false" aria-label="Drum engine" title="Drum engine">
           <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><ellipse cx="12" cy="7" rx="8" ry="3.4"/><path d="M4 7v9.5C4 18.5 7.6 20 12 20s8-1.5 8-3.5V7"/><path d="M4.9 4.4L2 2.3M19.1 4.4L22 2.3"/></svg>
         </button>
+        <button class="navbtn cap" type="button" data-page="clips" aria-pressed="false" aria-label="Clips" title="Clips">
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v12" opacity=".55"/><circle cx="8" cy="15" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
       </nav>
     </div>
     <div class="subrow">
       <button id="helpBtn" class="cap" type="button" aria-label="Help for this page" aria-expanded="false" aria-controls="help" title="Help for this page">
         <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button id="prefBtn" class="cap" type="button" aria-label="Preferences" aria-expanded="false" aria-controls="prefs" title="Preferences">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
       </button>
       <span class="dicecap" id="diceCap" aria-hidden="true">Randomize sequence</span>
       <div class="dicefield" id="diceField"></div>
@@ -389,6 +431,9 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
           </button>
           <button id="smooth" class="cap icon" type="button"></button>
+          <button id="clip" class="cap icon" type="button" aria-label="Clip: keep this loop in Clips" title="Clip: keep this loop in Clips">
+            <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="10" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="9.5" r="1.8" fill="currentColor" stroke="none"/><path d="M10 14l4.5-4.5" opacity=".5"/></svg>
+          </button>
           <div class="knobslot" id="tempoField"></div>
           <div class="knobslot" id="swingField"></div>
         </div>
@@ -402,6 +447,7 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
           <button id="redo" class="btn cap icon" type="button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="transform:scaleX(-1)"><path d="M8 7L3 12l5 5M3 12h11a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          <button id="playMode" class="dd cap mode" type="button"></button>
           <span class="gap"></span>
           <button id="mono" class="btn cap icon" type="button" aria-pressed="false" aria-label="Choke" title="Choke: a new hit cuts off whatever is still ringing">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c1.2-6 2.4-6 3.6 0s2.4 6 3.6 0 2.2-4.4 3.3 0"/><path d="M15.5 4.5v15" stroke-width="2.4"/><path d="M18.5 12h3.5" opacity=".45"/></svg>
@@ -421,20 +467,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
         <canvas id="modSky" tabindex="0" role="application" aria-label="Star chart for assigning modulation. Hold Step or Drum on a modulator and tap stars, or hold a star and tap Step or Drum."></canvas>
       </div>
       <div class="mods" id="mods"></div>
-      <div class="modedit" id="modEdit">
-        <div class="pickrow">
-          <div class="pick"><span id="shapeLbl">Shape</span>
-            <div class="pickwrap">
-              <button id="shapeBtn" class="pickbtn cap" type="button" aria-haspopup="menu" aria-expanded="false" aria-labelledby="shapeLbl shapeBtn"></button>
-              <div class="shapemenu" id="shapeMenu" role="menu" hidden></div>
-            </div>
-          </div>
-          <div class="pick"><span id="destLbl">Destination</span>
-            <div class="pickwrap"><select id="destSel" class="picksel cap" aria-labelledby="destLbl"></select></div>
-          </div>
-        </div>
-        <div class="knobgrid" id="modKnobs" style="--accent: var(--mc)"></div>
-      </div>
     </section>
 
     <section class="page" data-page="lanes">
@@ -460,13 +492,37 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
     <section class="page" data-page="engine" aria-labelledby="engineH">
       <h2 id="engineH">Drum engine</h2>
       <div class="enginepick">
-        <div class="selwrap"><select id="engineSelect" class="cap" aria-label="Drum to edit"></select></div>
+        <button id="engineSelect" class="dd cap drum" type="button"></button>
         <button id="engineReset" class="btn cap small" type="button">Reset</button>
       </div>
       <div id="engineParams" class="modules"></div>
     </section>
+    <section class="page" data-page="clips" aria-labelledby="clipsH">
+      <div class="cliphead">
+        <h2 id="clipsH">Clips</h2>
+        <button id="clipPlay" class="cap icon" type="button" aria-pressed="false" aria-label="Play this clip" title="Play this clip" disabled>
+          <svg class="ic-play" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>
+          <svg class="ic-stop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
+        </button>
+        <button id="clipLoad" class="btn cap small" type="button" disabled>Load</button>
+        <button id="clipExport" class="btn cap small" type="button" disabled>Export</button>
+        <button id="clipDelete" class="btn cap icon small" type="button" aria-label="Delete this clip" title="Delete this clip" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 7V4.5h4V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/></svg>
+        </button>
+      </div>
+      <div class="clipgrid" id="clipGrid" role="listbox" aria-label="Clips"></div>
+      <p class="clipnote" id="clipNote"></p>
+    </section>
   </div>
 </main>
+
+<div class="help" id="prefs" role="dialog" aria-modal="false" aria-labelledby="prefsH" hidden>
+  <div class="inner">
+    <div class="head"><h2 id="prefsH">Preferences</h2><button id="prefsClose" class="btn cap small" type="button">Close</button></div>
+    <div class="prefrow"><span>Dice can change modulation assignments<small>Past halfway on the modulation page</small></span><button id="prefAssign" class="btn cap small" type="button" aria-pressed="false">Off</button></div>
+    <div class="prefrow"><span>Theme</span><div class="seg" id="prefTheme" role="group" aria-label="Theme"><button class="btn cap small" type="button" data-v="auto">Auto</button><button class="btn cap small" type="button" data-v="light">Light</button><button class="btn cap small" type="button" data-v="dark">Dark</button></div></div>
+  </div>
+</div>
 
 <div class="help" id="help" role="dialog" aria-modal="false" aria-labelledby="helpH" hidden>
   <div class="inner">

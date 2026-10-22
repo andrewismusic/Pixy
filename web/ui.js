@@ -39,15 +39,23 @@
 
   /* knob geometry (see createKnob) */
   const KNOB_SWEEP = 270, KNOB_R = 22, KNOB_C = 26;
-  function arcPath(a0, a1) {
+  function arcPath(a0, a1, R = KNOB_R) {
     // angles in degrees, 0 = 12 o'clock, clockwise
-    const pt = (a) => [KNOB_C + KNOB_R * Math.sin(a * Math.PI / 180), KNOB_C - KNOB_R * Math.cos(a * Math.PI / 180)];
+    const pt = (a) => [KNOB_C + R * Math.sin(a * Math.PI / 180), KNOB_C - R * Math.cos(a * Math.PI / 180)];
     if (Math.abs(a1 - a0) < 0.5) a1 = a0 + 0.5;
     const [x0, y0] = pt(Math.min(a0, a1)), [x1, y1] = pt(Math.max(a0, a1));
-    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${KNOB_R} ${KNOB_R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${R} ${R} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   }
   /* ---------- state ---------- */
   let actx = null, engine = null;
+  let trash = null; // the trash key while it's held: {id, used, steps}
+  const randTargets = new WeakMap(); // element -> roll(strength), for hold-the-die-and-tap
+  let morph = null; // the sky resizing between the pad and modulation pages
+  /* preferences, kept in this browser */
+  const prefs = { diceAssign: false, theme: 'auto' };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem('pixy.prefs') || '{}')); } catch (_) {}
+  const savePrefs = () => { try { localStorage.setItem('pixy.prefs', JSON.stringify(prefs)); } catch (_) {} };
+  if (prefs.theme !== 'auto') document.documentElement.dataset.theme = prefs.theme;
   let dpr = 1;
   let dirty = true, stepsDirty = true, readoutDirty = true, headDirty = false, laneDirty = true;
   let tempo = 118, swing = 50; // swing in percent: 50 straight .. 75
@@ -110,9 +118,9 @@
      soundAt: the parameters for a hit at (x, y) on step i (-1 = a live
      touch), struck at time t, envT seconds into the hit (null = the strike
      itself, envelopes at zero). LFOs are read once at the strike; an
-     envelope moves pitch, filters, levels and position through the hit
-     (the voice glides), and anything fixed at the strike (decays, drive,
-     fold...) takes the envelope's peak. */
+     envelope moves pitch, filters, levels, position, FM, fold and drive
+     through the hit (the voice glides), and anything fixed at the strike
+     (decays, attack, sweep, clap) takes the envelope's peak. */
   const mods = Array.from({ length: MOD_COUNT }, freshMod);
   // a starting set: two at work on the demo beat, the rest ready to assign
   const anchorNamed = (n) => ANCHORS.findIndex((a) => a.name === n);
@@ -123,9 +131,21 @@
   Object.assign(mods[4], { shape: 'random', rate: 5, depth: 0.3, dest: 'fold' });
   Object.assign(mods[5], { shape: 'figure8', rate: 1, depth: 0.25, dest: 'y' });
   const knobMods = [], knobRefreshers = []; // knob source pickers (kit and engine pages)
-  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'hp', 'lp', 'q', 'lvl']);
-  let playT0 = 0;
-  const beatsAt = (t) => (playing ? t - playT0 : t) / (60 / tempo);
+  // what an envelope moves through the whole hit; the rest (decays, attack,
+  // sweep, clap) are fixed when the voice is struck, so they take its peak
+  const GLIDE_DESTS = new Set(['x', 'y', 'pitch', 'f', 'fm', 'fmRatio', 'tone', 'noise', 'metal', 'mPitch', 'res', 'resF', 'resShape', 'hp', 'lp', 'q', 'lvl', 'drive', 'fold']);
+  /* the song clock. Synced LFOs read beats from the steps actually
+     scheduled (each mark is one step: its time, its beat, its length), so
+     a modulated tempo keeps them in step; stopped, they rest at beat 0.
+     Free LFOs read seconds of the audio clock and never stop. */
+  let beatMarks = [];
+  function beatsAt(t) {
+    if (!playing || !beatMarks.length) return 0;
+    let m = beatMarks[0];
+    for (let k = beatMarks.length - 1; k >= 0; k--) if (beatMarks[k].t <= t) { m = beatMarks[k]; break; }
+    return m.beat + (t - m.t) / m.dur * 0.25;
+  }
+  const clockNow = () => (actx ? actx.currentTime : performance.now() / 1000);
   function activeMods(i, x, y) {
     const a = nearestAnchor(x, y), out = [];
     for (const m of mods) if (m.targets.length && modCovers(m, i, a)) out.push(m);
@@ -138,7 +158,7 @@
     const beats = beatsAt(t);
     const amt = (m) => isEnv(m)
       ? m.depth * (GLIDE_DESTS.has(m.dest) ? (envT == null ? 0 : envAt(m, envT)) : 1)
-      : m.depth * modLfo(m, beats);
+      : m.depth * modLfo(m, beats, t);
     let pos = { x, y };
     for (const m of act) pos = modulatePos(pos, m.dest, amt(m));
     let P = paramsAt(pos.x, pos.y);
@@ -190,11 +210,11 @@
   }
 
   /* the 16th-note grid the live clock locks to: while playing, phase-locked
-     to the running scheduler (nextBase/stepIdx); otherwise free-running from
+     to the running scheduler (nextBase/runPos); otherwise free-running from
      time zero, since there's no transport to lock to. */
   function gridAnchor() {
     const dur = 60 / tempo / 4;
-    return { stepDur: dur, barStart: playing ? nextBase - stepIdx * dur : 0 };
+    return { stepDur: playing ? curDur : dur, barStart: playing ? nextBase - (runPos % N_STEPS) * curDur : 0 };
   }
 
   /* stopped: holding the pad retriggers at the bar's rate, free-running */
@@ -202,7 +222,6 @@
   function triggerLive() {
     const { x, y } = seq.cursor;
     const P = playLive(x, y);
-    spawnBurst(x, y, P, performance.now());
   }
   function startPadHold() {
     stopPadHold();
@@ -218,7 +237,7 @@
      span). They're scheduled only ~35 ms ahead, so lifting a finger stops
      them promptly and bar moves are heard at once. */
   const LIVE_AHEAD = 0.035;
-  let liveNext = 0, liveQueue = [];
+  let liveNext = 0;
   function nextGridHit(T) {
     const { barStart, stepDur } = gridAnchor();
     const n = ratchetHits(ratchetN);
@@ -240,7 +259,7 @@
     while (liveNext < now + LIVE_AHEAD) {
       if (liveNext > now - 0.03) {
         const t = Math.max(liveNext, now), { x, y } = seq.cursor;
-        liveQueue.push({ t, x, y, P: playLive(x, y, t) });
+        playLive(x, y, t);
       }
       liveNext = nextGridHit(liveNext + 1e-4);
     }
@@ -301,24 +320,45 @@
         liveNext = 0;
         if (recording) {
           pendingPress = { x, y, id: gestureId, smooth };
-          const { barStart, stepDur } = gridAnchor();
-          silenceStored(((catchStep(actx.currentTime, barStart, stepDur) % N_STEPS) + N_STEPS) % N_STEPS);
+          const next = locks.find((L) => L.t > actx.currentTime);
+          if (next) silenceStored(next.i);
         }
       }
       else startPadHold();
     }
-    const P = playLive(x, y);
-    spawnBurst(x, y, P, now);
+    playLive(x, y);
   }
 
   /* ---------- sequencer clock ---------- */
-  let timer = null, nextBase = 0, stepIdx = 0, queue = [], playing = false, recording = false;
+  let timer = null, nextBase = 0, runPos = 0, curDur = 0.125, queue = [], playing = false, recording = false;
+  let playMode = 'fwd';
+  /* which step plays at run position n. Random modes are rolled ahead
+     and remembered, so the playhead knows where it's going next. */
+  let rollAhead = new Map();
+  function stepFor(n) {
+    if (playMode !== 'random') return stepAt(playMode, n);
+    if (!rollAhead.has(n)) rollAhead.set(n, stepAt('random', n));
+    return rollAhead.get(n);
+  }
+  /* the transport's own modulation: tempo and swing at one moment */
+  function transportAt(beat, t) {
+    let bpm = tempo, sw = swing;
+    for (const m of mods) {
+      if (m.dest === 'bpm' && !isEnv(m)) bpm = modTempo(bpm, m.depth * modLfo(m, beat, t));
+      else if (m.dest === 'swing' && !isEnv(m)) sw = modSwing(sw, m.depth * modLfo(m, beat, t));
+    }
+    return { bpm, sw };
+  }
 
   function tick() {
-    const dur = 60 / tempo / 4;
     while (nextBase < actx.currentTime + 0.12) {
-      const i = stepIdx;
-      const sw = swingOffset(i, swing, dur), t = nextBase + sw;
+      const beat = runPos * 0.25, tp = transportAt(beat, nextBase), dur = 60 / tp.bpm / 4;
+      curDur = dur;
+      const i = stepFor(runPos);
+      beatMarks.push({ t: nextBase, beat, dur });
+      if (beatMarks.length > 64) beatMarks.shift();
+      for (const k of rollAhead.keys()) if (k < runPos - 40) rollAhead.delete(k);
+      const sw = swingOffset(runPos % N_STEPS, tp.sw, dur), t = nextBase + sw;
       const r = seq.trial(i);
       const fired = r.fired, decMult = r.decMult;
       let P = null;
@@ -338,10 +378,10 @@
           }
         }
       }
-      queue.push({ i, t, fired: fired && !!P, x: r.x, y: r.y, P });
+      queue.push({ i, n: runPos, t, fired: fired && !!P, x: r.x, y: r.y, P });
       locks.push({ i, t: nextBase + RATCHET_CATCH * dur, S: nextBase, dur });
       nextBase += dur;
-      stepIdx = (stepIdx + 1) % N_STEPS;
+      runPos++;
     }
     tickLocks();
     tickLive();
@@ -382,15 +422,15 @@
     if (on) {
       ensureAudio();
       stopPadHold();
-      stepIdx = 0; queue = []; locks = []; finals = []; liveNext = 0; pendingPress = pendingBar = null;
+      runPos = 0; queue = []; locks = []; finals = []; beatMarks = []; rollAhead = new Map(); liveNext = 0; pendingPress = pendingBar = null;
       nextBase = actx.currentTime + 0.06;
-      playT0 = nextBase;
       playing = true;
       tick();
       timer = setInterval(tick, 25);
     } else {
-      clearInterval(timer); timer = null; queue = []; locks = []; finals = []; cur = -1; headDirty = true;
+      clearInterval(timer); timer = null; queue = []; locks = []; finals = []; cur = -1; curN = -1; headDirty = true;
       playing = false;
+      if (recording) setRecording(false); // stop disarms record
       if (seq.padHeld()) startPadHold();
     }
     btn.setAttribute('aria-label', on ? 'Stop' : 'Play');
@@ -402,141 +442,6 @@
     recording = on;
     const btn = $('#record');
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-
-  /* ==========================================================================
-     Particle feedback: every hit spawns a small cluster whose colour, size,
-     speed and behaviour come entirely from that hit's own synth parameters
-     (via voiceSignature), not from any label. A sound that's mostly body
-     tone reads as droplets; mostly noise reads as smoke; mostly metal reads
-     as sparks. A sound can be any blend of the three at once.
-     ========================================================================== */
-  let particles = [];
-  const PARTICLE_CAP = 260;
-
-  const SPREAD = 2.6;     // particle speed multiplier: hits spread well past the finger
-  const FINGER = 0.045;  // particles start this far out (pad units), clear of the fingertip
-  function spawnBurst(x, y, P, now) {
-    const sig = voiceSignature(P);
-    sig.rgb = starRGB(sig.t);
-    const n = Math.round(8 + sig.level * 26);
-    const nLiquid = Math.round(n * sig.tW);
-    const nSmoke = Math.round(n * sig.nW);
-    const nSpark = sig.mW > 0.04 ? Math.max(3, Math.round(n * sig.mW * 1.3)) : 0;
-    for (let k = 0; k < nLiquid; k++) particles.push(makeLiquid(x, y, sig, now));
-    for (let k = 0; k < nSmoke; k++) particles.push(makeSmoke(x, y, sig, now));
-    for (let k = 0; k < nSpark; k++) particles.push(makeSpark(x, y, sig, now));
-    particles.push(makeRing(x, y, sig, now));
-    if (particles.length > PARTICLE_CAP) particles.splice(0, particles.length - PARTICLE_CAP);
-    dirty = true;
-  }
-
-  function makeLiquid(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * (0.11 + sig.t * 0.16) * (0.55 + Math.random() * 0.8) * (0.55 + sig.level * 0.65);
-    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER * 0.5;
-    return {
-      kind: 'liquid', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd * 0.5,
-      r: (0.011 + 0.018 * sig.level) * (1.25 - sig.t * 0.7) * (0.7 + Math.random() * 0.6),
-      born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.1, 200, 950),
-      rgb: sig.rgb, drive: sig.drive,
-    };
-  }
-  function updateLiquid(p, dt) {
-    p.px = p.x; p.py = p.y;
-    p.vy -= 0.22 * dt;
-    p.vx *= Math.pow(0.93, dt * 60);
-    if (p.drive > 0.1) { p.vx += (Math.random() - 0.5) * p.drive * 0.02; p.vy += (Math.random() - 0.5) * p.drive * 0.02; }
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawLiquid(pg, p, age, px, py, u) {
-    const a = Math.pow(1 - age, 0.75) * 0.85;
-    const scale = Math.min(px(1) - px(0), 1e9);
-    const r = p.r * (1 - 0.25 * age) * scale;
-    // a short flat streak rather than a soft blob, so motion reads without any blur
-    pg.strokeStyle = rgbs(p.rgb, a * 0.55);
-    pg.lineWidth = Math.max(1 * u, r * 1.3);
-    pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs(p.rgb, a);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), r, 0, 6.283); pg.fill();
-  }
-
-  function makeSmoke(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * (0.045 + Math.random() * 0.1) * (0.6 + sig.level * 0.6);
-    x += Math.cos(ang) * FINGER; y += Math.abs(Math.sin(ang)) * FINGER;
-    return {
-      kind: 'smoke', x, y, vx: Math.cos(ang) * spd, vy: Math.abs(Math.sin(ang)) * spd * 0.55 + 0.02,
-      r: (0.006 + 0.01 * sig.level) * (1.2 - sig.t * 0.4) * (0.7 + Math.random() * 0.6),
-      born: now, life: reduceMotion ? 140 : clamp(sig.dec * 1000 * 1.5, 280, 1500),
-      rgb: mixc(sig.rgb, theme.dark ? [180, 182, 196] : [90, 96, 112], 0.35), drive: sig.drive,
-    };
-  }
-  function updateSmoke(p, dt) {
-    p.vx += (Math.random() - 0.5) * (0.02 + p.drive * 0.04) * dt * 60;
-    p.vy *= Math.pow(0.996, dt * 60);
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawSmoke(pg, p, age, px, py, u) {
-    // many small flat specks scattering outward reads as dust, not a blurred cloud
-    const a = Math.pow(1 - age, 1.1) * 0.55;
-    const scale = Math.min(px(1) - px(0), 1e9);
-    const r = p.r * (0.8 + 0.5 * age) * scale;
-    pg.fillStyle = rgbs(p.rgb, a);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), r, 0, 6.283); pg.fill();
-  }
-
-  function makeSpark(x, y, sig, now) {
-    const ang = Math.random() * Math.PI * 2;
-    const spd = SPREAD * 0.85 * (0.22 + sig.t * 0.34) * (0.6 + Math.random() * 0.8) * (0.55 + sig.level * 0.75);
-    x += Math.cos(ang) * FINGER; y += Math.sin(ang) * FINGER;
-    return {
-      kind: 'spark', x, y, px: x, py: y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-      r: (0.0024 + 0.0042 * sig.level) * (1.15 - sig.t * 0.35),
-      born: now, life: reduceMotion ? 100 : clamp(sig.dec * 1000 * 0.75 + 50, 80, 420),
-      rgb: mixc(sig.rgb, theme.glint, 0.4), drive: sig.drive,
-    };
-  }
-  function updateSpark(p, dt) {
-    p.px = p.x; p.py = p.y;
-    const drag = Math.pow(0.86, dt * 60);
-    p.vx *= drag; p.vy *= drag; p.vy -= 0.06 * dt;
-    if (p.drive > 0.08) { p.vx += (Math.random() - 0.5) * p.drive * 0.35 * dt; p.vy += (Math.random() - 0.5) * p.drive * 0.35 * dt; }
-    p.x += p.vx * dt; p.y += p.vy * dt;
-  }
-  function drawSpark(pg, p, age, px, py, u) {
-    const a = Math.pow(1 - age, 1.3);
-    const scale = Math.min(px(1) - px(0), 1e9);
-    pg.strokeStyle = rgbs(p.rgb, a * 0.85);
-    pg.lineWidth = Math.max(1 * u, p.r * scale * 1.4);
-    pg.beginPath(); pg.moveTo(px(p.px), py(p.py)); pg.lineTo(px(p.x), py(p.y)); pg.stroke();
-    pg.fillStyle = rgbs(theme.glint, a * 0.95);
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), p.r * scale * 0.85, 0, 6.283); pg.fill();
-  }
-
-  /* ring: a thin pulse whose reach follows the decay, sized to clear a
-     fingertip (about a tenth of the pad) even for the shortest hits */
-  function makeRing(x, y, sig, now) {
-    return { kind: 'ring', x, y, born: now, life: reduceMotion ? 120 : clamp(sig.dec * 1000 * 1.4, 320, 1400), r: 0.16 + 0.2 * clamp(sig.dec, 0, 1), rgb: sig.rgb };
-  }
-  function drawRing(pg, p, age, px, py, u) {
-    const scale = px(1) - px(0), e = 1 - Math.pow(1 - age, 3);
-    pg.strokeStyle = rgbs(mixc(p.rgb, theme.glint, 0.4), (1 - age) * 0.7);
-    pg.lineWidth = (2.5 - 1.5 * age) * u;
-    pg.beginPath(); pg.arc(px(p.x), py(p.y), (0.03 + p.r * e) * scale, 0, 6.283); pg.stroke();
-  }
-  const noop = () => {};
-
-  const UPDATE = { liquid: updateLiquid, smoke: updateSmoke, spark: updateSpark, ring: noop };
-  const DRAW = { liquid: drawLiquid, smoke: drawSmoke, spark: drawSpark, ring: drawRing };
-
-  function stepParticles(dt, now) {
-    if (!particles.length) return;
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      if (now - p.born >= p.life) { particles.splice(i, 1); continue; }
-      UPDATE[p.kind](p, dt);
-    }
   }
 
   /* ---------- the sky: a plain field with a faint nebula of the sound map
@@ -567,7 +472,8 @@
     dpr = Math.min(2.5, window.devicePixelRatio || 1);
     pad.width = Math.max(2, Math.round(r.width * dpr));
     pad.height = Math.max(2, Math.round(r.height * dpr));
-    field = buildSky(pad.width, pad.height);
+    // while the sky is resizing between pages, stretch the old field
+    if (!morph || !field.width) field = buildSky(pad.width, pad.height);
     dirty = true;
   }
 
@@ -582,7 +488,7 @@
     });
     return [...groups.values()];
   }
-  let curT = 0; // when the current step started sounding (audio clock)
+  let curT = 0, curN = -1; // when the current step started sounding (audio clock), and its run position
   /* the constellation, the playhead travelling along it, the stars and the
      moons of every modulator orbiting the steps it moves */
   function drawStarChart(g, W, H, u, now, opts) {
@@ -592,11 +498,19 @@
       g.lineWidth = 1 * u; g.strokeStyle = theme.line;
       g.beginPath(); order.forEach((i, k) => { const [x, y] = P(seq.steps[i]); if (k) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); g.stroke();
     }
-    const stepDur = 60 / tempo / 4, frac = playing && actx ? clamp((actx.currentTime - curT) / stepDur, 0, 1) : 0;
-    if (playing && cur >= 0 && order.length > 1 && opts.playhead) {
-      let a = -1; for (let k = 0; k < order.length; k++) if (order[k] <= cur) a = k; if (a < 0) a = order.length - 1;
-      const b = (a + 1) % order.length, sa = order[a], sb = order[b], span = ((sb - sa + 16) % 16) || 16;
-      const prog = clamp((((cur - sa + 16) % 16) + frac) / span, 0, 1);
+    const frac = playing && actx ? clamp((actx.currentTime - curT) / curDur, 0, 1) : 0;
+    // the playhead runs from the star that last played to the next one
+    // due, in whatever order the play mode visits them
+    let ends = null;
+    if (playing && curN >= 0 && order.length > 1 && opts.playhead) {
+      const isOn = (n) => n >= 0 && seq.steps[stepFor(n)].on;
+      let a = -1, b = -1;
+      for (let n = curN; n >= Math.max(0, curN - 32); n--) if (isOn(n)) { a = n; break; }
+      for (let n = curN + 1; n <= curN + 32; n++) if (isOn(n)) { b = n; break; }
+      if (a >= 0 && b > a && stepFor(a) !== stepFor(b)) ends = { a, b };
+    }
+    if (ends) {
+      const sa = stepFor(ends.a), sb = stepFor(ends.b), prog = clamp((curN - ends.a + frac) / (ends.b - ends.a), 0, 1);
       const [x0, y0] = P(seq.steps[sa]), [x1, y1] = P(seq.steps[sb]), hx = x0 + (x1 - x0) * prog, hy = y0 + (y1 - y0) * prog;
       const grad = g.createLinearGradient(x0, y0, hx, hy); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, theme.now);
       g.strokeStyle = grad; g.lineWidth = 2 * u; g.beginPath(); g.moveTo(x0, y0); g.lineTo(hx, hy); g.stroke();
@@ -605,7 +519,7 @@
     const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
     for (const list of groups) {
       const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
-      const lit = list.includes(cur) && playing, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
       const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
       glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
       g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
@@ -616,19 +530,20 @@
       if (theme.dark) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(x, y, R * 0.26, 0, 6.283); g.fill(); }
       else { g.strokeStyle = 'rgba(16,21,33,.55)'; g.lineWidth = 0.8 * u; g.beginPath(); g.arc(x, y, R * 0.62, 0, 6.283); g.stroke(); }
       if (lit) { g.strokeStyle = theme.now; g.lineWidth = 1.6 * u; g.beginPath(); g.arc(x, y, R * 1.7, 0, 6.283); g.stroke(); }
+      if (opts.thumb) continue;
       if (list.some((i) => seq.held.has(i) || seq.latched.has(i))) { g.strokeStyle = theme.hold; g.lineWidth = 2.4 * u; g.beginPath(); g.arc(x, y, R * 2.2, 0, 6.283); g.stroke(); }
       if (opts.mark && opts.mark(list)) { g.strokeStyle = theme.hold; g.lineWidth = 2 * u; g.setLineDash(opts.mark(list) === 'drum' ? [3 * u, 3 * u] : []); g.beginPath(); g.arc(x, y, R * 2.6, 0, 6.283); g.stroke(); g.setLineDash([]); }
       g.fillStyle = theme.muted; g.font = `500 ${8.5 * u}px ${font}`; g.textAlign = 'left'; g.textBaseline = 'middle';
       g.fillText(list.map((i) => i + 1).join(' '), x + R * 1.5 + 2 * u, y - R * 1.4);
     }
-    drawMoons(g, W, H, u, now, groups);
+    if (!opts.thumb) drawMoons(g, W, H, u, now, groups);
   }
   /* moons: one per modulator around every star it moves. An LFO's moon
      follows its real path (an ellipse for Kepler, a figure-eight for the
      three-body orbit); an envelope shows when its step fires, as a flare,
      an impact or a supernova depending on its attack and decay. */
   function drawMoons(g, W, H, u, now, groups) {
-    const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo);
+    const T = clockNow(), beats = beatsAt(T);
     mods.forEach((m, k) => {
       if (!m.targets.length) return;
       const col = modCol(k), env = isEnv(m), sh = SHAPE_BY_ID[m.shape];
@@ -660,7 +575,7 @@
           }
           continue;
         }
-        const p = beats / MOD_RATES[m.rate].beats + m.phase, q = lfoAt(m.shape, p, m.ctl);
+        const p = modCycles(m, beats, T), q = lfoAt(m.shape, p, m.ctl);
         let mx, my;
         if (sh && sh.orbit) { mx = cx + q.x * R; my = cy - q.y * R; }
         else { const a = 2 * Math.PI * p; mx = cx + Math.cos(a) * R; my = cy + Math.sin(a) * R; }
@@ -677,12 +592,6 @@
     const px = (x) => x * W, py = (y) => (1 - y) * H;
     pg.clearRect(0, 0, W, H);
     pg.drawImage(field, 0, 0, W, H);
-    for (const p of particles) {
-      // timer-spawned particles can be born a few ms after this frame's timestamp
-      const age = Math.max(0, (now - p.born) / p.life);
-      if (age >= 1) continue;
-      DRAW[p.kind](pg, p, age, px, py, u);
-    }
     drawStarChart(pg, W, H, u, now, { playhead: true });
     // cursor: a plain dot, deliberately unthemed so it always reads as
     // "you". Touching grows it and adds a thin ring.
@@ -758,9 +667,16 @@
         e.preventDefault(); ensureAudio();
         viaPointer = true; clearTimeout(clearTimer);
         try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+        // trash held: this step is deleted when it's let go
+        if (trash) { trash.used = true; trash.steps.add(i); btn.classList.add('doomed'); return; }
         seq.stepDown(i);
       });
-      btn.addEventListener('pointerup', () => { seq.stepUp(i); endPointer(); history.commit(); });
+      btn.addEventListener('pointerup', () => {
+        btn.classList.remove('doomed');
+        if (trash && trash.steps.has(i)) { trash.steps.delete(i); seq.erase(i); }
+        else seq.stepUp(i);
+        endPointer(); history.commit();
+      });
       btn.addEventListener('pointercancel', () => { seq.stepCancel(i); endPointer(); });
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
@@ -820,11 +736,13 @@
   }
 
   const ORIGINAL_PARAMS = ANCHORS.map((a) => Object.assign({}, a.p));
-  const engineSelect = $('#engineSelect'), engineParams = $('#engineParams');
-  ANCHORS.forEach((a, i) => {
-    const opt = document.createElement('option');
-    opt.value = String(i); opt.textContent = a.name;
-    engineSelect.appendChild(opt);
+  const engineParams = $('#engineParams');
+  let engineIdx = 0; // the drum being edited
+  const engineMenu = createMenu($('#engineSelect'), {
+    label: 'Drum to edit', cls: 'two', minWidth: 260,
+    items: () => ANCHORS.map((a, i) => ({ value: i, label: a.name, icon: `<i class="dot" style="background:${rgbs(starRGB(voiceSignature(a.p).t), 1)}"></i>` })),
+    value: () => engineIdx,
+    onPick: (i) => { engineIdx = i; loadAnchorIntoEditor(); },
   });
   let fieldRefreshTimer = null, engineAuditionTimer = null;
   function scheduleFieldRefresh() {
@@ -836,7 +754,6 @@
     engineAuditionTimer = setTimeout(() => {
       ensureAudio();
       const P = playAt(a.x, a.y);
-      spawnBurst(a.x, a.y, P, performance.now());
     }, 60);
   }
   /* while a slider is being dragged and the sequence isn't playing,
@@ -846,7 +763,7 @@
   function startSliderPreview(a) {
     stopSliderPreview();
     ensureAudio();
-    const fire = () => { const P = playAt(a.x, a.y); spawnBurst(a.x, a.y, P, performance.now()); };
+    const fire = () => playAt(a.x, a.y);
     fire();
     sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
   }
@@ -858,38 +775,46 @@
     const el = document.createElement('div');
     el.className = 'module'; el.style.setProperty('--accent', `var(${m.accent})`);
     el.innerHTML = '<h3></h3><div class="knobgrid"></div>';
+    el.dataset.mod = m.id;
+    el.style.setProperty('--n', PARAM_SPECS.filter((p) => p.mod === m.id).length);
     el.querySelector('h3').textContent = m.label;
     engineParams.appendChild(el);
     moduleGrids[m.id] = el.querySelector('.knobgrid');
+    // hold the die and tap a section's name: roll just that section
+    randTargets.set(el.querySelector('h3'), (st) => {
+      const a = ANCHORS[engineIdx], q = jitterParams(Object.assign({}, a.p), st);
+      for (const p of PARAM_SPECS) if (p.mod === m.id) a.p[p.key] = q[p.key];
+      loadAnchorIntoEditor(); scheduleFieldRefresh();
+    });
   }
   const paramRows = PARAM_SPECS.map((spec) => {
     const container = document.createElement('div');
     moduleGrids[spec.mod].appendChild(container);
     const slider = createKnob(container, {
       min: spec.min, max: spec.max, step: spec.step, value: BASE[spec.key], log: spec.log,
-      def: () => ORIGINAL_PARAMS[+engineSelect.value][spec.key],
+      def: () => ORIGINAL_PARAMS[engineIdx][spec.key],
       label: spec.label, fmt: (v) => fmtParam(spec.unit, v),
       onInput: (v) => {
-        const a = ANCHORS[+engineSelect.value];
+        const a = ANCHORS[engineIdx];
         a.p[spec.key] = v;
         scheduleFieldRefresh();
         stepsDirty = readoutDirty = laneDirty = true;
         if (playing) auditionAnchorSoon(a);
       },
-      onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[+engineSelect.value]); },
+      onPointerDown: () => { if (!playing) startSliderPreview(ANCHORS[engineIdx]); },
       onPointerUp: stopSliderPreview,
       onChange: () => history.commit(),
-      mod: knobMod(spec.key, () => ({ kind: 'drum', a: +engineSelect.value })),
+      mod: knobMod(spec.key, () => ({ kind: 'drum', a: engineIdx })),
     });
     return { spec, slider };
   });
   function loadAnchorIntoEditor() {
-    const a = ANCHORS[+engineSelect.value];
+    const a = ANCHORS[engineIdx];
+    engineMenu.paint();
     paramRows.forEach(({ spec, slider }) => { slider.set(a.p[spec.key]); slider.refreshMod(); });
   }
-  engineSelect.addEventListener('change', loadAnchorIntoEditor);
   $('#engineReset').addEventListener('click', () => {
-    const idx = +engineSelect.value;
+    const idx = engineIdx;
     ANCHORS[idx].p = Object.assign({}, ORIGINAL_PARAMS[idx]);
     loadAnchorIntoEditor();
     scheduleFieldRefresh();
@@ -1041,10 +966,10 @@
   function createKnob(container, opts) {
     container.style.display = 'grid'; container.style.justifyItems = 'center'; container.style.gap = '4px';
     container.innerHTML = '<div class="knob" tabindex="0" role="slider"><div class="knob-dial">' +
-      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/></svg>' +
+      '<svg viewBox="0 0 52 52" aria-hidden="true"><path class="trk"/><path class="val"/><path class="mring"/></svg>' +
       '<div class="knob-cap"><i class="knob-ptr"></i></div></div><span class="knob-value"></span><span class="knob-label"></span></div>';
     const el = container.querySelector('.knob');
-    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value');
+    const valPath = el.querySelector('.val'), valueEl = el.querySelector('.knob-value'), ringPath = el.querySelector('.mring');
     el.querySelector('.trk').setAttribute('d', arcPath(-KNOB_SWEEP / 2, KNOB_SWEEP / 2));
     el.querySelector('.knob-label').textContent = opts.label;
     el.setAttribute('aria-label', opts.ariaLabel || opts.label);
@@ -1070,6 +995,20 @@
       valueEl.textContent = opts.fmt ? opts.fmt(value) : String(value);
       el.setAttribute('aria-valuenow', value);
       el.setAttribute('aria-valuetext', valueEl.textContent);
+      drawRing(ang);
+    }
+    /* a modulated knob gets a ring in its modulator's colour: how far the
+       modulation reaches either side of the value (one side if unipolar or
+       an envelope). Drag the ring to set the depth. */
+    const srcK = () => (opts.mod ? opts.mod.current() : -1);
+    function drawRing(ang) {
+      const k = srcK();
+      if (k < 0) { ringPath.style.display = 'none'; return; }
+      const m = mods[k], span = Math.abs(m.depth) * 0.5 * KNOB_SWEEP, lim = KNOB_SWEEP / 2;
+      const one = m.uni || isEnv(m), sgn = m.depth < 0 ? -1 : 1;
+      const a0 = clamp(one ? ang : ang - span, -lim, lim), a1 = clamp(one ? ang + sgn * span : ang + span, -lim, lim);
+      ringPath.setAttribute('d', arcPath(Math.min(a0, a1), Math.max(a0, a1), KNOB_R + 5.5));
+      ringPath.style.display = ''; ringPath.style.stroke = modCol(k);
     }
     const emit = () => { if (opts.onInput) opts.onInput(value); };
     let drag = null, lastTap = 0;
@@ -1088,11 +1027,25 @@
       }
       lastTap = t;
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, pos: clamp(toPos(value), 0, 1) };
+      // on the ring (outside the cap) of a modulated knob: set the depth
+      const dial = el.querySelector('.knob-dial').getBoundingClientRect(), k = srcK();
+      if (k >= 0 && Math.hypot(e.clientX - (dial.left + dial.width / 2), e.clientY - (dial.top + dial.height / 2)) > dial.width * 0.34) {
+        drag.depth = { k, d0: mods[k].depth };
+        lastTap = 0;
+        valueEl.textContent = `M${k + 1} ${Math.round(mods[k].depth * 100)}%`;
+      }
       el.classList.add('active');
       if (opts.onPointerDown) opts.onPointerDown(value);
     });
     el.addEventListener('pointermove', (e) => {
       if (!drag || drag.id !== e.pointerId) return;
+      if (drag.depth) {
+        const m = mods[drag.depth.k];
+        m.depth = Math.round(clamp(drag.depth.d0 + ((e.clientX - drag.x) - (e.clientY - drag.y)) / 160, -1, 1) * 100) / 100;
+        drawRing(-KNOB_SWEEP / 2 + clamp(toPos(value), 0, 1) * KNOB_SWEEP);
+        valueEl.textContent = `M${drag.depth.k + 1} ${m.depth > 0 ? '+' : ''}${Math.round(m.depth * 100)}%`;
+        return;
+      }
       const travel = e.shiftKey ? 800 : 200;
       const p = clamp(drag.pos + ((e.clientX - drag.x) - (e.clientY - drag.y)) / travel, 0, 1);
       const v = snap(fromPos(p));
@@ -1100,6 +1053,7 @@
     });
     const end = (e) => {
       if (!drag || drag.id !== e.pointerId) return;
+      if (drag.depth) { drag = null; el.classList.remove('active'); render(); refreshKnobMods(); renderMods(); history.commit(); return; }
       drag = null; el.classList.remove('active');
       if (opts.onPointerUp) opts.onPointerUp(value);
       if (opts.onChange) opts.onChange(value);
@@ -1119,19 +1073,31 @@
       if (opts.onChange) opts.onChange(value);
     });
     render();
+    // hold the die and tap the knob: a new value, further away with strength
+    randTargets.set(el, (st) => {
+      const p = clamp(toPos(value), 0, 1), q = st > 0.9 ? Math.random() : clamp(p + (Math.random() * 2 - 1) * st, 0, 1);
+      value = snap(fromPos(q)); render(); emit(); if (opts.onChange) opts.onChange(value);
+    });
     // a modulation source picker under the knob (kit and engine pages)
-    let srcSel = null;
+    let src = null;
     if (opts.mod) {
-      srcSel = document.createElement('select');
-      srcSel.className = 'modsel';
-      srcSel.setAttribute('aria-label', `Modulation source for ${opts.ariaLabel || opts.label}`);
-      srcSel.innerHTML = '<option value="-1">\u00b7</option>' + mods.map((_, k) => `<option value="${k}">M${k + 1}</option>`).join('');
-      srcSel.addEventListener('change', () => { opts.mod.pick(+srcSel.value); });
-      container.appendChild(srcSel);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'modsel';
+      container.appendChild(b);
+      const name = opts.ariaLabel || opts.label;
+      src = createMenu(b, {
+        label: `Modulation for ${name}`, cls: 'tiny', minWidth: 180,
+        items: () => [{ value: -1, label: 'None', short: '\u00b7' }, ...mods.map((m, k) => ({
+          value: k, short: `M${k + 1}`, icon: `<i class="dot" style="background:${modCol(k)}"></i>`,
+          label: `M${k + 1} ${SHAPE_BY_ID[m.shape].name}` + (m.dest === opts.mod.dest ? '' : ` \u00b7 now ${MOD_DESTS.find((d) => d.id === m.dest)?.name || m.dest}`),
+        }))],
+        value: () => opts.mod.current(),
+        onPick: (k) => opts.mod.pick(k),
+        paint: (btn, it) => { const k = it ? it.value : -1; btn.classList.toggle('set', k >= 0); btn.style.background = k >= 0 ? modCol(k) : ''; },
+      });
     }
-    const refreshMod = () => { if (!srcSel) return; const k = opts.mod.current(); srcSel.value = String(k); srcSel.classList.toggle('set', k >= 0); };
-    if (srcSel) knobRefreshers.push(refreshMod);
-    refreshMod();
+    const refreshMod = () => { if (!src) return; src.paint(); render(); };
+    if (src) knobRefreshers.push(refreshMod);
     return { get value() { return value; }, set(v) { value = snap(v); render(); }, refreshMod };
   }
 
@@ -1166,15 +1132,17 @@
     el.addEventListener('pointerdown', (e) => {
       dragging = true; el.classList.add('dragging');
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
-      fromClientX(e.clientX);
+      dieHold = { strength: fromClientX(e.clientX), used: false };
+      updateDice(dieHold.strength);
     });
-    el.addEventListener('pointermove', (e) => { if (dragging) fromClientX(e.clientX); });
+    el.addEventListener('pointermove', (e) => { if (dragging) { dieHold.strength = fromClientX(e.clientX); updateDice(dieHold.strength); } });
     const end = (e) => {
       if (!dragging) return;
       dragging = false; el.classList.remove('dragging');
-      const strength = fromClientX(e.clientX);
-      place(0);
-      if (strength > 0.01) onRoll(strength);
+      const strength = fromClientX(e.clientX), used = dieHold && dieHold.used;
+      dieHold = null;
+      place(0); updateDice();
+      if (!used && strength > 0.01) onRoll(strength);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
@@ -1289,6 +1257,17 @@
     el.addEventListener('click', () => { if (viaPointer) { viaPointer = false; return; } fn(); });
   }
   press($('#play'), () => setPlaying(!playing));
+  const MODE_ICON = {
+    fwd: '<path d="M4 12h14M13 7l5 5-5 5"/>', back: '<path d="M20 12H6M11 7l-5 5 5 5"/>',
+    pingpong: '<path d="M3 9h15M15 6l3 3-3 3M21 15H6M9 12l-3 3 3 3"/>', random: '<path d="M3 7h3c5 0 7 10 12 10h3M3 17h3c2 0 3-2 4-4M14 11c1-2 2-4 4-4h3M18 4l3 3-3 3M18 14l3 3-3 3"/>',
+  };
+  const modeIcon = (id) => `<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON[id]}</svg>`;
+  const playModeMenu = createMenu($('#playMode'), {
+    label: 'Play mode', minWidth: 170,
+    items: () => PLAY_MODES.map((m) => ({ value: m.id, label: m.name, icon: modeIcon(m.id) })),
+    value: () => playMode,
+    onPick: (v) => { playMode = v; rollAhead = new Map(); history.commit(); },
+  });
   const smoothBtn = $('#smooth');
   const SMOOTH_ICON = {
     stepped: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 15H6V9H10V12H14V5H18"/></svg>',
@@ -1302,7 +1281,26 @@
   press(smoothBtn, () => { smooth = !smooth; paintSmooth(); });
   paintSmooth();
   press($('#record'), () => setRecording(!recording));
-  $('#clear').addEventListener('click', () => { seq.clear(); history.commit(); });
+  const clearBtn = $('#clear');
+  clearBtn.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    try { clearBtn.setPointerCapture(e.pointerId); } catch (_) {}
+    trash = { id: e.pointerId, used: seq.held.size > 0, steps: new Set() };
+    clearBtn.classList.add('pressed');
+  });
+  const trashUp = (e) => {
+    if (!trash || trash.id !== e.pointerId) return;
+    const t = trash; trash = null; clearBtn.classList.remove('pressed');
+    if (e.type === 'pointercancel') return;
+    const held = [...seq.held].filter((i) => !t.steps.has(i));
+    if (held.length) held.forEach((i) => seq.erase(i, true));
+    else if (!t.used) seq.clear();
+    history.commit();
+  };
+  clearBtn.addEventListener('pointerup', trashUp);
+  clearBtn.addEventListener('pointercancel', trashUp);
+  clearBtn.addEventListener('click', (e) => { if (e.detail === 0) { seq.clear(); history.commit(); } }); // keyboard
   const selBtn = $('#select');
   press(selBtn, () => {
     const v = selBtn.getAttribute('aria-pressed') !== 'true';
@@ -1319,9 +1317,108 @@
   });
   let pendingMono = false; // applied to `engine` once it's created (ensureAudio runs lazily)
 
+  /* ---------- dropdown: a key showing the current choice; pressing it
+     opens a list in the app's own style, not the system picker. It opens
+     on touch-down, and nothing stays lit once a choice is made. ---------- */
+  const menuEl = document.createElement('div');
+  menuEl.className = 'menu'; menuEl.hidden = true; menuEl.setAttribute('role', 'listbox');
+  document.body.appendChild(menuEl);
+  let menuOwner = null;
+  function closeMenu() {
+    if (!menuOwner) return;
+    menuEl.hidden = true; menuOwner.btn.setAttribute('aria-expanded', 'false'); menuOwner = null;
+  }
+  /* o: items() -> [{value, label, short?, icon?, group?}], value() -> current,
+     onPick(value), cls (extra class for the list), paint(btn, item) */
+  function createMenu(btn, o) {
+    btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
+    const paint = () => {
+      const it = o.items().find((x) => x.value === o.value());
+      btn.innerHTML = (it && it.icon ? it.icon : '') + `<span>${it ? (it.short || it.label) : ''}</span>`;
+      if (o.label) btn.setAttribute('aria-label', `${o.label}: ${it ? it.label : ''}`);
+      if (o.paint) o.paint(btn, it);
+    };
+    const open = () => {
+      if (menuOwner && menuOwner.btn === btn) { closeMenu(); return; }
+      closeMenu();
+      const items = o.items(), cur = o.value();
+      let html = '', grp = null;
+      items.forEach((it, n) => {
+        if (it.group && it.group !== grp) { grp = it.group; html += `<div class="grouplabel">${grp}</div>`; }
+        html += `<button type="button" role="option" data-n="${n}" aria-selected="${it.value === cur}">${it.icon || ''}<span>${it.label}</span></button>`;
+      });
+      menuEl.innerHTML = html;
+      menuEl.className = 'menu' + (o.cls ? ' ' + o.cls : '');
+      menuEl.hidden = false;
+      menuOwner = { btn, items, o, paint };
+      btn.setAttribute('aria-expanded', 'true');
+      // place it under the key (or above, if there's more room there)
+      const r = btn.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      const w = Math.min(vw - 16, Math.max(r.width, o.minWidth || 170));
+      menuEl.style.width = w + 'px';
+      menuEl.style.left = clamp(r.left, 8, vw - w - 8) + 'px';
+      const below = vh - r.bottom - 12, above = r.top - 12, h = menuEl.scrollHeight;
+      const up = h > below && above > below;
+      menuEl.style.maxHeight = Math.max(120, up ? above : below) + 'px';
+      menuEl.style.top = (up ? Math.max(8, r.top - 6 - Math.min(h, above)) : r.bottom + 6) + 'px';
+      const sel = menuEl.querySelector('[aria-selected="true"]');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    };
+    press(btn, open);
+    btn.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); open(); const f = menuEl.querySelector('[aria-selected="true"]') || menuEl.querySelector('button'); if (f) f.focus(); } });
+    randTargets.set(btn, () => { const items = o.items(); o.onPick(items[Math.floor(Math.random() * items.length)].value); paint(); });
+    paint();
+    return { paint, btn };
+  }
+  menuEl.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b || !menuOwner) return;
+    const { btn, items, o, paint } = menuOwner, it = items[+b.dataset.n];
+    closeMenu();
+    o.onPick(it.value); paint();
+    btn.blur();
+  });
+  menuEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { const b = menuOwner && menuOwner.btn; closeMenu(); if (b) b.focus(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const list = [...menuEl.querySelectorAll('button')], k = list.indexOf(document.activeElement);
+      const nx = list[clamp(k + (e.key === 'ArrowDown' ? 1 : -1), 0, list.length - 1)]; if (nx) nx.focus();
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (menuOwner && !menuEl.contains(e.target) && !menuOwner.btn.contains(e.target)) closeMenu();
+  }, true);
+  window.addEventListener('resize', closeMenu);
+
+  /* ---------- hold the die and tap something: that one thing is rolled
+     (a knob, a dropdown, a modulator's name, a step, an engine section).
+     randTargets maps an element to its roll(strength). ---------- */
+  let dieHold = null; // {strength, used} while the top-bar die is held
+  function rollTarget(e) {
+    if (!dieHold || e.target.closest('.dicetrack')) return false;
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      const fn = randTargets.get(el);
+      if (!fn) continue;
+      e.preventDefault(); e.stopPropagation();
+      fn(dieHold.strength > 0.05 ? dieHold.strength : 0.5);
+      dieHold.used = true;
+      el.classList.remove('rolled'); void el.offsetWidth; el.classList.add('rolled');
+      suppressClick = performance.now();
+      dirty = stepsDirty = laneDirty = true;
+      history.commit();
+      return true;
+    }
+    return false;
+  }
+  let suppressClick = 0;
+  document.addEventListener('pointerdown', rollTarget, true);
+  document.addEventListener('click', (e) => { if (performance.now() - suppressClick < 600) { e.preventDefault(); e.stopPropagation(); } }, true);
+
   /* ==========================================================================
-     Modulation page. Six modulators, each a row: a live thumbnail, what it
-     does, Step and Drum assign keys and its own die (rolls its settings).
+     Modulation page. Six modulators, each a row: a live thumbnail, its
+     name, its shape and destination, and Step / Drum assign keys. The
+     selected one opens its controls right under its row.
      Assigning: hold Step or Drum and tap stars on the sky above, or hold a
      star and tap Step or Drum; several either way in one hold. A quick tap
      on Step or Drum latches it (lit) until tapped again, for one pointer.
@@ -1329,29 +1426,57 @@
   const modSky = $('#modSky'), msg = modSky.getContext('2d');
   let modField = null, modSel = 0;
   const modsEl = $('#mods');
-  const fmtRate = (m) => MOD_RATES[m.rate].name;
-  const destName = (id) => { const d = MOD_DESTS.find((x) => x.id === id); return d ? d.name : id; };
-  function modSummary(m) {
-    const sh = SHAPE_BY_ID[m.shape].name, n = m.targets.length;
-    const where = n ? m.targets.map((g) => g.kind === 'kit' ? 'kit' : g.kind === 'step' ? `step ${g.i + 1}` : ANCHORS[g.a].name).join(', ') : 'not assigned';
-    return `${sh} → ${destName(m.dest)} · ${where}`;
-  }
-  const PIPS = '<i></i><i></i><i></i><i></i><i></i>';
-  modsEl.innerHTML = mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
+  const isGlobal = (m) => GLOBAL_DESTS.has(m.dest);
+  modsEl.innerHTML = '<div class="modhead" aria-hidden="true"><span></span><span>Assign</span></div>' + mods.map((_, k) => `<div class="mod" data-k="${k}" style="--mc:${MOD_COL[k]}">
       <canvas aria-hidden="true"></canvas>
-      <div style="min-width:0"><div class="nm"><i></i>M${k + 1}</div><div class="sm"></div></div>
-      <button class="assign cap" type="button" data-kind="step" aria-label="Step assign M${k + 1}: hold and tap stars">Step<br>assign</button>
-      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum assign M${k + 1}: hold and tap stars">Drum<br>assign</button>
-      <button class="minidie" type="button" aria-label="Randomize M${k + 1}'s settings" title="Randomize this modulator's settings">${PIPS}</button>
+      <div class="mid"><button type="button" class="nm" aria-label="M${k + 1}"><i></i>M${k + 1}</button>
+        <div class="dds"><button type="button" class="dd cap shape"></button><button type="button" class="dd cap dest"></button></div></div>
+      <button class="assign cap" type="button" data-kind="step" aria-label="Step: hold and tap stars to send M${k + 1} to those steps">Step</button>
+      <button class="assign cap" type="button" data-kind="drum" aria-label="Drum: hold and tap a star to send M${k + 1} to every hit of its drum">Drum</button>
     </div>`).join('');
   const modRows = [...modsEl.querySelectorAll('.mod')];
+  // the selected modulator's controls, moved under its row
+  const modEdit = document.createElement('div');
+  modEdit.className = 'modedit';
+  modEdit.innerHTML = '<div class="modkeys"><button type="button" class="mini cap" data-t="free"></button><button type="button" class="mini cap" data-t="uni"></button></div><div class="knobgrid"></div>';
+  const modKnobsEl = modEdit.querySelector('.knobgrid');
+
+  /* shape icons, drawn from the shapes themselves */
+  function shapeIcon(id, size = 22) {
+    const sh = SHAPE_BY_ID[id], pts = [];
+    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
+    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 1.5 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
+    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, id === 'random' ? 0 : 0.5).x * 7]);
+    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
+  }
+  const SHAPE_GROUP = (s) => (s.env ? 'One-shot' : s.orbit ? 'Orbits' : 'Waves');
+  const SHAPE_ITEMS = MOD_SHAPES.map((sh) => ({ value: sh.id, label: sh.name, short: sh.id === 'figure8' ? 'Figure 8' : sh.name, icon: shapeIcon(sh.id, 18), group: SHAPE_GROUP(sh) }));
+  const destItems = (m) => MOD_DESTS.filter((d) => !(d.global && isEnv(m))).map((d) => ({ value: d.id, label: d.name, group: d.group }));
+  const shapeMenus = [], destMenus = [];
+  function setShape(k, id) {
+    const m = mods[k]; m.shape = id;
+    if (isEnv(m) && isGlobal(m)) m.dest = 'pitch'; // an envelope can't move the transport
+    modSel = k; renderMods(); refreshKnobMods(); history.commit();
+  }
+  modRows.forEach((row, k) => {
+    shapeMenus[k] = createMenu(row.querySelector('.shape'), { label: `M${k + 1} shape`, cls: 'two', minWidth: 290, items: () => SHAPE_ITEMS, value: () => mods[k].shape, onPick: (v) => setShape(k, v) });
+    destMenus[k] = createMenu(row.querySelector('.dest'), { label: `M${k + 1} destination`, minWidth: 220, items: () => destItems(mods[k]), value: () => mods[k].dest, onPick: (v) => { mods[k].dest = v; modSel = k; renderMods(); refreshKnobMods(); history.commit(); } });
+    randTargets.set(row.querySelector('.nm'), (st) => { randomizeModSettings(k, st, true); modSel = k; renderMods(); refreshKnobMods(); });
+  });
+
   function renderMods() {
     modRows.forEach((row, k) => {
+      const m = mods[k];
       row.classList.toggle('sel', k === modSel);
       row.style.setProperty('--mc', modCol(k));
-      row.querySelector('.sm').textContent = modSummary(mods[k]);
+      shapeMenus[k].paint(); destMenus[k].paint();
+      row.querySelectorAll('.assign').forEach((b) => { b.disabled = isGlobal(m); b.title = isGlobal(m) ? 'Tempo and swing are global: nothing to assign' : ''; });
     });
-    $('#modEdit').style.setProperty('--mc', modCol(modSel));
+    const row = modRows[modSel];
+    if (modEdit.parentElement !== row) row.appendChild(modEdit);
+    modEdit.style.setProperty('--mc', modCol(modSel));
+    loadModEditor();
   }
 
   /* assigning */
@@ -1364,7 +1489,8 @@
   }
   function assign(k, kind, list) {
     for (const g of targetFor(kind, list)) toggleTarget(mods[k], g);
-    modSel = k; renderMods(); refreshKnobMods(); dirty = true;
+    if (modSel !== k) { modSel = k; renderMods(); }
+    refreshKnobMods(); dirty = true;
   }
   function paintAssignKeys() {
     modRows.forEach((row, k) => row.querySelectorAll('.assign').forEach((b) => {
@@ -1373,7 +1499,10 @@
     }));
   }
   modRows.forEach((row, k) => {
-    row.addEventListener('pointerdown', (e) => { if (!e.target.closest('button')) { modSel = k; renderMods(); loadModEditor(); } });
+    row.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.dd, .assign, .modedit')) return;
+      if (modSel !== k) { modSel = k; renderMods(); dirty = true; }
+    });
     row.querySelectorAll('.assign').forEach((b) => {
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -1392,7 +1521,6 @@
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
       b.addEventListener('click', (e) => { if (e.detail === 0) { assignLatch = assignLatch && assignLatch.k === k && assignLatch.kind === b.dataset.kind ? null : { k, kind: b.dataset.kind }; paintAssignKeys(); } });
     });
-    row.querySelector('.minidie').addEventListener('click', () => { randomizeModSettings(k, 0.8); modSel = k; renderMods(); loadModEditor(); history.commit(); });
   });
   function starAt(e) {
     const r = modSky.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = 1 - (e.clientY - r.top) / r.height;
@@ -1420,8 +1548,9 @@
   function drawModSky(now) {
     const r = modSky.getBoundingClientRect(), d = Math.min(2.5, window.devicePixelRatio || 1);
     const W = Math.max(2, Math.round(r.width * d)), H = Math.max(2, Math.round(r.height * d));
-    if (modSky.width !== W || modSky.height !== H || !modField) { modSky.width = W; modSky.height = H; modField = buildSky(W, H); }
-    msg.drawImage(modField, 0, 0);
+    if (modSky.width !== W || modSky.height !== H) { modSky.width = W; modSky.height = H; if (!morph) modField = null; }
+    if (!modField) modField = buildSky(W, H);
+    msg.drawImage(modField, 0, 0, W, H);
     const m = mods[modSel];
     const held = new Set([...heldStars.values()].flat());
     drawStarChart(msg, W, H, d, now, {
@@ -1437,7 +1566,7 @@
   }
 
   /* thumbnails: an LFO's path or wave with its body, or the envelope's shape */
-  function drawModThumbs(now) {
+  function drawModThumbs() {
     modRows.forEach((row, k) => {
       const cv = row.querySelector('canvas'), d = Math.min(2, window.devicePixelRatio || 1), S = Math.round(40 * d);
       if (cv.width !== S) { cv.width = S; cv.height = S; }
@@ -1451,86 +1580,83 @@
         g.stroke();
         return;
       }
-      const beats = actx ? beatsAt(actx.currentTime) : now / 1000 / (60 / tempo), p = beats / MOD_RATES[m.rate].beats + m.phase;
+      const T = clockNow(), p = modCycles(m, beatsAt(T), T);
       if (sh.orbit) {
         const R = S * 0.36; g.beginPath();
         for (let q = 0; q <= 120; q++) { const o = lfoAt(m.shape, p - 1 + q / 120, m.ctl); const X = c + o.x * R, Y = c - o.y * R; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
         g.stroke();
         const o = lfoAt(m.shape, p, m.ctl); g.fillStyle = col; g.beginPath(); g.arc(c + o.x * R, c - o.y * R, 3 * d, 0, 6.283); g.fill();
       } else {
+        // unipolar waves sit on the floor of the thumbnail
+        const yOf = (v) => (m.uni ? S - 6 * d - (v + 1) / 2 * (S - 12 * d) : c - v * S * 0.32);
+        if (m.uni) { g.beginPath(); g.moveTo(3 * d, S - 6 * d); g.lineTo(S - 3 * d, S - 6 * d); g.stroke(); }
         g.strokeStyle = col; g.beginPath();
-        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = c - lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x * S * 0.32; if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
+        for (let q = 0; q <= 60; q++) { const X = 4 * d + (S - 8 * d) * q / 60, Y = yOf(lfoAt(m.shape, p - 1.5 + 1.5 * q / 60, m.ctl).x); if (q) g.lineTo(X, Y); else g.moveTo(X, Y); }
         g.stroke();
       }
     });
   }
 
-  /* shape icons, drawn from the shapes themselves */
-  function shapeIcon(id, size = 22) {
-    const sh = SHAPE_BY_ID[id], pts = [];
-    if (sh.env) { const m = { atk: 0.25, dec: 0.5 }; const span = envAttack(m) + envDecay(m); for (let q = 0; q <= 30; q++) pts.push([2 + 20 * q / 30, 20 - envAt(m, span * q / 30) * 16]); }
-    else if (sh.orbit) { const n = id === 'precession' ? 360 : id === 'halo' ? 400 : 160, cyc = id === 'precession' ? 4 : id === 'halo' ? 6 : id === 'retrograde' ? 2 : 1; for (let q = 0; q <= n; q++) { const o = lfoAt(id, cyc * q / n, 0.5); pts.push([12 + o.x * 9, 12 - o.y * 9]); } }
-    else for (let q = 0; q <= 60; q++) pts.push([2 + 20 * q / 60, 12 - lfoAt(id, 1.5 * q / 60, 0.5).x * 7]);
-    const d = pts.map((q, k) => (k ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
-    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="${d}"/></svg>`;
-  }
-  const shapeBtn = $('#shapeBtn'), shapeMenu = $('#shapeMenu');
-  const SHAPE_GROUPS = [['Waves', (s) => !s.orbit && !s.env], ['Orbits', (s) => s.orbit], ['One-shot', (s) => s.env]];
-  shapeMenu.innerHTML = SHAPE_GROUPS.map(([name, f]) => `<div class="grouplabel">${name}</div>` +
-    MOD_SHAPES.filter(f).map((sh) => `<button type="button" role="menuitemradio" data-id="${sh.id}">${shapeIcon(sh.id)}${sh.name}</button>`).join('')).join('');
-  function closeShapeMenu() { shapeMenu.hidden = true; shapeBtn.setAttribute('aria-expanded', 'false'); }
-  shapeBtn.addEventListener('click', () => {
-    const open = shapeMenu.hidden;
-    shapeMenu.hidden = !open; shapeBtn.setAttribute('aria-expanded', String(open));
-    if (open) (shapeMenu.querySelector('[aria-checked="true"]') || shapeMenu.querySelector('button')).focus();
-  });
-  shapeMenu.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    mods[modSel].shape = b.dataset.id; closeShapeMenu(); loadModEditor(); renderMods(); history.commit(); shapeBtn.focus();
-  });
-  shapeMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeShapeMenu(); shapeBtn.focus(); } });
-  document.addEventListener('pointerdown', (e) => { if (!shapeMenu.hidden && !e.target.closest('.pickwrap')) closeShapeMenu(); });
-
-  const destSel = $('#destSel');
-  destSel.innerHTML = [...new Set(MOD_DESTS.map((d) => d.group))].map((grp) => `<optgroup label="${grp}">` +
-    MOD_DESTS.filter((d) => d.group === grp).map((d) => `<option value="${d.id}">${d.name}</option>`).join('') + '</optgroup>').join('');
-  destSel.addEventListener('change', () => { mods[modSel].dest = destSel.value; renderMods(); refreshKnobMods(); history.commit(); });
-
-  /* the editor's four knobs: rate, depth, the shape's own control and
-     phase for LFOs; attack, decay and depth for the envelope */
-  const modKnobsEl = $('#modKnobs');
+  /* the selected modulator's controls: Sync / Free and polarity keys, then
+     rate (or Hz), depth, the shape's own control and phase for LFOs;
+     attack, decay and depth for the envelope */
+  const modKeys = { free: modEdit.querySelector('[data-t="free"]'), uni: modEdit.querySelector('[data-t="uni"]') };
+  press(modKeys.free, () => { const m = mods[modSel]; m.free = !m.free; loadModEditor(); history.commit(); });
+  press(modKeys.uni, () => { const m = mods[modSel]; m.uni = !m.uni; loadModEditor(); refreshKnobMods(); history.commit(); });
+  const fmtHzRate = (m) => { const h = modHz(m); return h < 1 ? h.toFixed(2) + ' Hz' : h.toFixed(h < 10 ? 1 : 0) + ' Hz'; };
   function loadModEditor() {
     const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
-    shapeBtn.innerHTML = shapeIcon(m.shape) + sh.name;
-    shapeMenu.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.id === m.shape)));
-    destSel.value = m.dest;
+    modKeys.free.hidden = modKeys.uni.hidden = !!sh.env;
+    modKeys.free.textContent = m.free ? 'Free' : 'Sync';
+    modKeys.free.setAttribute('aria-pressed', String(!!m.free));
+    modKeys.free.title = m.free ? 'Free: runs on its own clock, even when stopped' : 'Sync: follows the song\'s tempo';
+    modKeys.uni.innerHTML = m.uni ? '<b>+</b>&thinsp;Uni' : '<b>±</b>&thinsp;Bi';
+    modKeys.uni.title = m.uni ? 'Unipolar: moves one way, 0 to depth' : 'Bipolar: swings both ways';
     modKnobsEl.innerHTML = '';
-    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { renderMods(); history.commit(); } }, o)); };
+    const knob = (o) => { const d = document.createElement('div'); modKnobsEl.appendChild(d); return createKnob(d, Object.assign({ onChange: () => { refreshKnobMods(); history.commit(); } }, o)); };
     if (sh.env) {
       knob({ min: 0, max: 1, step: 0.01, value: m.atk, label: 'Attack', fmt: () => fmtT(envAttack(m)), onInput: (v) => { m.atk = v; } });
       knob({ min: 0, max: 1, step: 0.01, value: m.dec, label: 'Decay', fmt: () => fmtT(envDecay(m)), onInput: (v) => { m.dec = v; } });
+    } else if (m.free) {
+      knob({ min: 0, max: 1, step: 0.005, value: m.hz == null ? 0.45 : m.hz, label: 'Rate', fmt: () => fmtHzRate(m), onInput: (v) => { m.hz = v; } });
     } else {
       knob({ min: 0, max: MOD_RATES.length - 1, step: 1, value: m.rate, label: 'Rate', fmt: (v) => MOD_RATES[v].name, onInput: (v) => { m.rate = v; } });
     }
-    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; } });
+    knob({ min: -100, max: 100, step: 1, value: Math.round(m.depth * 100), bipolar: true, label: 'Depth', fmt: (v) => (v > 0 ? '+' : '') + v + '%', onInput: (v) => { m.depth = v / 100; refreshKnobMods(); } });
     if (!sh.env && sh.ctl) knob({ min: 0, max: 1, step: 0.01, value: m.ctl, label: sh.ctl[0], fmt: (v) => (sh.ctl[1] + v * (sh.ctl[2] - sh.ctl[1])).toFixed(2), onInput: (v) => { m.ctl = v; } });
     if (!sh.env) knob({ min: 0, max: 359, step: 1, value: Math.round(m.phase * 360), label: 'Phase', fmt: (v) => v + '°', onInput: (v) => { m.phase = v / 360; } });
   }
 
-  /* each modulator's die rolls its settings, not its assignments */
-  function randomizeModSettings(k, strength) {
-    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)];
-    if (Math.random() < strength) m.shape = pick(MOD_SHAPES).id;
-    m.rate = clamp(Math.round(m.rate + (Math.random() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
-    m.depth = clamp((Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.6 * strength), -1, 1);
-    m.ctl = clamp(m.ctl + (Math.random() * 2 - 1) * strength, 0, 1);
-    m.phase = Math.random() < strength ? Math.random() : m.phase;
-    m.atk = clamp(m.atk + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
-    m.dec = clamp(m.dec + (Math.random() * 2 - 1) * strength * 0.6, 0, 1);
+  /* rolling a modulator's settings: rate, depth, its shape's control and
+   phase always move; at higher strength the shape and destination may
+   change too (to ones that suit it). Never its assignments. */
+  const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch', 'fold', 'drive', 'fm'];
+  const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
+  function randomizeModSettings(k, strength, all) {
+    const m = mods[k], pick = (a) => a[Math.floor(Math.random() * a.length)], r = Math.random;
+    if (r() < (all ? 0.4 + 0.6 * strength : strength * 0.6)) { m.shape = pick(MOD_SHAPES).id; if (isEnv(m) && isGlobal(m)) m.dest = 'pitch'; }
+    if (!isGlobal(m) && r() < (all ? 0.25 + 0.5 * strength : strength * 0.35)) m.dest = pick(isEnv(m) ? ENV_DESTS : LFO_DESTS);
+    m.rate = clamp(Math.round(m.rate + (r() * 2 - 1) * 3 * strength), 0, MOD_RATES.length - 1);
+    m.hz = clamp((m.hz == null ? 0.45 : m.hz) + (r() * 2 - 1) * 0.4 * strength, 0, 1);
+    m.depth = clamp((r() < 0.5 ? -1 : 1) * (0.15 + r() * 0.6 * strength), -1, 1);
+    m.ctl = clamp(m.ctl + (r() * 2 - 1) * strength, 0, 1);
+    if (r() < strength) m.phase = r();
+    if (r() < strength * 0.25) m.free = !m.free;
+    if (r() < strength * 0.25) m.uni = !m.uni;
+    m.atk = clamp(m.atk + (r() * 2 - 1) * strength * 0.6, 0, 1);
+    m.dec = clamp(m.dec + (r() * 2 - 1) * strength * 0.6, 0, 1);
   }
-  /* the page's die makes assignments: each modulator picks a destination
-     that suits it (envelopes on things that glide through a hit) and lands
-     on the drums the pattern actually uses most, or on a few steps */
+  /* the page's die: below halfway it rolls every modulator's settings;
+     past halfway, if Preferences allow it, it also makes new assignments */
+  function randomizeModPage(strength) {
+    mods.forEach((_, k) => { if (Math.random() < 0.4 + 0.6 * strength) randomizeModSettings(k, strength, false); });
+    if (prefs.diceAssign && strength >= 0.5) randomizeAssignments(strength);
+    renderMods(); refreshKnobMods(); dirty = true;
+    history.commit();
+  }
+  /* new assignments: each modulator picks a destination that suits it
+     (envelopes on things that glide through a hit) and lands on the drums
+     the pattern actually uses most, or on a few steps */
   function randomizeAssignments(strength) {
     const on = seq.steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
     if (!on.length) return;
@@ -1538,8 +1664,6 @@
     for (const i of on) { const s = seq.steps[i], a = nearestAnchor(s.x, s.y); counts.set(a, (counts.get(a) || 0) + 1); }
     const drums = [...counts.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
-    const ENV_DESTS = ['pitch', 'lp', 'hp', 'x', 'y', 'noise', 'metal', 'resF', 'mPitch'];
-    const LFO_DESTS = ['x', 'y', 'decay', 'pitch', 'lp', 'fold', 'fm', 'drive', 'noise', 'resShape', 'q'];
     mods.forEach((m) => {
       if (Math.random() > 0.3 + 0.7 * strength) return;
       m.targets = [];
@@ -1552,8 +1676,6 @@
       } else m.targets.push({ kind: 'kit' });
       m.depth = (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.5 * strength);
     });
-    renderMods(); loadModEditor(); refreshKnobMods(); dirty = true;
-    history.commit();
   }
 
   /* the knob pickers on the kit and engine pages: a modulator moves that
@@ -1561,6 +1683,7 @@
   function knobMod(dest, target) {
     const sameT = (g, t) => g.kind === t.kind && g.a === t.a;
     const o = {
+      dest,
       current() { const t = target(); return mods.findIndex((m) => m.dest === dest && m.targets.some((g) => sameT(g, t))); },
       pick(k) {
         const t = target();
@@ -1581,7 +1704,7 @@
       return {
         steps: JSON.parse(JSON.stringify(seq.steps)),
         anchors: ANCHORS.map((a) => ({ ...a.p })),
-        trims: { ...trims }, tempo, swing, mono: pendingMono,
+        trims: { ...trims }, tempo, swing, mono: pendingMono, playMode,
         mods: JSON.parse(JSON.stringify(mods)),
       };
     },
@@ -1590,6 +1713,7 @@
       s.anchors.forEach((p, i) => { ANCHORS[i].p = { ...p }; });
       Object.assign(trims, { fold: 0, resMix: 1 }, s.trims);
       tempo = s.tempo; swing = s.swing;
+      if (s.playMode) { playMode = s.playMode; playModeMenu.paint(); }
       if (s.mods) s.mods.forEach((m, k) => { mods[k] = JSON.parse(JSON.stringify(m)); });
       renderMods(); loadModEditor(); refreshKnobMods();
       pendingMono = s.mono; if (engine) engine.mono = s.mono;
@@ -1610,6 +1734,7 @@
       seq.onChange();
     },
     commit() {
+      if (stash) return; // a clip is only being auditioned
       const snap = this.snapshot();
       const top = this.stack[this.index];
       if (top && JSON.stringify(top) === JSON.stringify(snap)) return;
@@ -1621,25 +1746,242 @@
     undo() { if (this.index > 0) { this.index--; this.restore(this.stack[this.index]); } },
     redo() { if (this.index < this.stack.length - 1) { this.index++; this.restore(this.stack[this.index]); } },
   };
+  /* ==========================================================================
+     Clips: the clip key keeps the loop as it stands (pattern, kit,
+     modulation, tempo, play mode) in a pool on the Clips page, each shown
+     as a thumbnail of its sky. Select one to play it there, load it back
+     into the sequencer, or export it: a zip of WAVs, the mix plus one stem
+     per drum, rendered from one shared set of hits so chokes cut the
+     stems exactly as they cut the mix.
+     Clips are kept for this viewer in the artifact's database when it's
+     available, otherwise in this browser.
+     ========================================================================== */
+  let clips = [], clipSel = null, clipPlaying = null, stash = null, clipCount = 0;
+  const clipStore = { col: null };
+  const clipGrid = $('#clipGrid'), clipNote = $('#clipNote');
+  const clipBody = (c) => ({ kind: 'clip', name: c.name, at: c.at, snap: c.snap, thumb: c.thumb });
+  async function initClipStore() {
+    try {
+      if (window.claude && window.claude.use) {
+        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+        const uid = db && user ? await user.id() : null;
+        if (uid) {
+          clipStore.col = db.collection('data/users/' + uid);
+          const snap = await clipStore.col.get();
+          const got = snap.docs.filter((d) => d.exists && d.data().kind === 'clip').map((d) => Object.assign({ id: d.id }, JSON.parse(JSON.stringify(d.data()))));
+          mergeClips(got);
+          return;
+        }
+      }
+    } catch (_) { clipStore.col = null; }
+    try { mergeClips(JSON.parse(localStorage.getItem('pixy.clips') || '[]')); } catch (_) {}
+  }
+  function mergeClips(list) {
+    for (const c of list) if (!clips.some((d) => d.id === c.id)) clips.push(c);
+    clips.sort((a, b) => a.at - b.at);
+    clipCount = clips.reduce((n, c) => Math.max(n, +(/\d+$/.exec(c.name) || [0])[0]), clipCount);
+    if (currentPage === 'clips') renderClips();
+  }
+  function saveLocalClips() { if (!clipStore.col) try { localStorage.setItem('pixy.clips', JSON.stringify(clips)); } catch (_) {} }
+  async function storeClip(c) {
+    if (clipStore.col) { try { await clipStore.col.doc(c.id).set(clipBody(c)); return; } catch (_) { clipStore.col = null; } }
+    saveLocalClips();
+  }
+  async function unstoreClip(c) {
+    if (clipStore.col) { try { await clipStore.col.doc(c.id).delete(); return; } catch (_) {} }
+    saveLocalClips();
+  }
+
+  /* a clip's thumbnail: its sky and constellation, no moons or labels */
+  function clipThumb() {
+    const S = 180, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    g.drawImage(buildSky(S, S), 0, 0);
+    drawStarChart(g, S, S, S / 360, performance.now(), { thumb: true });
+    return cv.toDataURL('image/jpeg', 0.82);
+  }
+  async function takeClip() {
+    if (!seq.steps.some((s) => s.on)) { flashKey($('#clip'), 'Nothing to clip'); return; }
+    const snap = stash ? stash.snap : history.snapshot();
+    const c = { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: 'Clip ' + (++clipCount), at: Date.now(), snap, thumb: clipThumb() };
+    clips.push(c); clipSel = c.id;
+    flashKey($('#clip'));
+    if (currentPage === 'clips') renderClips();
+    await storeClip(c);
+  }
+  function flashKey(el, msg) {
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 380);
+    if (msg) el.title = msg;
+  }
+  press($('#clip'), takeClip);
+
+  const clipBtns = { play: $('#clipPlay'), load: $('#clipLoad'), exp: $('#clipExport'), del: $('#clipDelete') };
+  const selClip = () => clips.find((c) => c.id === clipSel) || null;
+  function renderClips() {
+    clipGrid.innerHTML = '';
+    for (const c of clips) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'clipcard'; b.setAttribute('role', 'option');
+      b.setAttribute('aria-selected', String(c.id === clipSel));
+      b.classList.toggle('playing', c.id === clipPlaying);
+      const n = c.snap.steps.filter((s) => s.on).length;
+      b.innerHTML = `<img alt="" src="${c.thumb}"><span>${c.name} · ${Math.round(c.snap.tempo)} bpm · ${n} steps</span>`;
+      b.setAttribute('aria-label', `${c.name}, ${Math.round(c.snap.tempo)} bpm, ${n} steps`);
+      b.addEventListener('click', () => {
+        clipSel = c.id;
+        if (clipPlaying && clipPlaying !== c.id) playClip(c); // selecting another while one plays switches to it
+        renderClips();
+      });
+      clipGrid.appendChild(b);
+    }
+    const c = selClip();
+    for (const k of ['play', 'load', 'exp', 'del']) clipBtns[k].disabled = !c;
+    clipBtns.play.setAttribute('aria-pressed', String(!!c && clipPlaying === c.id));
+    if (!clips.length) clipNote.textContent = 'No clips yet. The clip key beside record keeps the loop as it is.';
+    else if (!clipNote.dataset.busy) clipNote.textContent = '';
+  }
+  /* playing a clip here swaps it in for the working pattern; stopping, or
+     leaving this page, puts the working pattern back */
+  function playClip(c) {
+    if (!stash) stash = { snap: history.snapshot(), wasPlaying: playing };
+    history.restore(c.snap);
+    clipPlaying = c.id;
+    if (!playing) setPlaying(true);
+    renderClips();
+  }
+  function stopClip() {
+    if (!stash) return;
+    const st = stash; stash = null; clipPlaying = null;
+    if (!st.wasPlaying) setPlaying(false);
+    history.restore(st.snap);
+    renderClips();
+  }
+  function leaveClips() { stopClip(); }
+  press(clipBtns.play, () => { const c = selClip(); if (!c) return; if (clipPlaying === c.id) stopClip(); else playClip(c); });
+  clipBtns.load.addEventListener('click', () => {
+    const c = selClip(); if (!c) return;
+    if (stash) { const st = stash; stash = null; clipPlaying = null; if (!st.wasPlaying) setPlaying(false); }
+    history.restore(c.snap); history.commit();
+    clipNote.textContent = `${c.name} is in the sequencer.`;
+    renderClips();
+  });
+  clipBtns.del.addEventListener('click', async () => {
+    const c = selClip(); if (!c) return;
+    if (clipPlaying === c.id) stopClip();
+    clips = clips.filter((d) => d !== c); clipSel = null;
+    renderClips();
+    await unstoreClip(c);
+  });
+
+  /* ---------- export ---------- */
+  const EXPORT_BARS = 4, EXPORT_SR = 44100;
+  /* every hit of the clip, planned once: when, what, and which drum's stem
+     it belongs to. A bar is played first and thrown away, so the loop
+     starts with the tails it would have when looping. */
+  function planClip(snap) {
+    const keep = history.snapshot(), live = { beatMarks, playing };
+    history.restore(snap);
+    const hits = [], marks = [];
+    beatMarks = marks; playing = true;
+    let t = 0.02, loopStart = 0, loopEnd = 0;
+    const plan = (i, x, y, at, decMult, glidePts) => {
+      const act = activeMods(i, x, y), envs = act.filter((m) => isEnv(m) && GLIDE_DESTS.has(m.dest));
+      const P = soundAt(i, x, y, at, envs.length ? 0 : null, act), gl = glidePts ? glidePts.slice() : [];
+      if (envs.length) {
+        const span = Math.min(2, Math.max(...envs.map((m) => envAttack(m) + envDecay(m))));
+        for (let k = 1; k <= ENV_POINTS; k++) { const tau = span * k / ENV_POINTS; gl.push([soundAt(i, x, y, at, tau, act), at + tau]); }
+      }
+      hits.push({ t: at, P, decMult, glide: gl.length > 0 || !!glidePts, glides: gl, a: nearestAnchor(x, y) });
+    };
+    for (let n = 0; n < (EXPORT_BARS + 1) * N_STEPS; n++) {
+      if (n === N_STEPS) loopStart = t;
+      const beat = n * 0.25, tp = transportAt(beat, t), dur = 60 / tp.bpm / 4;
+      marks.push({ t, beat, dur });
+      const i = stepAt(playMode, n), sw = swingOffset(n % N_STEPS, tp.sw, dur), at = t + sw, span = dur - sw;
+      const r = seq.trial(i), s = seq.steps[i];
+      if (r.fired && s.auto) {
+        const dx = r.x - s.x, dy = r.y - s.y;
+        const q = (o) => { const p = autoAt(s.auto, o); return { x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }; };
+        const offs = [0, ...s.ratchets.map((rr) => rr.offset)];
+        offs.forEach((o, k) => {
+          const o2 = k + 1 < offs.length ? offs[k + 1] : 1, ht = at + o * span, p0 = q(o), pts = [];
+          for (let j = 1; j < AUTO_POINTS; j++) { const oo = j / (AUTO_POINTS - 1); if (oo > o && oo <= o2) { const qq = q(oo); pts.push([soundAt(i, qq.x, qq.y, ht, (oo - o) * span), at + oo * span]); } }
+          hits.push({ t: ht, P: soundAt(i, p0.x, p0.y, ht, 0), decMult: r.decMult, glide: true, glides: pts, a: nearestAnchor(p0.x, p0.y) });
+        });
+      } else if (r.fired) {
+        plan(i, r.x, r.y, at, r.decMult);
+        for (const rr of s.ratchets) plan(i, rr.x, rr.y, at + rr.offset * span, r.decMult);
+      }
+      t += dur;
+    }
+    loopEnd = t;
+    const setup = { trims: { ...trims }, mono: pendingMono };
+    beatMarks = live.beatMarks; playing = live.playing;
+    history.restore(keep);
+    return { hits, loopStart, loopEnd, setup };
+  }
+  /* render the plan; stem = an anchor index (only its hits are heard, but
+     every hit is still struck so chokes land where they do in the mix) */
+  async function renderPlan(plan, stem) {
+    const len = Math.ceil((plan.loopEnd + 0.05) * EXPORT_SR);
+    const ctx = new OfflineAudioContext(1, len, EXPORT_SR);
+    const R = Math.random; let seed = 12345; Math.random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    try {
+      const eng = new Engine(ctx, { dry: stem != null });
+      eng.trims = plan.setup.trims; eng.mono = plan.setup.mono;
+      for (const h of plan.hits) {
+        const v = eng.trigger(h.P, h.t, h.decMult, h.glide ? { glide: true } : undefined);
+        if (stem != null && h.a !== stem) v.out.gain.value = 0;
+        if (v.glide) for (const [P, at] of h.glides) v.glide(P, at);
+      }
+    } finally { Math.random = R; }
+    const buf = (await ctx.startRendering()).getChannelData(0);
+    return buf.slice(Math.round(plan.loopStart * EXPORT_SR), Math.round(plan.loopEnd * EXPORT_SR));
+  }
+  const fileSafe = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  async function exportClip(c) {
+    const note = (t) => { clipNote.textContent = t; };
+    clipNote.dataset.busy = '1'; clipBtns.exp.disabled = true;
+    try {
+      note('Rendering the mix…');
+      const plan = planClip(c.snap), base = fileSafe(c.name);
+      const files = [{ name: `${base}/${base}-mix.wav`, data: encodeWav(await renderPlan(plan), EXPORT_SR) }];
+      const stems = [...new Set(plan.hits.map((h) => h.a))].sort((a, b) => a - b);
+      for (const [k, a] of stems.entries()) {
+        note(`Rendering stems… ${k + 1} of ${stems.length}`);
+        files.push({ name: `${base}/stems/${String(a + 1).padStart(2, '0')}-${fileSafe(ANCHORS[a].name)}.wav`, data: encodeWav(await renderPlan(plan, a), EXPORT_SR) });
+      }
+      const zip = new Blob([zipStore(files)], { type: 'application/zip' }), filename = `pixy-${base}.zip`;
+      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (dl) {
+        try { await dl.save({ filename, data: zip }); note(`Saved ${filename}: the mix and ${stems.length} stems, ${EXPORT_BARS} bars.`); }
+        catch (e) { note(e && e.code === 'declined' ? 'Export cancelled.' : 'Couldn’t save the file here.'); }
+      } else {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        note(`Exported ${filename}: the mix and ${stems.length} stems, ${EXPORT_BARS} bars.`);
+      }
+      window.__lastExport = { filename, files: files.map((f) => f.name), bytes: zip.size }; // for tests
+    } catch (e) {
+      note('Export failed: ' + (e && e.message ? e.message : e));
+    } finally {
+      delete clipNote.dataset.busy; clipBtns.exp.disabled = !selClip();
+    }
+  }
+  clipBtns.exp.addEventListener('click', () => { const c = selClip(); if (c) exportClip(c); });
+  initClipStore();
+
   /* ---------- randomizer dice: strength 0..1 (how far right the die was
      dragged) scales how much gets perturbed. ---------- */
-  function jitterAnchorParams(a, strength) {
-    PARAM_SPECS.forEach((spec) => {
-      const span = spec.max - spec.min;
-      a.p[spec.key] = clamp(a.p[spec.key] + (Math.random() * 2 - 1) * strength * span * 0.75, spec.min, spec.max);
-    });
-  }
+  const jitterAnchorParams = (a, strength) => jitterParams(a.p, strength);
   function randomizeSequence(strength) {
-    seq.steps.forEach((s) => {
-      if (!s.on) return;
-      s.x = clamp(s.x + (Math.random() * 2 - 1) * strength * 0.9, 0, 1);
-      s.y = clamp(s.y + (Math.random() * 2 - 1) * strength * 0.9, 0, 1);
-    });
+    randomizeSteps(seq.steps, strength);
     seq.onChange();
     history.commit();
   }
   function randomizeDrum(strength) {
-    jitterAnchorParams(ANCHORS[+engineSelect.value], strength);
+    jitterAnchorParams(ANCHORS[engineIdx], strength);
     loadAnchorIntoEditor(); scheduleFieldRefresh();
     stepsDirty = readoutDirty = laneDirty = true;
     history.commit();
@@ -1660,41 +2002,55 @@
     seq.onChange();
     history.commit();
   }
+  /* the top-bar die, per page: what a roll does, and its caption (which
+     can change with how far the die is dragged) */
   const DICE = {
-    pad: ['Randomize sequence', randomizeSequence],
-    mod: ['Randomize modulation assignments', randomizeAssignments],
-    lanes: ['Randomize this lane', randomizeLane],
-    kit: ['Randomize whole kit', randomizeKit],
-    engine: ['Randomize this drum', randomizeDrum],
+    pad: [() => 'Randomize sequence', randomizeSequence],
+    mod: [(st) => (prefs.diceAssign ? (st >= 0.5 ? 'Randomize modulators + assignments' : 'Randomize modulators · past half: assignments') : 'Randomize modulator settings'), randomizeModPage],
+    lanes: [() => 'Randomize this lane', randomizeLane],
+    kit: [() => 'Randomize every drum', randomizeKit],
+    engine: [() => 'Randomize this drum', randomizeDrum],
+    clips: null,
   };
-  const dice = createDiceSlider($('#diceField'), DICE.pad[0], (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
-  function updateDice() {
-    const d = DICE[currentPage];
-    dice.setAttribute('aria-label', d ? d[0] : 'Nothing to randomize here');
-    dice.title = d ? d[0] : '';
+  const dice = createDiceSlider($('#diceField'), 'Randomize sequence', (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
+  function updateDice(st) {
+    const d = DICE[currentPage], cap = d ? d[0](st || 0) : '';
+    dice.setAttribute('aria-label', d ? cap + '. Hold it and tap a control to randomize just that.' : 'Nothing to randomize here');
+    dice.title = cap;
     dice.setAttribute('aria-disabled', String(!d));
-    $('#diceCap').textContent = d ? d[0] : '';
+    $('#diceCap').textContent = dieHold && dieHold.used ? 'Tap what to randomize' : cap;
   }
+  /* hold the die and tap a step: that one step is rolled */
+  tiles.forEach((btn, i) => randTargets.set(btn, (st) => {
+    const s = seq.steps[i];
+    if (!s.on) { s.on = true; s.set = true; s.x = 0.04 + Math.random() * 0.92; s.y = 0.04 + Math.random() * 0.92; }
+    else randomizeSteps([s], st);
+    seq.onChange();
+  }));
 
   const HELP = {
     pad: ['Star chart', [
-      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in playing order.',
+      '<b>Touch the sky</b> to play: every point is a different blend of drums. Each sequenced step is a star, joined to the next in step order.',
       '<b>Tap a step</b> to switch it on or off. Switching one off clears it completely.',
       '<b>Hold the pad, then tap a step</b> to give that step the sound under your finger. <b>Hold steps, then touch the pad</b> and they follow your finger.',
       '<b>Hold a step, then tap another</b> to copy its sound.',
-      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at.',
+      '<b>Trash</b>: hold it and tap steps to delete them, or hold steps and tap it. Tapped on its own, it clears the whole sequence.',
+      '<b>Record</b>: while playing, touching the sky writes into the step that\'s passing. A touch that starts in the second half of a step lands on the next one; a hold covers every step it\'s still held at. Stopping also disarms record.',
       'The <b>ratchet bar</b> beside the sky sets how many hits a recorded step gets (2, 3, 4 or 6). Hold it up while recording with the sky; it springs back to 1/16 when you let go and does nothing on its own.',
       '<b>Stepped / smooth</b> (beside record): smooth lets a ringing hit follow your finger and records the whole gesture. It only affects new touches.',
+      '<b>Clip</b> (the framed stars) keeps the loop as it is, sound and all, on the Clips page.',
+      '<b>Play mode</b> (beside redo): forward, backward, ping-pong or random.',
       '<b>Choke</b> (the cut-off wave) lets only one hit ring at a time. <b>Select</b> (dotted square) latches steps for one-finger editing.',
       'Small <b>moons</b> orbit the stars a modulator moves. Set them up on the modulation page.',
     ]],
     mod: ['Modulation', [
-      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>.',
-      '<b>Hold Step assign</b> and tap stars to send a modulator to those steps. <b>Hold Drum assign</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it.',
-      'Or <b>hold a star</b> and tap Step or Drum assign on any modulator. A quick tap on an assign key latches it until you tap it again.',
-      '<b>Destination</b> is what it moves: position on the map, pitch, decay, or any engine control. The kit and engine pages also have a small picker under each knob.',
-      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: a slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
-      'The <b>die on each modulator</b> rolls its settings. The <b>die in the top bar</b> makes new assignments, aimed at the drums your pattern uses most.',
+      'Six modulators. Each one is a <b>wave</b>, an <b>orbit</b> (real orbital motion: Kepler, precession, halo, retrograde, resonance, figure-eight) or a one-shot <b>envelope</b>. Pick its shape and destination on its row.',
+      '<b>Assign</b>: hold <b>Step</b> and tap stars to send a modulator to those steps; hold <b>Drum</b> and tap a star to send it to every hit of that star\'s drum. Tap a star again to remove it. Or hold a star and tap Step or Drum. A quick tap on Step or Drum latches it until you tap it again.',
+      'Tap a row to open its controls. <b>Sync</b> follows the song\'s tempo and rests when stopped; <b>Free</b> runs in Hz on its own clock, always. <b>Bi</b> swings both ways; <b>Uni</b> only moves one way.',
+      '<b>Tempo</b> and <b>swing</b> are destinations too; they\'re global, so there\'s nothing to assign.',
+      'An LFO is read at the moment each hit is struck. An envelope runs through the hit: pitch, filters, levels, position, FM, fold and drive follow its whole shape; decays, attack, sweep and clap take its peak. A slow attack shows as a flare, a fast one as an impact, a fast one with a long tail as a supernova.',
+      'The kit and engine pages have a small picker under each knob. A modulated knob gets a ring in its modulator\'s colour; drag the ring to set the depth.',
+      '<b>The die</b> rolls every modulator\'s settings. In Preferences you can let it also make new assignments past halfway.',
     ]],
     lanes: ['Step lanes', [
       '<b>Chance</b>: how often each step plays. <b>X / Y drift</b>: how often, and how far, a step strays from its spot. <b>Decay</b>: each step\'s own decay length, and how often and how far it varies.',
@@ -1702,22 +2058,51 @@
     ]],
     kit: ['Whole kit', [
       'These shift every drum on the map at once. Double-tap a knob to reset it.',
-      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit.',
+      'The small picker under each knob sends a modulator (M1 to M6) to that control for the whole kit; drag the coloured ring to set how far it moves.',
+      'The die rolls every drum\'s sound. To roll one macro, hold the die and tap its knob.',
     ]],
     engine: ['Drum engine', [
       'Each drum is a point the whole map blends toward, so shaping it reshapes nearby sounds too.',
       'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
-      'The small picker under each knob sends a modulator to that control for this drum.',
+      'The small picker under each knob sends a modulator to that control for this drum. Hold the die and tap a section\'s name to roll just that section.',
+    ]],
+    clips: ['Clips', [
+      'The <b>clip</b> key on the star chart keeps the loop as it is: pattern, sounds, modulation, tempo and play mode.',
+      'Tap a clip to select it. <b>Play</b> hears it here without touching your pattern (leaving the page puts yours back); <b>Load</b> puts it into the sequencer (undo covers it).',
+      '<b>Export</b> renders four bars as a zip of WAVs: the mix, and a stem for each drum. Every hit is struck in every stem, so choke cuts the stems exactly as it cuts the mix. Stems skip the master compressor.',
     ]],
   };
+  /* preferences sheet */
+  const prefSheet = $('#prefs'), prefBtn = $('#prefBtn'), prefAssign = $('#prefAssign');
+  function paintPrefs() {
+    prefAssign.setAttribute('aria-pressed', String(prefs.diceAssign));
+    prefAssign.textContent = prefs.diceAssign ? 'On' : 'Off';
+    prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
+  }
+  function setPrefs(open) {
+    if (open) setHelp(false);
+    prefSheet.hidden = !open; prefBtn.setAttribute('aria-expanded', String(open)); prefBtn.setAttribute('aria-pressed', String(open));
+    if (open) { paintPrefs(); $('#prefsClose').focus(); }
+  }
+  prefBtn.addEventListener('click', () => setPrefs(prefSheet.hidden));
+  $('#prefsClose').addEventListener('click', () => { setPrefs(false); prefBtn.focus(); });
+  prefAssign.addEventListener('click', () => { prefs.diceAssign = !prefs.diceAssign; savePrefs(); paintPrefs(); updateDice(); });
+  prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
+    prefs.theme = b.dataset.v; savePrefs(); paintPrefs();
+    if (prefs.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = prefs.theme;
+  }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !prefSheet.hidden) { setPrefs(false); prefBtn.focus(); } });
+
   const help = $('#help'), helpBtn = $('#helpBtn');
   function fillHelp() {
     const [title, items] = HELP[currentPage];
     $('#helpH').textContent = title;
     $('#helpList').innerHTML = items.map((t) => `<li>${t}</li>`).join('') +
+      '<li><b>Hold the die and tap</b> a knob, a dropdown, a step or a modulator\'s name to roll just that one. Drag the die further for a bigger change.</li>' +
       '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
   }
   function setHelp(open) {
+    if (open && !prefSheet.hidden) setPrefs(false);
     help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
     if (open) { fillHelp(); $('#helpClose').focus(); }
   }
@@ -1761,18 +2146,12 @@
       const ct = actx.currentTime;
       while (queue.length && queue[0].t <= ct) {
         const q = queue.shift();
-        if (q.i !== cur || !q.ratchet) curT = q.t;
+        if (!q.ratchet) { curT = q.t; curN = q.n; }
         cur = q.i;
-        if (q.fired) spawnBurst(q.x, q.y, q.P, now);
         headDirty = dirty = laneDirty = true;
       }
     }
-    if (actx && liveQueue.length) {
-      const ct = actx.currentTime;
-      while (liveQueue.length && liveQueue[0].t <= ct) { const q = liveQueue.shift(); spawnBurst(q.x, q.y, q.P, now); }
-    }
-    stepParticles(dt, now);
-    if (particles.length || playing || mods.some((m) => m.targets.length)) dirty = true;
+    if (playing || mods.some((m) => m.targets.length || m.free)) dirty = true;
     if (actx) envFires = envFires.filter((f) => actx.currentTime - f.t < 2.5);
 
     if (headDirty) { updateHead(); headDirty = false; }
@@ -1788,9 +2167,20 @@
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
+  /* a page's parts, in the order they assemble; the sky is its own part,
+     shared by the pad and modulation pages */
+  const PARTS = {
+    pad: '.ratchet, .transport > *, .cell, .tools > :not(.gap)',
+    mod: '.modhead, .mod',
+    lanes: '.lanehead > *, .lanetabs .tab, #laneCanvas, .lanereadout',
+    kit: 'h2, #kitKnobs > *',
+    engine: 'h2, .enginepick > *, .module h3, .module .knobgrid > *',
+    clips: '.cliphead > *, .clipcard, .clipnote',
+  };
+  const SKY = { pad: '.padrow .padwrap', mod: '.modsky' };
   function settleSlide() {
     if (!slide) return;
     const { from, anims, timer } = slide;
@@ -1798,44 +2188,70 @@
     clearTimeout(timer);
     anims.forEach((an) => { try { an.cancel(); } catch (_) {} });
     from.classList.remove('active', 'leaving');
+    if (morph) { morph = null; resizePad(); modField = null; dirty = true; }
   }
   function setPage(page) {
     if (!PAGE_ORDER.includes(page) || page === currentPage) return;
     settleSlide();
+    closeMenu();
     const from = document.querySelector(`.page[data-page="${currentPage}"]`);
     const to = document.querySelector(`.page[data-page="${page}"]`);
-    const dir = PAGE_ORDER.indexOf(page) > PAGE_ORDER.indexOf(currentPage) ? 1 : -1;
+    const fromSky = SKY[currentPage] && from.querySelector(SKY[currentPage]), r0 = fromSky && fromSky.getBoundingClientRect();
+    const prev = currentPage;
     currentPage = page;
     updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
+    if (prev === 'clips') leaveClips();
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
     // force a resize+redraw now that the page is actually visible.
     if (page === 'pad') { resizePad(); dirty = true; }
     if (page === 'lanes') { resizeLaneCanvas(); laneDirty = true; }
-    if (page === 'mod') { modField = null; renderMods(); loadModEditor(); dirty = true; }
+    if (page === 'mod') { modField = null; renderMods(); dirty = true; }
+    if (page === 'clips') renderClips();
     if (!help.hidden) fillHelp();
     if (reduceMotion || !to.animate) { from.classList.remove('active'); return; }
-    // the old page leaves as the new one arrives, side by side like a strip;
-    // no fill mode, so once the animations end (or are cancelled) both pages
-    // are back to an untransformed resting state whatever happened
+    /* the old page comes apart and the new one assembles: each part flies
+       in from beyond its own side of the page, a few ms after the last.
+       Between the pad and modulation pages the sky stays and resizes. */
     from.classList.add('leaving');
-    const opts = { duration: 380, easing: 'cubic-bezier(.65, 0, .35, 1)' };
-    const off = (sign) => `translateX(calc(${sign} * (100% + 24px)))`;
-    const anims = [
-      from.animate([{ transform: 'translateX(0)' }, { transform: off(-dir) }], opts),
-      to.animate([{ transform: off(dir) }, { transform: 'translateX(0)' }], opts),
-    ];
-    const timer = setTimeout(settleSlide, opts.duration + 200); // in case finish never fires
+    const anims = [], pr = to.getBoundingClientRect(), cx = pr.left + pr.width / 2, cy = pr.top + Math.min(pr.height, window.innerHeight) / 2;
+    const toSky = SKY[page] && to.querySelector(SKY[page]);
+    const out = (el) => { const r = el.getBoundingClientRect(), dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy, n = Math.hypot(dx, dy) || 1; return [dx / n, dy / n]; };
+    const fromParts = [...from.querySelectorAll(PARTS[prev])];
+    if (fromSky) fromParts.push(fromSky);
+    fromParts.forEach((el) => {
+      if (el === fromSky && toSky) { el.style.visibility = 'hidden'; anims.push({ cancel() { el.style.visibility = ''; } }); return; }
+      const [ux, uy] = out(el);
+      anims.push(el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translate(${ux * 26}px, ${uy * 26}px) scale(.96)` }], { duration: 170, easing: 'cubic-bezier(.5, 0, .9, .4)', fill: 'forwards' }));
+    });
+    const parts = [...to.querySelectorAll(PARTS[page])];
+    if (toSky && !fromSky) parts.unshift(toSky);
+    parts.forEach((el, n) => {
+      const [ux, uy] = out(el), d = 34 + (n % 3) * 10;
+      anims.push(el.animate([{ opacity: 0, transform: `translate(${ux * d}px, ${uy * d + 10}px) scale(.94)` }, { opacity: 1, transform: 'none' }],
+        { duration: 420, delay: 70 + Math.min(n, 16) * 16, easing: 'cubic-bezier(.2, .85, .25, 1.06)', fill: 'backwards' }));
+    });
+    let last = 70 + Math.min(parts.length - 1, 16) * 16 + 420;
+    if (toSky && fromSky) {
+      // the sky resizes from where it was to where it lands on this page
+      const r1 = toSky.getBoundingClientRect();
+      morph = true;
+      anims.push(toSky.animate([
+        { transform: `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px)`, width: r0.width + 'px', height: r0.height + 'px' },
+        { transform: 'none', width: r1.width + 'px', height: r1.height + 'px' },
+      ], { duration: 460, easing: 'cubic-bezier(.65, 0, .35, 1)' }));
+      last = Math.max(last, 460);
+    }
+    const timer = setTimeout(settleSlide, last + 60);
     slide = { from, anims, timer };
-    anims[1].onfinish = () => { if (slide && slide.anims === anims) settleSlide(); };
   }
   function initPages() {
     document.querySelectorAll('.navbtn').forEach((btn) => {
       btn.addEventListener('click', () => setPage(btn.dataset.page));
     });
     const pages = $('#pages');
-    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .shapemenu, button, select, input, .tab';
+    const INTERACTIVE = '#pad, #modSky, .step, .knob, .dicetrack, .ratchet, #laneCanvas, .mod, .menu, button, select, input, .tab';
     let sw = null; // {x, y, pointerId}
     pages.addEventListener('pointerdown', (e) => {
       if (e.target.closest(INTERACTIVE)) { sw = null; return; }

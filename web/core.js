@@ -210,6 +210,19 @@ function foldCurve(amount) {
   return c;
 }
 
+/* the glide voice's folder: one fixed sine fold, k = 8, with the amount
+   set by how hard it's driven and how much of it is mixed in. Close to
+   foldCurve(amount) behind its input gain, and it can move mid-note. */
+const GLIDE_FOLD = (() => {
+  const n = 2048, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) c[i] = Math.sin((i / (n - 1) * 2 - 1) * 4 * Math.PI);
+  return c;
+})();
+function foldMix(amount) {
+  const a = clamp(amount, 0, 1), g = 1 + 2.2 * a, m = Math.min(1, a * 4);
+  return { dry: (1 - m) * g, drive: g * (1 + 7 * a) / 8, wet: m };
+}
+
 /* resonator mode ratios. resShape morphs (log domain) between three
    idealized bodies: a string/tube (harmonic), a circular membrane, and a
    free bar (marimba, bell-ish). */
@@ -309,8 +322,18 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
   pre.connect(shp); shp.connect(post); post.connect(out);
   // every layer feeds `bus`: straight into the drive stage, or through the
   // wavefolder first when there's any fold
-  let bus = pre;
-  if (fold > 0.01) {
+  let bus = pre, foldNodes = null;
+  if (glide) {
+    // glide voices always carry a folder so a glide can fade fold in: a
+    // dry path and a sine fold path, crossfaded (see foldMix)
+    bus = ctx.createGain();
+    const dry = ctx.createGain(), fin = ctx.createGain(), wet = ctx.createGain();
+    const fs = ctx.createWaveShaper(); fs.curve = GLIDE_FOLD; fs.oversample = '2x';
+    bus.connect(dry); dry.connect(pre); bus.connect(fin); fin.connect(fs); fs.connect(wet); wet.connect(pre);
+    const fm = foldMix(fold);
+    dry.gain.value = fm.dry; fin.gain.value = fm.drive; wet.gain.value = fm.wet;
+    foldNodes = { dry, fin, wet };
+  } else if (fold > 0.01) {
     // more fold also drives the folder harder, so it keeps biting into the tail
     bus = ctx.createGain(); bus.gain.value = 0.8 + fold * 2.4;
     const fs = ctx.createWaveShaper(); fs.curve = foldCurve(fold); fs.oversample = '2x';
@@ -338,14 +361,18 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
     osc.frequency.setTargetAtTime(f, t, tau);
     const g = ctx.createGain();
     ampEnv(g.gain, t, P.atk, glide ? 1 : P.tone, dur);
-    if (P.fm > 0.02) {
+    if (P.fm > 0.02 || glide) {
       const mod = ctx.createOscillator(); mod.type = 'sine';
       mod.frequency.setValueAtTime(fs * P.fmRatio, t);
       mod.frequency.setTargetAtTime(f * P.fmRatio, t, tau);
       const mg = ctx.createGain();
-      mg.gain.setValueAtTime(P.fm * f * 4, t);
+      // glide voices: the envelope runs at unit depth into a gain that
+      // carries the FM amount, so the amount can move later
+      mg.gain.setValueAtTime((glide ? 1 : P.fm) * f * 4, t);
       mg.gain.setTargetAtTime(0, t, Math.max(0.008, dur * 0.25));
-      mod.connect(mg); mg.connect(osc.frequency);
+      mod.connect(mg);
+      if (glide) { G.fmAmt = ctx.createGain(); G.fmAmt.gain.value = P.fm; mg.connect(G.fmAmt); G.fmAmt.connect(osc.frequency); }
+      else mg.connect(osc.frequency);
       mod.start(t); stopAt(mod, t + P.atk + dur + 0.05);
       G.mod = mod;
     }
@@ -424,6 +451,7 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
       const f = Q.f * tune, when = Math.max(at, G.sweepEnd || at);
       if (G.osc) G.osc.frequency.setTargetAtTime(f, when, GLIDE_TAU);
       if (G.mod) G.mod.frequency.setTargetAtTime(f * Q.fmRatio, when, GLIDE_TAU);
+      if (G.fmAmt) to(G.fmAmt.gain, Q.fm);
       if (G.tone) to(G.tone.gain, Q.tone);
       if (G.noise) to(G.noise.gain, Q.noise);
       if (G.metal) to(G.metal.gain, Q.metal);
@@ -434,7 +462,10 @@ function playVoice(ctx, out, noiseBuf, P, trims, t, extraDecay, opts) {
         const rr = modeRatios(Q.resShape);
         for (const [bp, k] of G.modes) to(bp.frequency, Math.min(Q.resF * tune * rr[k], ctx.sampleRate * 0.45));
       }
-      to(post.gain, Q.lvl * 0.9 / (1 + drive * 0.8));
+      const d2 = clamp(P2.drive + trims.drive, 0, 1), fm2 = foldMix(clamp((P2.fold || 0) + (trims.fold || 0), 0, 1));
+      to(pre.gain, 1 + d2 * 5);
+      to(post.gain, Q.lvl * 0.9 / (1 + d2 * 0.8));
+      to(foldNodes.dry.gain, fm2.dry); to(foldNodes.fin.gain, fm2.drive); to(foldNodes.wet.gain, fm2.wet);
     },
   };
 }
@@ -449,7 +480,8 @@ const AUTO_POINTS = 16; // automation points recorded per step in smooth mode (a
 
 const MAX_VOICES = 14;
 class Engine {
-  constructor(ctx) {
+  /* opts.dry: no master compressor (stems for export) */
+  constructor(ctx, opts) {
     this.ctx = ctx;
     this.trims = { tune: 0, decay: 1, drive: 0 };
     this.noise = makeNoise(ctx);
@@ -459,7 +491,8 @@ class Engine {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 6;
     comp.attack.value = 0.003; comp.release.value = 0.12;
-    this.master.connect(comp); comp.connect(ctx.destination);
+    if (opts && opts.dry) this.master.connect(ctx.destination);
+    else { this.master.connect(comp); comp.connect(ctx.destination); }
   }
   /* stop a voice: a short fade, then its sources are stopped outright so a
      stolen voice stops costing CPU (fading alone left every oscillator
@@ -623,6 +656,14 @@ class Sequence {
     this.held.delete(i);
     if (!this.consumed.has(i)) this.toggle(i);
     this.consumed.delete(i);
+    this.onChange();
+  }
+  /* erase: delete a step outright (the trash key). keepHeld: it's still
+     held, so its release mustn't toggle it back on */
+  erase(i, keepHeld) {
+    this.steps[i] = freshStep();
+    if (keepHeld && this.held.has(i)) this.consumed.add(i);
+    else { this.held.delete(i); this.consumed.delete(i); }
     this.onChange();
   }
   stepCancel(i) { this.held.delete(i); this.consumed.delete(i); this.onChange(); }
@@ -792,7 +833,7 @@ const MOD_RATES = [
 /* ctl: what the shape's own knob does, and the range it maps 0..1 onto */
 const MOD_SHAPES = [
   { id: 'sine', name: 'Sine' }, { id: 'triangle', name: 'Triangle' }, { id: 'saw', name: 'Saw' },
-  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random' },
+  { id: 'square', name: 'Square' }, { id: 'random', name: 'Random', ctl: ['Smooth', 0, 1] },
   { id: 'kepler', name: 'Kepler', orbit: true, ctl: ['Eccentric', 0, 0.9] },
   { id: 'precession', name: 'Precession', orbit: true, ctl: ['Precess', 0.02, 0.3] },
   { id: 'halo', name: 'Halo', orbit: true, ctl: ['Detune', 0.01, 0.25] },
@@ -844,7 +885,13 @@ function lfoAt(shape, p, ctl) {
     case 'triangle': return { x: 1 - 4 * Math.abs(((f + 0.25) % 1) - 0.5), y: 0 };
     case 'saw': return { x: 2 * f - 1, y: 0 };
     case 'square': return { x: f < 0.5 ? 1 : -1, y: 0 };
-    case 'random': return { x: 2 * hash01(Math.floor(p * 4)) - 1, y: 0 };
+    case 'random': {
+      // four values a cycle; Smooth eases each one into the next over that
+      // share of its step (0 = held steps)
+      const q = p * 4, n = Math.floor(q), u = q - n, a0 = hash01(n), a1 = hash01(n + 1);
+      const w = c > 0.001 ? 0.5 - 0.5 * Math.cos(Math.PI * clamp((u - (1 - c)) / c, 0, 1)) : 0;
+      return { x: 2 * (a0 + (a1 - a0) * w) - 1, y: 0 };
+    }
     case 'kepler': { const E = kepler(a, c), b = Math.sqrt(1 - c * c); return { x: (Math.cos(E) - c) / (1 + c), y: b * Math.sin(E) / (1 + c) }; }
     case 'precession': {
       const e = 0.5, E = kepler(a, e), b = Math.sqrt(1 - e * e), x0 = (Math.cos(E) - e) / 1.5, y0 = b * Math.sin(E) / 1.5, w = c * a;
@@ -873,16 +920,28 @@ function envLook(m) {
   if (envAttack(m) > 0.06) return 'flare';
   return envDecay(m) > 0.5 ? 'supernova' : 'impact';
 }
+/* free: the LFO runs on its own clock in Hz (0.05..20, log), even with the
+   transport stopped; synced, it runs at MOD_RATES in beats of the song.
+   uni: unipolar, 0..1 instead of -1..1 (envelopes are always 0..1). */
 function freshMod() {
-  return { shape: 'sine', rate: 2, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
+  return { shape: 'sine', rate: 2, free: false, hz: 0.45, uni: false, depth: 0.5, ctl: 0.5, phase: 0, atk: 0.2, dec: 0.45, dest: 'pitch', targets: [] };
 }
-/* the LFO's output at a point in the song, in beats from the start */
-const modLfo = (m, beats) => lfoAt(m.shape, beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats + m.phase, m.ctl).x;
+const modHz = (m) => 0.05 * Math.pow(400, clamp(m.hz == null ? 0.45 : m.hz, 0, 1));
+/* the LFO's phase in cycles, from the song position in beats or (free)
+   seconds of the audio clock */
+const modCycles = (m, beats, secs) => (m.free ? secs * modHz(m) : beats / MOD_RATES[clamp(m.rate, 0, MOD_RATES.length - 1)].beats) + m.phase;
+/* its output, -1..1 (or 0..1 unipolar) */
+function modLfo(m, beats, secs) {
+  const x = lfoAt(m.shape, modCycles(m, beats, secs || 0), m.ctl).x;
+  return m.uni ? (x + 1) / 2 : x;
+}
 
 /* destinations: the hit's position on the map, pitch and decay across every
    layer, or any one engine control */
 const MOD_DESTS = [
   { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
+  // transport: global, so a modulator sent here needs no targets (LFOs only)
+  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
   { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
   // engine controls carry their layer's name: there's a body decay and a noise decay
   ...PARAM_SPECS.map((p) => {
@@ -892,6 +951,11 @@ const MOD_DESTS = [
     return { id: p.key, name, group: layer };
   }),
 ];
+const GLOBAL_DESTS = new Set(MOD_DESTS.filter((d) => d.global).map((d) => d.id));
+/* transport destinations: tempo moves by up to x1.5 either way, swing by
+   up to 25 points (it stays within 50..75) */
+const modTempo = (bpm, amt) => clamp(bpm * Math.pow(1.5, amt), 30, 300);
+const modSwing = (sw, amt) => clamp(sw + amt * 25, 50, 75);
 function modulatePos(pos, dest, amt) {
   if (dest === 'x') return { x: clamp(pos.x + amt * 0.5, 0, 1), y: pos.y };
   if (dest === 'y') return { x: pos.x, y: clamp(pos.y + amt * 0.5, 0, 1) };
@@ -913,6 +977,7 @@ function modulateParams(P, dest, amt) {
 /* does a target cover this hit? step: that step; drum: hits whose nearest
    anchor is that drum; kit: every hit */
 function modCovers(m, stepIndex, anchor) {
+  if (GLOBAL_DESTS.has(m.dest)) return false; // the transport, not hits
   return m.targets.some((g) => g.kind === 'kit' || (g.kind === 'step' && g.i === stepIndex) || (g.kind === 'drum' && g.a === anchor));
 }
 /* toggle a target in or out of a modulator's list */
@@ -923,6 +988,133 @@ function toggleTarget(m, g) {
   return k < 0;
 }
 const nearestAnchor = (x, y) => { const w = weightsAt(x, y); return w.indexOf(Math.max(...w)); };
+
+/* ==========================================================================
+   Randomizing. rng() is 0..1 (Math.random, or seeded in tests).
+   ========================================================================== */
+/* bounce off the edges instead of piling up against them */
+const reflect01 = (v) => { v = ((v % 2) + 2) % 2; return v > 1 ? 2 - v : v; };
+const MAX_NEW_RATCHETS = 6;
+/* randomizeSteps: an empty pattern gets 5..16 new steps (more with
+   strength); an existing one has its stars moved, and from halfway up
+   steps may be added (often) or removed (less often), and ratchets added
+   or removed, never more than MAX_NEW_RATCHETS newly ratcheted steps */
+function randomizeSteps(steps, strength, rng) {
+  rng = rng || Math.random;
+  const s01 = clamp(strength, 0, 1), pick = (a) => a[Math.floor(rng() * a.length)];
+  const hitsChoices = RATCHET_VALUES.slice(1).map(ratchetHits);
+  const place = (s) => { s.on = true; s.set = true; s.x = 0.04 + rng() * 0.92; s.y = 0.04 + rng() * 0.92; };
+  let newRatchets = 0;
+  const maybeRatchet = (s, chance) => {
+    if (newRatchets < MAX_NEW_RATCHETS && rng() < chance) { s.ratchets = evenRatchets(s.x, s.y, pick(hitsChoices)); newRatchets++; }
+  };
+  const on = steps.map((s, i) => (s.on ? i : -1)).filter((i) => i >= 0);
+  if (!on.length) {
+    const n = Math.round(5 + s01 * 11), free = steps.map((_, i) => i);
+    for (let k = 0; k < n; k++) {
+      const i = free.splice(Math.floor(rng() * free.length), 1)[0];
+      steps[i] = freshStep(); place(steps[i]);
+      maybeRatchet(steps[i], s01 >= 0.5 ? (s01 - 0.4) * 0.3 : 0);
+    }
+    return steps;
+  }
+  const reach = s01 * 0.6;
+  for (const i of on) {
+    const s = steps[i], nx = reflect01(s.x + (rng() * 2 - 1) * reach), ny = reflect01(s.y + (rng() * 2 - 1) * reach), dx = nx - s.x, dy = ny - s.y;
+    s.x = nx; s.y = ny;
+    if (s.auto) s.auto = s.auto.map((q) => ({ x: reflect01(q.x + dx), y: reflect01(q.y + dy) }));
+    for (const r of s.ratchets) { r.x = reflect01(r.x + dx); r.y = reflect01(r.y + dy); }
+  }
+  if (s01 > 0.5) {
+    const over = (s01 - 0.5) * 2; // 0..1 over the top half
+    for (let i = 0; i < steps.length; i++) {
+      if (!steps[i].on && rng() < 0.12 + 0.3 * over) { steps[i] = freshStep(); place(steps[i]); }
+    }
+    let left = steps.filter((s) => s.on).length;
+    for (const i of on) if (left > 1 && rng() < 0.06 + 0.16 * over) { steps[i] = freshStep(); left--; }
+  }
+  if (s01 >= 0.45) {
+    const r = (s01 - 0.4) / 0.6; // 0.1..1
+    for (const s of steps) {
+      if (!s.on) continue;
+      if (s.ratchets.length) { if (rng() < 0.35 * r) s.ratchets = []; }
+      else maybeRatchet(s, 0.2 * r);
+    }
+  }
+  return steps;
+}
+/* jitterParams: one drum's engine controls. Pitches and times move in
+   ratio (log), the rest linearly; drive and fold lean low, since a little
+   of either takes over a sound quickly */
+function jitterParams(p, strength, rng) {
+  rng = rng || Math.random;
+  const s01 = clamp(strength, 0, 1);
+  for (const spec of PARAM_SPECS) {
+    const v = p[spec.key];
+    if (spec.key === 'drive' || spec.key === 'fold') {
+      const target = Math.pow(rng(), 3) * (spec.key === 'fold' ? 0.6 : 0.7);
+      p[spec.key] = clamp(v + (target - v) * s01 * 0.8, spec.min, spec.max);
+    } else if (spec.log && spec.min > 0) {
+      p[spec.key] = clamp(v * Math.pow(spec.max / spec.min, (rng() * 2 - 1) * s01 * 0.3), spec.min, spec.max);
+    } else {
+      p[spec.key] = clamp(v + (rng() * 2 - 1) * s01 * (spec.max - spec.min) * 0.5, spec.min, spec.max);
+    }
+  }
+  return p;
+}
+
+/* play modes: which step plays at position n of the run (n counts every
+   step since play) */
+const PLAY_MODES = [
+  { id: 'fwd', name: 'Forward' }, { id: 'back', name: 'Backward' },
+  { id: 'pingpong', name: 'Ping-pong' }, { id: 'random', name: 'Random' },
+];
+function stepAt(mode, n, rng) {
+  const L = N_STEPS;
+  if (mode === 'back') return L - 1 - (n % L);
+  if (mode === 'pingpong') { const m = n % (2 * L - 2); return m < L ? m : 2 * L - 2 - m; }
+  if (mode === 'random') return Math.floor((rng || Math.random)() * L);
+  return n % L;
+}
+
+/* ==========================================================================
+   Export files: 16-bit WAV, and a zip that stores (doesn't compress) them.
+   ========================================================================== */
+function encodeWav(samples, sampleRate) {
+  const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(clamp(samples[i], -1, 1) * 32767), true);
+  return new Uint8Array(buf);
+}
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+/* files: [{name, data: Uint8Array}] -> one zip (method 0, stored) */
+function zipStore(files) {
+  const enc = (t) => Array.from(unescape(encodeURIComponent(t)), (ch) => ch.charCodeAt(0));
+  const parts = [], central = [];
+  let off = 0;
+  const u16 = (a, v) => a.push(v & 255, (v >>> 8) & 255), u32 = (a, v) => a.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255);
+  for (const f of files) {
+    const name = enc(f.name), crc = crc32(f.data), h = [];
+    u32(h, 0x04034b50); u16(h, 20); u16(h, 0x0800); u16(h, 0); u16(h, 0); u16(h, 0x21);
+    u32(h, crc); u32(h, f.data.length); u32(h, f.data.length); u16(h, name.length); u16(h, 0); h.push(...name);
+    parts.push(new Uint8Array(h), f.data);
+    const c = [];
+    u32(c, 0x02014b50); u16(c, 20); u16(c, 20); u16(c, 0x0800); u16(c, 0); u16(c, 0); u16(c, 0x21);
+    u32(c, crc); u32(c, f.data.length); u32(c, f.data.length); u16(c, name.length); u16(c, 0); u16(c, 0); u16(c, 0); u16(c, 0); u32(c, 0); u32(c, off);
+    c.push(...name); central.push(new Uint8Array(c));
+    off += h.length + f.data.length;
+  }
+  const cdSize = central.reduce((a, c) => a + c.length, 0), e = [];
+  u32(e, 0x06054b50); u16(e, 0); u16(e, 0); u16(e, files.length); u16(e, files.length); u32(e, cdSize); u32(e, off); u16(e, 0);
+  const all = [...parts, ...central, new Uint8Array(e)], out = new Uint8Array(all.reduce((a, c) => a + c.length, 0));
+  let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
 
 const DEMO_BEAT = [
   [0, 0.12, 0.10], [2, 0.70, 0.86], [3, 0.31, 0.87], [4, 0.45, 0.42],
@@ -939,6 +1131,7 @@ if (typeof module !== "undefined") module.exports = {
   colorAt, decayMultiplier, nearest, voiceSignature, METAL_RATIOS, BURST_GAP, SHAPER_CURVE,
   foldCurve, modeRatios, modeQ, playVoice, mixedParams, autoAt, AUTO_POINTS, Engine,
   PARAM_SPECS, PARAM_BY_KEY, MOD_COUNT, MOD_RATES, MOD_SHAPES, SHAPE_BY_ID, MOD_DESTS, lfoAt, envAt, envAttack, envDecay, envLook,
-  freshMod, modLfo, modulatePos, modulateParams, modCovers, toggleTarget, nearestAnchor, kepler,
+  freshMod, modLfo, modHz, modCycles, GLOBAL_DESTS, modTempo, modSwing, foldMix, GLIDE_FOLD,
+  encodeWav, crc32, zipStore, reflect01, randomizeSteps, MAX_NEW_RATCHETS, jitterParams, PLAY_MODES, stepAt, evenRatchets, modulatePos, modulateParams, modCovers, toggleTarget, nearestAnchor, kepler,
   LANE_DEFAULTS, freshStep, RATCHET_VALUES, ratchetHits, RATCHET_CATCH, slotDuration, catchStep, swingOffset, Sequence, DEMO_BEAT,
 };

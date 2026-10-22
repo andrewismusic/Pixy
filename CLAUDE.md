@@ -22,6 +22,10 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 - While playing, live pad hits are scheduled only `LIVE_AHEAD` (35 ms) ahead so lifting a finger stops them promptly.
 - Toggling a step off resets it fully via `freshStep()`.
 - Modulation (`MOD_COUNT` = 6): each modulator has one destination and any number of targets (step, drum = hits whose `nearestAnchor` is that drum, or kit). LFOs are read once per hit at the strike; an envelope glides the voice through the hit for destinations in `GLIDE_DESTS` and applies its peak at the strike for the rest. All hits go through `strike()` / `soundAt()` in ui.js.
+- Synced LFOs read beats from `beatMarks` (one per scheduled step) and rest at beat 0 when stopped; free LFOs (`m.free`, Hz from `modHz`) read the audio clock and always run. `m.uni` makes an LFO 0..1. Tempo and swing (`GLOBAL_DESTS`) are applied per step in `tick()` via `transportAt()`; they ignore targets and envelopes can't use them.
+- The scheduler counts run positions (`runPos`); `stepFor(n)` maps a position to a step through the play mode (`stepAt`; random is rolled ahead into `rollAhead` so the playhead knows the next star). Swing parity follows the position, not the step index.
+- Trash: a press and release with no step involved clears everything; steps pressed while it's held are deleted on their own release; steps already held are deleted when it's released (`seq.erase(i, true)` keeps them consumed).
+- Export renders one planned set of hits (`planClip`) for the mix and every stem; a stem strikes every hit and mutes the others, so chokes and voice stealing match the mix. Stems use `Engine(ctx, {dry: true})` (no compressor). Random is seeded per render so noise matches.
 - Stolen voices are stopped outright (`Engine.silence`), and finished voices disconnect, so dense ratchets don't pile up nodes.
 - Resonator exciter sources must outlive the ring: Chromium stops processing a biquad ~0.28 s after its input source ends.
 - New synth params default in `BASE` so the original 14 anchors render byte-identically; check with an offline render before/after.
@@ -34,6 +38,10 @@ XY-pad drum synth + 16-step sequencer. Web prototype now; native iOS (SwiftUI + 
 - Sound colours follow stellar classes from `voiceSignature(P).t` (ui.js `STAR_NIGHT` / `STAR_DAY` on the sky, the stronger `TILE` on step tiles and lanes); they stay clear of yellow and cyan. The six modulator colours (`MOD_COL`) do too.
 - Raised controls use `.cap` and sink when pressed or on; knob arcs take their colour from the module accent (`--m-*`). A knob's cap and shadow stay put; only `.knob-ptr` turns.
 - Help is a sheet for the page you're on (`HELP` in ui.js), not a page. Keep it current when a page changes.
+- Dropdowns are `createMenu()` keys with the app's own list, never native `<select>` (iOS leaves a focused select lit and needs a second tap).
+- Holding the die and tapping a control rolls just that control: register a roll function in `randTargets` for anything new that should support it.
+- Page changes: the old page's parts fly out, the new page's `PARTS` assemble from beyond their own side; the sky (`SKY`) is shared by the pad and modulation pages and resizes between them (`morph`, during which the field is stretched rather than rebuilt).
+- Preferences live in a sheet and in `localStorage` (`pixy.prefs`); clips go to the artifact's per-viewer db when it's there, else `localStorage`.
 - Check both light and dark themes, at phone width (430px).
 - No explanatory text at the top of pages, and no boxes around pages or engine sections.
 - `design/style-board.html` is the working style board (artifact https://claude.ai/artifact/8KpJmX9YTn1KA2oiTf6vxX).

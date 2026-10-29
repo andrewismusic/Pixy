@@ -218,14 +218,15 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 }
 .step .n { position: absolute; top: 6px; left: 8px; font: 600 12px/1 var(--font-head); letter-spacing: .04em; opacity: .5; }
 .step .dot {
-  display: none; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff;
+  display: none; position: absolute; z-index: 1; width: 9px; height: 9px; border-radius: 50%; background: #fff;
   box-shadow: 0 0 0 2px rgba(5,7,12,.55);
   left: calc(14% + var(--dx, .5) * 72%); bottom: calc(12% + var(--dy, .5) * 56%); transform: translate(-50%, 50%);
 }
 .step.on { background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0) 55%), var(--c, #555); color: var(--tc, #fff); border-color: rgba(0,0,0,.35); }
 .step.on .n { opacity: .9; }
 .step.on .dot { display: block; }
-.step .hits { position: absolute; top: 4px; right: 6px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
+/* ratchet dots: a line under the number; the position dot may cover them */
+.step .hits { position: absolute; top: 22px; left: 8px; font: 700 10px/1 var(--font-mono); letter-spacing: -1px; opacity: .85; }
 .cell.now .step { transform: translateY(-2px); box-shadow: 0 6px 0 var(--shadow), 0 0 0 2px var(--now); }
 .step.held { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow), 0 0 0 3px var(--hold); }
 .step:focus-visible { outline: 2px solid var(--hold); outline-offset: 3px; }
@@ -336,6 +337,7 @@ h3 { font: 600 11.5px/1 var(--font-head); margin: 0; letter-spacing: .18em; text
 
 /* ---------- preferences ---------- */
 #prefBtn { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+#prefsH { margin-bottom: 8px; }
 .prefrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--edge); }
 .prefrow > span { display: grid; gap: 2px; font-weight: 600; }
 .prefrow small { font-size: 12px; color: var(--muted); font-weight: 500; }
@@ -402,8 +404,8 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
       <button id="helpBtn" class="cap" type="button" aria-label="Help for this page" aria-expanded="false" aria-controls="help" title="Help for this page">
         <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.3" r="1.2" fill="currentColor" stroke="none"/></svg>
       </button>
-      <button id="prefBtn" class="cap" type="button" aria-label="Preferences" aria-expanded="false" aria-controls="prefs" title="Preferences">
-        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
+      <button id="prefBtn" class="navbtn cap" type="button" data-page="prefs" aria-pressed="false" aria-label="Preferences" title="Preferences">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10.3 2.8h3.4l.5 2.6 1.6.9 2.5-.9 1.7 2.9-2 1.8v1.8l2 1.8-1.7 2.9-2.5-.9-1.6.9-.5 2.6h-3.4l-.5-2.6-1.6-.9-2.5.9-1.7-2.9 2-1.8v-1.8l-2-1.8 1.7-2.9 2.5.9 1.6-.9z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
       <span class="dicecap" id="diceCap" aria-hidden="true">Randomize sequence</span>
       <div class="dicefield" id="diceField"></div>
@@ -497,6 +499,12 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
       </div>
       <div id="engineParams" class="modules"></div>
     </section>
+    <section class="page" data-page="prefs" aria-labelledby="prefsH">
+      <h2 id="prefsH">Preferences</h2>
+      <div class="prefrow"><span>Dice can change modulation assignments<small>Past halfway on the modulation page</small></span><button id="prefAssign" class="btn cap small" type="button" aria-pressed="false">Off</button></div>
+      <div class="prefrow"><span>Theme</span><div class="seg" id="prefTheme" role="group" aria-label="Theme"><button class="btn cap small" type="button" data-v="auto">Auto</button><button class="btn cap small" type="button" data-v="light">Light</button><button class="btn cap small" type="button" data-v="dark">Dark</button></div></div>
+    </section>
+
     <section class="page" data-page="clips" aria-labelledby="clipsH">
       <div class="cliphead">
         <h2 id="clipsH">Clips</h2>
@@ -516,13 +524,6 @@ kbd { font: 500 12px var(--font-mono); padding: 1px 5px; border: 1.5px solid var
   </div>
 </main>
 
-<div class="help" id="prefs" role="dialog" aria-modal="false" aria-labelledby="prefsH" hidden>
-  <div class="inner">
-    <div class="head"><h2 id="prefsH">Preferences</h2><button id="prefsClose" class="btn cap small" type="button">Close</button></div>
-    <div class="prefrow"><span>Dice can change modulation assignments<small>Past halfway on the modulation page</small></span><button id="prefAssign" class="btn cap small" type="button" aria-pressed="false">Off</button></div>
-    <div class="prefrow"><span>Theme</span><div class="seg" id="prefTheme" role="group" aria-label="Theme"><button class="btn cap small" type="button" data-v="auto">Auto</button><button class="btn cap small" type="button" data-v="light">Light</button><button class="btn cap small" type="button" data-v="dark">Dark</button></div></div>
-  </div>
-</div>
 
 <div class="help" id="help" role="dialog" aria-modal="false" aria-labelledby="helpH" hidden>
   <div class="inner">
@@ -1165,7 +1166,10 @@ class Sequence {
       if (others.length === 1) {
         const srcIndex = others[0];
         const src = this.steps[srcIndex], dst = this.steps[i];
+        // the copy carries the source's ratchets and smooth gesture too
         dst.x = src.x; dst.y = src.y; dst.on = true; dst.set = true;
+        dst.ratchets = src.ratchets.map((r) => ({ ...r }));
+        dst.auto = src.auto ? src.auto.map((q) => ({ ...q })) : null;
         this.held.add(i);
         this.consumed.add(i);
         // the source step was just used as a copy source: it shouldn't
@@ -1474,8 +1478,6 @@ function modLfo(m, beats, secs) {
    layer, or any one engine control */
 const MOD_DESTS = [
   { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
-  // transport: global, so a modulator sent here needs no targets (LFOs only)
-  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
   { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
   // engine controls carry their layer's name: there's a body decay and a noise decay
   ...PARAM_SPECS.map((p) => {
@@ -1484,6 +1486,8 @@ const MOD_DESTS = [
     const name = p.key === 'lvl' ? 'Output level' : p.key === 'q' ? 'Filter resonance' : p.mod === 'out' || p.mod === 'filter' ? p.label : `${layer} ${low}`;
     return { id: p.key, name, group: layer };
   }),
+  // transport, last: global, so a modulator sent here needs no targets (LFOs only)
+  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
 ];
 const GLOBAL_DESTS = new Set(MOD_DESTS.filter((d) => d.global).map((d) => d.id));
 /* transport destinations: tempo moves by up to x1.5 either way, swing by
@@ -2180,8 +2184,11 @@ const DEMO_BEAT = [
     }
     const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
     for (const list of groups) {
-      const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
-      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const s = seq.steps[list[0]], [x, y] = P(s), sig = voiceSignature(paramsAt(s.x, s.y)), c = starRGB(sig.t);
+      // long-ringing sounds make bigger stars, short ones smaller (and the
+      // step's own decay lane counts too)
+      const ring = sig.dec * decayMultiplier(s.decay), big = clamp(1 + 0.22 * Math.log2(ring / 0.25), 0.7, 1.5);
+      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u * big;
       const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
       glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
       g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
@@ -2427,7 +2434,7 @@ const DEMO_BEAT = [
     ensureAudio();
     const fire = () => playAt(a.x, a.y);
     fire();
-    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
+    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 8) * 1000); // eighth notes
   }
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
@@ -3270,7 +3277,6 @@ const DEMO_BEAT = [
     const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
     modKeys.free.hidden = modKeys.uni.hidden = !!sh.env;
     modKeys.free.textContent = m.free ? 'Free' : 'Sync';
-    modKeys.free.setAttribute('aria-pressed', String(!!m.free));
     modKeys.free.title = m.free ? 'Free: runs on its own clock, even when stopped' : 'Sync: follows the song\'s tempo';
     modKeys.uni.innerHTML = m.uni ? '<b>+</b>&thinsp;Uni' : '<b>±</b>&thinsp;Bi';
     modKeys.uni.title = m.uni ? 'Unipolar: moves one way, 0 to depth' : 'Bipolar: swings both ways';
@@ -3673,6 +3679,7 @@ const DEMO_BEAT = [
     kit: [() => 'Randomize every drum', randomizeKit],
     engine: [() => 'Randomize this drum', randomizeDrum],
     clips: null,
+    prefs: null,
   };
   const dice = createDiceSlider($('#diceField'), 'Randomize sequence', (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
   function updateDice(st) {
@@ -3728,32 +3735,28 @@ const DEMO_BEAT = [
       'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
       'The small picker under each knob sends a modulator to that control for this drum. Hold the die and tap a section\'s name to roll just that section.',
     ]],
+    prefs: ['Preferences', [
+      'Settings for this browser: whether the modulation die can make new assignments, and the theme.',
+    ]],
     clips: ['Clips', [
       'The <b>clip</b> key on the star chart keeps the loop as it is: pattern, sounds, modulation, tempo and play mode.',
       'Tap a clip to select it. <b>Play</b> hears it here without touching your pattern (leaving the page puts yours back); <b>Load</b> puts it into the sequencer (undo covers it).',
       '<b>Export</b> renders four bars as a zip of WAVs: the mix, and a stem for each drum. Every hit is struck in every stem, so choke cuts the stems exactly as it cuts the mix. Stems skip the master compressor.',
     ]],
   };
-  /* preferences sheet */
-  const prefSheet = $('#prefs'), prefBtn = $('#prefBtn'), prefAssign = $('#prefAssign');
+  /* preferences: a page of their own */
+  const prefPage = $('.page[data-page="prefs"]'), prefAssign = $('#prefAssign');
   function paintPrefs() {
     prefAssign.setAttribute('aria-pressed', String(prefs.diceAssign));
     prefAssign.textContent = prefs.diceAssign ? 'On' : 'Off';
-    prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
+    prefPage.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
   }
-  function setPrefs(open) {
-    if (open) setHelp(false);
-    prefSheet.hidden = !open; prefBtn.setAttribute('aria-expanded', String(open)); prefBtn.setAttribute('aria-pressed', String(open));
-    if (open) { paintPrefs(); $('#prefsClose').focus(); }
-  }
-  prefBtn.addEventListener('click', () => setPrefs(prefSheet.hidden));
-  $('#prefsClose').addEventListener('click', () => { setPrefs(false); prefBtn.focus(); });
   prefAssign.addEventListener('click', () => { prefs.diceAssign = !prefs.diceAssign; savePrefs(); paintPrefs(); updateDice(); });
-  prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
+  prefPage.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
     prefs.theme = b.dataset.v; savePrefs(); paintPrefs();
     if (prefs.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = prefs.theme;
   }));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !prefSheet.hidden) { setPrefs(false); prefBtn.focus(); } });
+  paintPrefs();
 
   const help = $('#help'), helpBtn = $('#helpBtn');
   function fillHelp() {
@@ -3764,7 +3767,6 @@ const DEMO_BEAT = [
       '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
   }
   function setHelp(open) {
-    if (open && !prefSheet.hidden) setPrefs(false);
     help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
     if (open) { fillHelp(); $('#helpClose').focus(); }
   }
@@ -3829,7 +3831,7 @@ const DEMO_BEAT = [
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips', 'prefs'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
   /* a page's parts, in the order they assemble; the sky is its own part,
@@ -3841,6 +3843,7 @@ const DEMO_BEAT = [
     kit: 'h2, #kitKnobs > *',
     engine: 'h2, .enginepick > *, .module h3, .module .knobgrid > *',
     clips: '.cliphead > *, .clipcard, .clipnote',
+    prefs: 'h2, .prefrow',
   };
   const SKY = { pad: '.padrow .padwrap', mod: '.modsky' };
   function settleSlide() {
@@ -3864,6 +3867,7 @@ const DEMO_BEAT = [
     updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
     if (prev === 'clips') leaveClips();
+    if (prev === 'pad' && recording) setRecording(false); // recording only happens on the star chart
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
     // force a resize+redraw now that the page is actually visible.

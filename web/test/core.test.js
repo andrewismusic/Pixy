@@ -299,3 +299,20 @@ test('erase deletes a step; held ones stay consumed so release does not revive t
   s.stepUp(3);
   assert.equal(s.steps[3].on, false);
 });
+
+test('copying a step carries its ratchets and smooth gesture', () => {
+  const s = new C.Sequence();
+  s.recordStep(2, 0.3, 0.4, 3);
+  s.steps[2].auto = Array.from({ length: C.AUTO_POINTS }, (_, k) => ({ x: k / 20, y: 0.4 }));
+  s.stepDown(2); s.stepDown(9); s.stepUp(9); s.stepUp(2);
+  assert.equal(s.steps[9].on, true);
+  assert.equal(s.steps[9].ratchets.length, 2);
+  assert.notEqual(s.steps[9].ratchets, s.steps[2].ratchets);
+  assert.equal(s.steps[9].auto.length, C.AUTO_POINTS);
+  assert.equal(s.steps[2].on, true);
+});
+
+test('transport destinations come last in the list', () => {
+  const ids = C.MOD_DESTS.map((d) => d.id);
+  assert.deepEqual(ids.slice(-2), ['bpm', 'swing']);
+});

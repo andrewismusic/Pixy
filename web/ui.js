@@ -518,8 +518,11 @@
     }
     const groups = starGroups(), font = cssVar('--font-mono') || 'monospace';
     for (const list of groups) {
-      const s = seq.steps[list[0]], [x, y] = P(s), c = starRGB(voiceSignature(paramsAt(s.x, s.y)).t);
-      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u;
+      const s = seq.steps[list[0]], [x, y] = P(s), sig = voiceSignature(paramsAt(s.x, s.y)), c = starRGB(sig.t);
+      // long-ringing sounds make bigger stars, short ones smaller (and the
+      // step's own decay lane counts too)
+      const ring = sig.dec * decayMultiplier(s.decay), big = clamp(1 + 0.22 * Math.log2(ring / 0.25), 0.7, 1.5);
+      const lit = list.includes(cur) && playing && !opts.thumb, age = lit ? frac : 1, R = (4.2 + Math.min(list.length, 4) * 0.8) * u * big;
       const glow = g.createRadialGradient(x, y, 0, x, y, R * (lit ? 5 - 2 * age : 3));
       glow.addColorStop(0, rgbs(c, theme.dark ? (lit ? 0.55 : 0.28) : (lit ? 0.35 : 0.18))); glow.addColorStop(1, rgbs(c, 0));
       g.fillStyle = glow; g.beginPath(); g.arc(x, y, R * 5, 0, 6.283); g.fill();
@@ -765,7 +768,7 @@
     ensureAudio();
     const fire = () => playAt(a.x, a.y);
     fire();
-    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 16) * 1000);
+    sliderPreviewTimer = setInterval(fire, slotDuration(tempo, 8) * 1000); // eighth notes
   }
   function stopSliderPreview() {
     if (sliderPreviewTimer) { clearInterval(sliderPreviewTimer); sliderPreviewTimer = null; }
@@ -1608,7 +1611,6 @@
     const m = mods[modSel], sh = SHAPE_BY_ID[m.shape];
     modKeys.free.hidden = modKeys.uni.hidden = !!sh.env;
     modKeys.free.textContent = m.free ? 'Free' : 'Sync';
-    modKeys.free.setAttribute('aria-pressed', String(!!m.free));
     modKeys.free.title = m.free ? 'Free: runs on its own clock, even when stopped' : 'Sync: follows the song\'s tempo';
     modKeys.uni.innerHTML = m.uni ? '<b>+</b>&thinsp;Uni' : '<b>±</b>&thinsp;Bi';
     modKeys.uni.title = m.uni ? 'Unipolar: moves one way, 0 to depth' : 'Bipolar: swings both ways';
@@ -2011,6 +2013,7 @@
     kit: [() => 'Randomize every drum', randomizeKit],
     engine: [() => 'Randomize this drum', randomizeDrum],
     clips: null,
+    prefs: null,
   };
   const dice = createDiceSlider($('#diceField'), 'Randomize sequence', (st) => { const d = DICE[currentPage]; if (d) d[1](st); });
   function updateDice(st) {
@@ -2066,32 +2069,28 @@
       'Layers: <b>body</b> (pitched sine with FM), <b>noise</b>, <b>metal</b> (808-style squares), <b>resonator</b> (a struck physical model, string to skin to bar), then <b>filter</b>, <b>fold</b> and <b>drive</b>.',
       'The small picker under each knob sends a modulator to that control for this drum. Hold the die and tap a section\'s name to roll just that section.',
     ]],
+    prefs: ['Preferences', [
+      'Settings for this browser: whether the modulation die can make new assignments, and the theme.',
+    ]],
     clips: ['Clips', [
       'The <b>clip</b> key on the star chart keeps the loop as it is: pattern, sounds, modulation, tempo and play mode.',
       'Tap a clip to select it. <b>Play</b> hears it here without touching your pattern (leaving the page puts yours back); <b>Load</b> puts it into the sequencer (undo covers it).',
       '<b>Export</b> renders four bars as a zip of WAVs: the mix, and a stem for each drum. Every hit is struck in every stem, so choke cuts the stems exactly as it cuts the mix. Stems skip the master compressor.',
     ]],
   };
-  /* preferences sheet */
-  const prefSheet = $('#prefs'), prefBtn = $('#prefBtn'), prefAssign = $('#prefAssign');
+  /* preferences: a page of their own */
+  const prefPage = $('.page[data-page="prefs"]'), prefAssign = $('#prefAssign');
   function paintPrefs() {
     prefAssign.setAttribute('aria-pressed', String(prefs.diceAssign));
     prefAssign.textContent = prefs.diceAssign ? 'On' : 'Off';
-    prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
+    prefPage.querySelectorAll('#prefTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === prefs.theme)));
   }
-  function setPrefs(open) {
-    if (open) setHelp(false);
-    prefSheet.hidden = !open; prefBtn.setAttribute('aria-expanded', String(open)); prefBtn.setAttribute('aria-pressed', String(open));
-    if (open) { paintPrefs(); $('#prefsClose').focus(); }
-  }
-  prefBtn.addEventListener('click', () => setPrefs(prefSheet.hidden));
-  $('#prefsClose').addEventListener('click', () => { setPrefs(false); prefBtn.focus(); });
   prefAssign.addEventListener('click', () => { prefs.diceAssign = !prefs.diceAssign; savePrefs(); paintPrefs(); updateDice(); });
-  prefSheet.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
+  prefPage.querySelectorAll('#prefTheme button').forEach((b) => b.addEventListener('click', () => {
     prefs.theme = b.dataset.v; savePrefs(); paintPrefs();
     if (prefs.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = prefs.theme;
   }));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !prefSheet.hidden) { setPrefs(false); prefBtn.focus(); } });
+  paintPrefs();
 
   const help = $('#help'), helpBtn = $('#helpBtn');
   function fillHelp() {
@@ -2102,7 +2101,6 @@
       '<li><b>Undo / redo</b> (or Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every edit. Swipe left or right to change page.</li>';
   }
   function setHelp(open) {
-    if (open && !prefSheet.hidden) setPrefs(false);
     help.hidden = !open; helpBtn.setAttribute('aria-expanded', String(open)); helpBtn.setAttribute('aria-pressed', String(open));
     if (open) { fillHelp(); $('#helpClose').focus(); }
   }
@@ -2167,7 +2165,7 @@
   }
 
   /* ---------- pages: icon nav + swipe between pad/lanes/kit/engine/info ---------- */
-  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips'];
+  const PAGE_ORDER = ['pad', 'mod', 'lanes', 'kit', 'engine', 'clips', 'prefs'];
   let currentPage = 'pad';
   let slide = null; // the page transition in flight, if any
   /* a page's parts, in the order they assemble; the sky is its own part,
@@ -2179,6 +2177,7 @@
     kit: 'h2, #kitKnobs > *',
     engine: 'h2, .enginepick > *, .module h3, .module .knobgrid > *',
     clips: '.cliphead > *, .clipcard, .clipnote',
+    prefs: 'h2, .prefrow',
   };
   const SKY = { pad: '.padrow .padwrap', mod: '.modsky' };
   function settleSlide() {
@@ -2202,6 +2201,7 @@
     updateDice();
     document.querySelectorAll('.navbtn').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.page === page)));
     if (prev === 'clips') leaveClips();
+    if (prev === 'pad' && recording) setRecording(false); // recording only happens on the star chart
     to.classList.add('active');
     // canvases inside a page that was display:none have stale/zero size;
     // force a resize+redraw now that the page is actually visible.

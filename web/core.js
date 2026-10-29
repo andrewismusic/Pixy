@@ -631,7 +631,10 @@ class Sequence {
       if (others.length === 1) {
         const srcIndex = others[0];
         const src = this.steps[srcIndex], dst = this.steps[i];
+        // the copy carries the source's ratchets and smooth gesture too
         dst.x = src.x; dst.y = src.y; dst.on = true; dst.set = true;
+        dst.ratchets = src.ratchets.map((r) => ({ ...r }));
+        dst.auto = src.auto ? src.auto.map((q) => ({ ...q })) : null;
         this.held.add(i);
         this.consumed.add(i);
         // the source step was just used as a copy source: it shouldn't
@@ -940,8 +943,6 @@ function modLfo(m, beats, secs) {
    layer, or any one engine control */
 const MOD_DESTS = [
   { id: 'x', name: 'X position', group: 'Position' }, { id: 'y', name: 'Y position', group: 'Position' },
-  // transport: global, so a modulator sent here needs no targets (LFOs only)
-  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
   { id: 'pitch', name: 'Pitch', group: 'Whole voice' }, { id: 'decay', name: 'Decay', group: 'Whole voice' },
   // engine controls carry their layer's name: there's a body decay and a noise decay
   ...PARAM_SPECS.map((p) => {
@@ -950,6 +951,8 @@ const MOD_DESTS = [
     const name = p.key === 'lvl' ? 'Output level' : p.key === 'q' ? 'Filter resonance' : p.mod === 'out' || p.mod === 'filter' ? p.label : `${layer} ${low}`;
     return { id: p.key, name, group: layer };
   }),
+  // transport, last: global, so a modulator sent here needs no targets (LFOs only)
+  { id: 'bpm', name: 'Tempo', group: 'Transport', global: true }, { id: 'swing', name: 'Swing', group: 'Transport', global: true },
 ];
 const GLOBAL_DESTS = new Set(MOD_DESTS.filter((d) => d.global).map((d) => d.id));
 /* transport destinations: tempo moves by up to x1.5 either way, swing by
